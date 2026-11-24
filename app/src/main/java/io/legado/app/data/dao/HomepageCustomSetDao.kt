@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface HomepageCustomSetDao {
 
+    @get:Query("SELECT * FROM homepage_custom_sets")
+    val all: List<HomepageCustomSet>
+
     @Query("SELECT * FROM homepage_custom_sets ORDER BY sortOrder ASC")
     fun flowAll(): Flow<List<HomepageCustomSet>>
 
@@ -18,6 +21,9 @@ interface HomepageCustomSetDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(customSet: HomepageCustomSet)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertAll(items: List<HomepageCustomSet>)
 
     @Query("UPDATE homepage_custom_sets SET name = :name WHERE id = :id")
     suspend fun rename(id: String, name: String)

@@ -227,6 +227,95 @@ object CoverCollectionManager {
     }
 
     @Synchronized
+    fun migrateAndReloadAfterRestore() {
+        invalidateCache()
+        val collectionsById = HashMap<String, Collection>()
+        listOf(false, true).forEach { isNight ->
+            val modeDir = File(rootDir, if (isNight) "night" else "day")
+            if (!modeDir.isDirectory) return@forEach
+            val idxFile = File(modeDir, indexFileName)
+            val text = PackageIoKernel.readTextWithRecovery(idxFile, 2L * 1024L * 1024L) ?: return@forEach
+            val rawList = GSON.fromJsonArray<Collection>(text).getOrDefault(emptyList())
+            var indexChanged = false
+            val portableList = rawList.map { collection ->
+                var collectionChanged = false
+                val migratedImages = collection.images.map { rawPath ->
+                    val resolved = resolvePortablePath(rawPath, isNight, collection.dirName)
+                    if (resolved != null) {
+                        val portable = toPortablePath(resolved)
+                        if (portable != rawPath) {
+                            indexChanged = true
+                            collectionChanged = true
+                        }
+                        portable
+                    } else {
+                        // 盘面暂未找到文件时原样保留原始路径，不静默丢弃
+                        rawPath
+                    }
+                }
+                val finalImages = if (collectionChanged) migratedImages.distinct() else migratedImages
+                val migrated = collection.copy(images = finalImages)
+                collectionsById[migrated.id] = migrated
+                migrated
+            }
+            if (indexChanged) {
+                PackageIoKernel.writeTextAtomic(idxFile, GSON.toJson(portableList))
+            }
+        }
+
+        val assignmentsDir = File(rootDir, "assignments")
+        if (assignmentsDir.isDirectory) {
+            assignmentsDir.listFiles()
+                ?.filter { it.isFile && it.extension.equals("json", ignoreCase = true) && !it.name.startsWith(".") }
+                .orEmpty()
+                .forEach { file ->
+                    val collectionId = file.nameWithoutExtension
+                    val collection = collectionsById[collectionId]
+                    val text = runCatching { file.readText() }.getOrNull() ?: return@forEach
+                    val rawAssignments = GSON.fromJsonArray<Assignment>(text).getOrNull() ?: return@forEach
+                    var changed = false
+                    val migratedAssignments = rawAssignments.map { item ->
+                        if (item.imagePath.isBlank()) {
+                            val idx = item.index
+                            val candidate = if (collection != null && idx != null && idx in collection.images.indices) {
+                                collection.images[idx]
+                            } else {
+                                null
+                            }
+                            val resolvedCandidate = candidate?.let {
+                                resolvePortablePath(it, collection?.isNight, collection?.dirName)
+                            }
+                            if (resolvedCandidate != null) {
+                                changed = true
+                                item.copy(imagePath = toPortablePath(resolvedCandidate), index = null)
+                            } else {
+                                item
+                            }
+                        } else {
+                            val resolved = resolvePortablePath(item.imagePath, collection?.isNight, collection?.dirName)
+                            if (resolved != null) {
+                                val portable = toPortablePath(resolved)
+                                if (portable != item.imagePath) {
+                                    changed = true
+                                    item.copy(imagePath = portable)
+                                } else {
+                                    item
+                                }
+                            } else {
+                                // 盘面暂未找到文件时原样保留原始条目，不静默丢弃
+                                item
+                            }
+                        }
+                    }
+                    if (changed) {
+                        PackageIoKernel.writeTextAtomic(file, GSON.toJson(migratedAssignments))
+                    }
+                }
+        }
+        invalidateCache()
+    }
+
+    @Synchronized
     fun invalidateCache() {
         dayCache = null
         nightCache = null
@@ -856,25 +945,119 @@ object CoverCollectionManager {
         return typeDir(isNight).getFile(indexFileName)
     }
 
+    private fun toPortablePath(path: String): String {
+        val normalized = path.trim().replace('\\', '/')
+        if (normalized.isBlank()) return ""
+        if (!normalized.startsWith("/") && !File(normalized).isAbsolute) {
+            return normalized.trimStart('/')
+        }
+        val rootAbs = rootDir.absolutePath.replace('\\', '/').trimEnd('/') + "/"
+        if (normalized.startsWith(rootAbs)) {
+            return normalized.removePrefix(rootAbs)
+        }
+        val canonical = runCatching { File(normalized).canonicalPath.replace('\\', '/') }.getOrNull()
+        val rootCanonical = runCatching { rootDir.canonicalPath.replace('\\', '/').trimEnd('/') + "/" }.getOrNull()
+        if (canonical != null && rootCanonical != null && canonical.startsWith(rootCanonical)) {
+            return canonical.removePrefix(rootCanonical)
+        }
+        return path
+    }
+
+    private fun resolvePortablePath(
+        storedPath: String,
+        isNightHint: Boolean? = null,
+        dirNameHint: String? = null
+    ): String? {
+        val raw = storedPath.trim().replace('\\', '/')
+        if (raw.isBlank()) return null
+
+        if (!raw.startsWith("/") && !File(raw).isAbsolute) {
+            File(rootDir, raw.trimStart('/')).takeIf { it.isFile }?.let { return it.absolutePath }
+        } else {
+            File(raw).takeIf { it.isFile }?.let { return it.absolutePath }
+            val marker = "/coverCollections/"
+            val idx = raw.indexOf(marker)
+            if (idx >= 0) {
+                val rel = raw.substring(idx + marker.length).trimStart('/')
+                if (rel.isNotBlank()) {
+                    File(rootDir, rel).takeIf { it.isFile }?.let { return it.absolutePath }
+                }
+            }
+        }
+
+        val fileName = File(raw).name
+        if (fileName.isNotBlank()) {
+            if (isNightHint != null && !dirNameHint.isNullOrBlank()) {
+                val modeDir = File(rootDir, if (isNightHint) "night" else "day")
+                File(modeDir, "$dirNameHint/images/$fileName")
+                    .takeIf { it.isFile }
+                    ?.let { return it.absolutePath }
+            }
+            if (isNightHint == null && dirNameHint.isNullOrBlank()) {
+                for (night in listOf(false, true)) {
+                    val modeDir = File(rootDir, if (night) "night" else "day")
+                    if (!modeDir.isDirectory) continue
+                    modeDir.listFiles()?.forEach { colDir ->
+                        if (colDir.isDirectory) {
+                            val imgFile = File(colDir, "images/$fileName")
+                            if (imgFile.isFile) return imgFile.absolutePath
+                        }
+                    }
+                }
+            }
+        }
+        return null
+    }
+
     private fun loadIndex(isNight: Boolean): List<Collection> {
         (if (isNight) nightCache else dayCache)?.let { return it }
-        val text = PackageIoKernel.readTextWithRecovery(indexFile(isNight), 2L * 1024L * 1024L)
+        val file = indexFile(isNight)
+        val text = PackageIoKernel.readTextWithRecovery(file, 2L * 1024L * 1024L)
             ?: return emptyList()
-        val list = GSON.fromJsonArray<Collection>(text).getOrDefault(emptyList())
-            .map { collection ->
-                collection.copy(images = collection.images.filter { File(it).exists() })
+        var needsMigration = false
+        val rawList = GSON.fromJsonArray<Collection>(text).getOrDefault(emptyList())
+        val diskList = ArrayList<Collection>(rawList.size)
+        val runtimeList = ArrayList<Collection>(rawList.size)
+        rawList.forEach { collection ->
+            var collectionChanged = false
+            val diskImages = ArrayList<String>(collection.images.size)
+            val resolvedImages = ArrayList<String>(collection.images.size)
+            collection.images.forEach { rawPath ->
+                val resolved = resolvePortablePath(rawPath, isNight, collection.dirName)
+                if (resolved != null) {
+                    resolvedImages.add(resolved)
+                    val portable = toPortablePath(resolved)
+                    if (portable != rawPath) {
+                        needsMigration = true
+                        collectionChanged = true
+                    }
+                    diskImages.add(portable)
+                } else {
+                    // 未解析条目保留原串不丢弃，避免覆盖写回丢失未就绪资源引用
+                    diskImages.add(rawPath)
+                }
             }
-        if (isNight) {
-            nightCache = list
-        } else {
-            dayCache = list
+            val finalDiskImages = if (collectionChanged) diskImages.distinct() else diskImages
+            diskList.add(collection.copy(images = finalDiskImages))
+            runtimeList.add(collection.copy(images = resolvedImages.distinct()))
         }
-        return list
+        if (needsMigration) {
+            PackageIoKernel.writeTextAtomic(file, GSON.toJson(diskList))
+        }
+        if (isNight) {
+            nightCache = runtimeList
+        } else {
+            dayCache = runtimeList
+        }
+        return runtimeList
     }
 
     private fun saveIndex(isNight: Boolean, list: List<Collection>) {
         val file = indexFile(isNight)
-        PackageIoKernel.writeTextAtomic(file, GSON.toJson(list))
+        val portableList = list.map { collection ->
+            collection.copy(images = collection.images.map(::toPortablePath).distinct())
+        }
+        PackageIoKernel.writeTextAtomic(file, GSON.toJson(portableList))
         if (isNight) {
             nightCache = list
         } else {
@@ -1330,9 +1513,18 @@ object CoverCollectionManager {
 
     private fun readAssignments(collectionId: String): List<Assignment> {
         val file = assignmentsFile(collectionId)
-        return GSON.fromJsonArray<Assignment>(
-            file.takeIf { it.exists() }?.readText()
-        ).getOrDefault(emptyList())
+        val text = file.takeIf { it.exists() }?.readText() ?: return emptyList()
+        val rawList = GSON.fromJsonArray<Assignment>(text).getOrDefault(emptyList())
+        if (rawList.isEmpty()) return emptyList()
+        val collection = findCollectionById(collectionId)
+        return rawList.map { item ->
+            if (item.imagePath.isBlank()) {
+                item
+            } else {
+                val resolved = resolvePortablePath(item.imagePath, collection?.isNight, collection?.dirName)
+                if (resolved != null) item.copy(imagePath = resolved) else item
+            }
+        }
     }
 
     private fun scheduleSaveAssignmentsLocked(collectionId: String, state: AssignmentState) {
@@ -1377,10 +1569,14 @@ object CoverCollectionManager {
             (assignmentGenerations[collectionId] ?: 0L) == expectedGeneration
         }
         if (!stillCurrentBeforeWrite) return
+        val portableSnapshot = snapshot.map { item ->
+            if (item.imagePath.isBlank()) item
+            else item.copy(imagePath = toPortablePath(item.imagePath))
+        }
         val target = assignmentsFile(collectionId)
         val tmp = File(target.parentFile, ".${target.name}.${UUID.randomUUID()}.tmp")
         runCatching {
-            tmp.writeText(GSON.toJson(snapshot))
+            tmp.writeText(GSON.toJson(portableSnapshot))
             val stillValid = synchronized(this) {
                 (assignmentGenerations[collectionId] ?: 0L) == expectedGeneration
             }

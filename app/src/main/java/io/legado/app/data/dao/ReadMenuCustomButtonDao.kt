@@ -27,6 +27,9 @@ interface ReadMenuCustomButtonDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(button: ReadMenuCustomButton): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(vararg buttons: ReadMenuCustomButton)
+
     @Update
     fun update(button: ReadMenuCustomButton)
 

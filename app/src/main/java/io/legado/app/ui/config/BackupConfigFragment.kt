@@ -1,7 +1,9 @@
 package io.legado.app.ui.config
 
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
+import android.provider.DocumentsContract
 import android.view.Menu
 import android.view.MenuInflater
 import android.view.MenuItem
@@ -9,9 +11,13 @@ import android.view.View
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.edit
+import androidx.core.net.toUri
 import androidx.core.view.MenuProvider
+import androidx.documentfile.provider.DocumentFile
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
 import io.legado.app.R
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
@@ -23,12 +29,11 @@ import io.legado.app.help.LifecycleHelp
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.cloud.S3CapacityFullException
 import io.legado.app.lib.dialogs.SelectItem
-import android.net.Uri
-import androidx.documentfile.provider.DocumentFile
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.storage.AssetsBackupManager
 import io.legado.app.help.storage.Backup
 import io.legado.app.help.storage.BackupConfig
 import io.legado.app.help.storage.BackupProgress
@@ -74,6 +79,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import splitties.init.appCtx
+import java.io.File
 
 class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
@@ -92,6 +98,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     private var restoreJob: Job? = null
     private var activeBackupPath: String? = null
     private var pendingS3FullBackupPath: String? = null
+    private var assetsBackupState: AssetsBackupManager.AssetsBackupState =
+        AssetsBackupManager.state.value
 
     /**
      * 旧版数据选择器：默认选数据目录，附加动作可选旧版备份压缩包(zip)
@@ -133,7 +141,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             obtainWaitDialog().setText(R.string.restore)
             obtainWaitDialog().show()
             val task = Coroutine.async(Coroutine.defaultScope) {
-                findLocalAssetsUris()
+                findLocalAssetsUris(uri)
             }.onSuccess { assetsUris ->
                 _waitDialog?.dismiss()
                 askLocalRestore(uri, assetsUris)
@@ -176,6 +184,16 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         activity?.addMenuProvider(this, viewLifecycleOwner)
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                AssetsBackupManager.state.collect { state ->
+                    if (assetsBackupState != state) {
+                        assetsBackupState = state
+                        refreshSettings()
+                    }
+                }
+            }
+        }
         if (!LocalConfig.backupHelpVersionIsLast) {
             showHelp("webDavHelp")
         }
@@ -333,7 +351,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                         SettingActionSpec(
                             key = KEY_WEB_DAV_BACKUP,
                             title = str(R.string.backup),
-                            summary = str(R.string.backup_summary),
+                            summary = backupActionSummary(),
                             onClick = { backup() }
                         ),
                         SettingActionSpec(
@@ -365,7 +383,7 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                             key = PreferKey.backupAssetsSeparately,
                             title = str(R.string.backup_assets_separately_t),
                             summary = str(R.string.backup_assets_separately_s),
-                            defaultValue = false
+                            defaultValue = true
                         ),
                         switch(
                             key = PreferKey.onlyLatestBackup,
@@ -533,6 +551,25 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         }
     }
 
+    private fun backupActionSummary(): String {
+        val base = str(R.string.backup_summary)
+        val status = when (val state = assetsBackupState) {
+            AssetsBackupManager.AssetsBackupState.Idle -> null
+            AssetsBackupManager.AssetsBackupState.Checking -> str(R.string.assets_backup_status_checking)
+            AssetsBackupManager.AssetsBackupState.Packing -> str(R.string.assets_backup_status_packing)
+            AssetsBackupManager.AssetsBackupState.Uploading -> str(R.string.assets_backup_status_uploading)
+            AssetsBackupManager.AssetsBackupState.SkippedUnchanged -> str(R.string.assets_backup_status_skipped)
+            is AssetsBackupManager.AssetsBackupState.Success -> when {
+                state.cloudUploaded -> str(R.string.assets_backup_status_success_cloud)
+                state.localSaved -> str(R.string.assets_backup_status_success_local)
+                else -> str(R.string.assets_backup_synced)
+            }
+            is AssetsBackupManager.AssetsBackupState.Failed ->
+                str(R.string.assets_backup_status_failed, state.message)
+        }
+        return if (status != null) "$base\n$status" else base
+    }
+
     private fun webDavAccountSummary(): String {
         val url = ctx.getPrefString(PreferKey.webDavUrl).orEmpty()
         val account = ctx.getPrefString(PreferKey.webDavAccount).orEmpty()
@@ -641,7 +678,13 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
         val appContext = ctx.applicationContext
         // 使用全局协程：点「后台继续」或离开页面不会中断备份
         Coroutine.async(Coroutine.defaultScope) {
-            Backup.backupLocked(appContext, backupPath, uploadCloud, uploadWebDavFallback) { progress ->
+            Backup.backupLocked(
+                context = appContext,
+                path = backupPath,
+                uploadCloud = uploadCloud,
+                uploadWebDavFallback = uploadWebDavFallback,
+                isManual = true
+            ) { progress ->
                 BackupProgressHolder.update(progress)
             }
         }.onSuccess {
@@ -675,7 +718,11 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
      */
     private fun notifyBackupResult(success: Boolean, detail: String?) {
         val message = if (success) {
-            appCtx.getString(R.string.backup_success)
+            if (AppConfig.backupAssetsSeparately) {
+                appCtx.getString(R.string.backup_success_async_assets)
+            } else {
+                appCtx.getString(R.string.backup_success)
+            }
         } else {
             appCtx.getString(R.string.backup_fail, detail.orEmpty())
         }
@@ -914,7 +961,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
 
     private fun restoreWebDav(name: String) {
         Coroutine.async(Coroutine.defaultScope) {
-            AppCloudStorage.listAssetsBackupNames()
+            val allAssets = AppCloudStorage.listAssetsBackupNames()
+            AppCloudStorage.filterMatchingAssets(allAssets, name)
         }.onError {
             startCloudRestore(name, emptyList())
         }.onSuccess { assetsNames ->
@@ -925,6 +973,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
                     showComposeConfirmDialog(
                         title = str(R.string.restore),
                         message = str(R.string.backup_assets_restore_message, assetsNames.joinToString("\n")),
+                        positiveText = str(R.string.ui_main_restore_all),
+                        negativeText = str(R.string.ui_main_main_package_only),
                         onPositive = { startCloudRestore(name, assetsNames) },
                         onNegative = { startCloudRestore(name, emptyList()) }
                     )
@@ -958,26 +1008,90 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
     }
 
     /**
-     * 本地恢复的资源包发现：主包与资源包都同步在备份路径目录下，
-     * 从该目录枚举 backup_assets 前缀的 zip（附带显示名供弹窗确认）；
-     * 目录不可枚举时返回空。
+     * 本地恢复的资源包发现：优先扫描所选主包所在同级目录
+     * （`file://` 直接取 `parentFile`；SAF URI 优先在已授权同级目录树查找，否则回退 `AppConfig.backupPath`），
+     * 再按 [AppCloudStorage.filterMatchingAssets] 精准匹配设备后缀，防止多设备资源包混压覆盖。
      */
-    private suspend fun findLocalAssetsUris(): List<Pair<Uri, String>> {
-        val path = AppConfig.backupPath
-        if (path.isNullOrBlank()) return emptyList()
-        return runCatching {
-            if (path.isContentScheme()) {
-                DocumentFile.fromTreeUri(appCtx, Uri.parse(path))?.listFiles()
-                    ?.filter { it.isFile && it.name?.startsWith("backup_assets") == true }
-                    ?.mapNotNull { doc -> doc.name?.let { doc.uri to it } }
-                    .orEmpty()
-            } else {
-                java.io.File(path).listFiles()
-                    ?.filter { it.isFile && it.name.startsWith("backup_assets") }
-                    ?.map { Uri.fromFile(it) to it.name }
-                    .orEmpty()
+    private suspend fun findLocalAssetsUris(selectedUri: Uri): List<Pair<Uri, String>> {
+        val mainBackupName = if (selectedUri.isContentScheme()) {
+            DocumentFile.fromSingleUri(appCtx, selectedUri)?.name
+        } else {
+            selectedUri.path?.let { File(it).name }
+        }?.trim().orEmpty()
+        val candidates = if (!selectedUri.isContentScheme()) {
+            selectedUri.path?.let { File(it).parentFile }
+                ?.takeIf { it.isDirectory }
+                ?.let(::scanLocalAssetsInDir)
+                .orEmpty()
+        } else {
+            findSafSiblingAssets(selectedUri) ?: run {
+                val backupPath = AppConfig.backupPath?.takeIf { it.isNotBlank() }
+                when {
+                    backupPath == null -> emptyList()
+                    backupPath.isContentScheme() -> scanLocalAssetsInTree(backupPath.toUri())
+                    else -> scanLocalAssetsInDir(File(backupPath))
+                }
             }
+        }
+        if (candidates.isEmpty()) return emptyList()
+        val distinctCandidates = candidates
+            .filter { !it.second.equals(mainBackupName, ignoreCase = true) }
+            .distinctBy { it.second.lowercase() }
+        if (mainBackupName.isBlank()) return distinctCandidates
+        val matchedNames = AppCloudStorage.filterMatchingAssets(
+            distinctCandidates.map { it.second },
+            mainBackupName
+        ).toSet()
+        return distinctCandidates.filter { it.second in matchedNames }
+    }
+
+    private fun scanLocalAssetsInDir(dir: File): List<Pair<Uri, String>> {
+        if (!dir.isDirectory) return emptyList()
+        return dir.listFiles()
+            ?.filter { it.isFile && it.length() > 0L && it.name.startsWith("backup_assets", ignoreCase = true) }
+            ?.map { Uri.fromFile(it) to it.name }
+            .orEmpty()
+    }
+
+    private fun scanLocalAssetsInTree(treeUri: Uri): List<Pair<Uri, String>> {
+        return runCatching {
+            DocumentFile.fromTreeUri(appCtx, treeUri)?.listFiles()
+                ?.filter { it.isFile && it.length() > 0L && it.name?.startsWith("backup_assets", ignoreCase = true) == true }
+                ?.mapNotNull { doc -> doc.name?.let { doc.uri to it } }
+                .orEmpty()
         }.getOrDefault(emptyList())
+    }
+
+    private fun findSafSiblingAssets(selectedUri: Uri): List<Pair<Uri, String>>? {
+        return runCatching {
+            if (!DocumentsContract.isDocumentUri(appCtx, selectedUri)) return null
+            val docId = DocumentsContract.getDocumentId(selectedUri)
+            val authority = selectedUri.authority ?: return null
+            appCtx.contentResolver.persistedUriPermissions.forEach { perm ->
+                if (!perm.isReadPermission || perm.uri.authority != authority) return@forEach
+                val treeId = runCatching { DocumentsContract.getTreeDocumentId(perm.uri) }.getOrNull()
+                    ?: return@forEach
+                val relative = when {
+                    docId == treeId -> ""
+                    treeId.endsWith(":") && docId.startsWith(treeId) -> docId.removePrefix(treeId)
+                    treeId.endsWith("/") && docId.startsWith(treeId) -> docId.removePrefix(treeId)
+                    docId.startsWith("$treeId/") -> docId.removePrefix("$treeId/")
+                    else -> return@forEach
+                }
+                var dirDoc = DocumentFile.fromTreeUri(appCtx, perm.uri) ?: return@forEach
+                if (relative.contains('/')) {
+                    val parentSegments = relative.substringBeforeLast('/').split('/')
+                    for (seg in parentSegments) {
+                        if (seg.isBlank()) continue
+                        dirDoc = dirDoc.findFile(seg)?.takeIf { it.isDirectory } ?: return@forEach
+                    }
+                }
+                return dirDoc.listFiles()
+                    .filter { it.isFile && it.length() > 0L && it.name?.startsWith("backup_assets", ignoreCase = true) == true }
+                    .mapNotNull { doc -> doc.name?.let { doc.uri to it } }
+            }
+            null
+        }.getOrNull()
     }
 
     private fun askLocalRestore(uri: Uri, assetsUris: List<Pair<Uri, String>>) {
@@ -989,6 +1103,8 @@ class BackupConfigFragment : ComposeSettingFragment(), MenuProvider {
             showComposeConfirmDialog(
                 title = str(R.string.restore),
                 message = str(R.string.backup_assets_restore_path_message, assetsUris.joinToString("\n") { it.second }),
+                positiveText = str(R.string.ui_main_restore_all),
+                negativeText = str(R.string.ui_main_main_package_only),
                 onPositive = { startLocalRestore(uri, assetsUris.map { it.first }) },
                 onNegative = { startLocalRestore(uri, emptyList()) }
             )

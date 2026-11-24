@@ -15,29 +15,26 @@ import io.legado.app.help.DirectLinkUpload
 import io.legado.app.lib.cloud.S3CapacityFullException
 import io.legado.app.lib.cloud.S3ContainerManager
 import io.legado.app.lib.cloud.CloudStorageType
+import io.legado.app.help.ai.AiSecretCipher
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ShelfIdentity
-import io.legado.app.help.config.AdvancedTitlePackageManager
-import io.legado.app.help.config.BubblePackageManager
-import io.legado.app.help.config.CoverCollectionManager
+import io.legado.app.help.config.CoverHtmlTemplateConfig
 import io.legado.app.help.config.LocalConfig
-import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.SecurePrefs
 import io.legado.app.help.config.ThemeConfig
-import io.legado.app.help.config.AppearanceKitManager
-import io.legado.app.help.config.ThemePackageManager
-import io.legado.app.help.config.TopBarConfig
 import io.legado.app.help.config.pkg.UnifiedPackageRepository
 import io.legado.app.help.coroutine.Coroutine
+import io.legado.app.help.illustration.IllustrationHelp
 import io.legado.app.model.BookCover
 import io.legado.app.model.AutoTask
 import io.legado.app.model.AutoTaskImport
+import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplateStore
+import io.legado.app.ui.main.ai.AiImageProviderConfig
+import io.legado.app.ui.main.ai.AiMcpServerConfig
+import io.legado.app.ui.main.ai.AiProviderConfig
 import io.legado.app.data.entities.BaseSource
-import io.legado.app.data.entities.BookSource
-import io.legado.app.data.entities.HttpTTS
-import io.legado.app.data.entities.RssSource
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
@@ -45,15 +42,13 @@ import io.legado.app.utils.compress.ZipUtils
 import io.legado.app.utils.createFolderIfNotExist
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.externalFiles
+import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getFile
-import io.legado.app.utils.getPrefString
 import io.legado.app.utils.getSharedPreferences
 import io.legado.app.utils.isContentScheme
-import io.legado.app.utils.openInputStream
 import io.legado.app.utils.normalizeFileName
 import io.legado.app.utils.openOutputStream
-import io.legado.app.utils.outputStream
 import io.legado.app.utils.writeToOutputStream
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.currentCoroutineContext
@@ -69,7 +64,6 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.io.OutputStream
 import java.io.OutputStreamWriter
-import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -86,8 +80,6 @@ object Backup {
         appCtx.filesDir.getFile("backup").createFolderIfNotExist().absolutePath
     }
     val zipFilePath = "${appCtx.externalFiles.absolutePath}${File.separator}tmp_backup.zip"
-    private val assetsZipFilePath =
-        "${appCtx.externalFiles.absolutePath}${File.separator}tmp_backup_assets.zip"
     internal const val bookCharactersFileName = "bookCharacters.json"
     internal const val bookCharacterRelationsFileName = "bookCharacterRelations.json"
     internal const val bookCharacterAvatarsDirName = "bookCharacterAvatars"
@@ -103,11 +95,15 @@ object Backup {
     internal const val unifiedPackagesDirName = UiPackageBackup.UNIFIED_PACKAGES
 
     internal const val fontsDirName = "fonts"
-    private const val fontsCollectDirName = "fonts_collect"
-    private val fontFileRegex = Regex("(?i).*\\.[ot]tf")
+    internal const val illustrationsDirName = IllustrationHelp.ILLUSTRATIONS_DIR_NAME
+    internal const val readMenuIconsDirName = "readMenuIcons"
+    internal const val readAloudAudioDirName = "readAloudAudio"
+    internal const val aiImagesDirName = "ai_images"
+    internal const val sourceConfigFileName = "sourceConfig.xml"
+    internal const val sourceConfigPrefName = "SourceConfig"
     internal const val bookCacheBackupDirName = "book_cache"
 
-    private const val AT_FONT_PREFIX = "@font:"
+    internal const val BACKUP_AI_SECRET_PREFIX = "benc:v1:"
 
     private const val TAG = "Backup"
 
@@ -148,18 +144,44 @@ object Backup {
             "dictRule.json",
             bookCharactersFileName,
             bookCharacterRelationsFileName,
+            "bookCollections.json",
+            "bookCollectionItems.json",
+            "bookCollectionChildren.json",
+            "bookIllustrations.json",
+            "paragraphRules.json",
+            "bookParagraphRules.json",
+            "paragraphRuleVars.json",
+            "readMenuCustomButtons.json",
+            "homepageModules.json",
+            "homepageCustomSets.json",
+            "readAloudBgmGroups.json",
+            "readAloudBgmTracks.json",
+            "readAloudSpeakerGroups.json",
+            "readAloudSpeakerGroupItems.json",
+            "readRecordDaily.json",
+            "readRecentBooks.json",
+            "rssReadRecords.json",
+            "pendingReviewComments.json",
+            "aiMemoryItems.json",
+            "aiMemoryFragments.json",
+            "aiImageGroups.json",
+            "aiGeneratedImages.json",
             "servers.json",
+            "cookies.json",
             "autoTask.json",
             DirectLinkUpload.ruleFileName,
             ReadBookConfig.configFileName,
             ReadBookConfig.shareConfigFileName,
             ReadBookConfig.epubConfigFileName,
             ReadBookConfig.epubShareConfigFileName,
+            EpubReaderTemplateStore.fileName,
             ThemeConfig.configFileName,
             BookCover.configFileName,
+            CoverHtmlTemplateConfig.configFileName,
             "sourceRuntime.json",
             "config.xml",
-            "videoConfig.xml"
+            "videoConfig.xml",
+            sourceConfigFileName
         )
     }
 
@@ -171,16 +193,6 @@ object Backup {
             "backup${backupDate}-${deviceName}.zip"
         } else {
             "backup${backupDate}.zip"
-        }.normalizeFileName()
-    }
-
-    private fun getAssetsZipFileName(): String {
-        // 资源包用稳定文件名：内容不变时跳过上传、不产生每日堆积
-        val deviceName = AppConfig.webDavDeviceName
-        return if (deviceName?.isNotBlank() == true) {
-            "backup_assets-${deviceName}.zip"
-        } else {
-            "backup_assets.zip"
         }.normalizeFileName()
     }
 
@@ -196,17 +208,28 @@ object Backup {
                 LogUtils.d(TAG, "auto backup delayed for foreground first frame")
                 delay(5000)
             }
+            var mainSucceeded = false
+            val targetPath = AppConfig.backupPath
             mutex.withLock {
                 if (shouldBackup()) {
                     AppLog.put("自动备份触发")
                     AppLog.put("Auto backup trigger")
                     LogUtils.d(TAG, "auto backup trigger")
-                    backup(appContext, AppConfig.backupPath)
+                    mainSucceeded = backup(appContext, targetPath)
                 } else {
                     AppLog.put("自动备份跳过: 今日已备份")
                     AppLog.put("Auto backup skipped: already backed up today")
                     LogUtils.d(TAG, "auto backup skipped by interval")
                 }
+            }
+            if (mainSucceeded && AppConfig.backupAssetsSeparately) {
+                AssetsBackupManager.enqueueAsync(
+                    context = appContext,
+                    path = targetPath,
+                    uploadCloud = true,
+                    uploadWebDavFallback = false,
+                    showUserFeedback = false
+                )
             }
         }.onError {
             AppLog.put("自动备份失败\n${it.localizedMessage}", it)
@@ -249,6 +272,8 @@ object Backup {
                 if (!AppConfig.autoBackupOnShelfChange || Restore.isRestoring) {
                     return@async
                 }
+                var mainSucceeded = false
+                var targetPath: String? = null
                 // 持锁后再复查：恢复流程（restoreLocked）持同一把锁，锁内复查可保证
                 // 备份删建 backupPath 与恢复解压到 backupPath 互斥。
                 mutex.withLock {
@@ -268,11 +293,23 @@ object Backup {
                         AppLog.put("书架变动自动备份已跳过：身份键集合未变化")
                         return@withLock
                     }
-                    backup(context, backupPath)
-                    // ⚠️ 记账必须放在**备份成功之后**：放在开头的话，备份中途被取消/进程被杀
-                    // 会留下「标记已更新但备份没做成」，该次变动此后永不补备份。
-                    LocalConfig.lastShelfKeys = encodeKeys(currentKeys)
-                    AppLog.put("书架变动自动备份完成：${currentKeys.size} 本在线书")
+                    targetPath = backupPath
+                    mainSucceeded = backup(context, backupPath)
+                    if (mainSucceeded) {
+                        // ⚠️ 记账必须放在**备份成功之后**：放在开头的话，备份中途被取消/进程被杀
+                        // 会留下「标记已更新但备份没做成」，该次变动此后永不补备份。
+                        LocalConfig.lastShelfKeys = encodeKeys(currentKeys)
+                        AppLog.put("书架变动自动备份完成：${currentKeys.size} 本在线书")
+                    }
+                }
+                if (mainSucceeded && AppConfig.backupAssetsSeparately) {
+                    AssetsBackupManager.enqueueAsync(
+                        context = context,
+                        path = targetPath,
+                        uploadCloud = true,
+                        uploadWebDavFallback = false,
+                        showUserFeedback = false
+                    )
                 }
             }.onError {
                 AppLog.put("书架变动自动备份失败\n${it.localizedMessage}", it)
@@ -291,12 +328,24 @@ object Backup {
         path: String?,
         uploadCloud: Boolean = true,
         uploadWebDavFallback: Boolean = false,
+        isManual: Boolean = false,
         onProgress: ((BackupProgress) -> Unit)? = null
     ) {
+        val appContext = context.applicationContext ?: context
+        var mainSucceeded = false
         mutex.withLock {
             withContext(IO) {
-                backup(context, path, uploadCloud, uploadWebDavFallback, onProgress)
+                mainSucceeded = backup(appContext, path, uploadCloud, uploadWebDavFallback, onProgress)
             }
+        }
+        if (mainSucceeded && AppConfig.backupAssetsSeparately) {
+            AssetsBackupManager.enqueueAsync(
+                context = appContext,
+                path = path,
+                uploadCloud = uploadCloud,
+                uploadWebDavFallback = uploadWebDavFallback,
+                showUserFeedback = isManual
+            )
         }
     }
 
@@ -306,7 +355,7 @@ object Backup {
         uploadCloud: Boolean = true,
         uploadWebDavFallback: Boolean = false,
         onProgress: ((BackupProgress) -> Unit)? = null
-    ) {
+    ): Boolean {
         LogUtils.d(TAG, "开始备份 path:$path")
         val reporter = BackupProgressReporter(onProgress)
         reporter.report(BackupProgress(BackupStage.PREPARING), force = true)
@@ -328,6 +377,28 @@ object Backup {
         writeListToJson(appDb.dictRuleDao.all, "dictRule.json", backupPath)
         writeListToJson(appDb.bookCharacterDao.allCharacters(), bookCharactersFileName, backupPath)
         writeListToJson(appDb.bookCharacterDao.allRelations(), bookCharacterRelationsFileName, backupPath)
+        writeListToJson(appDb.bookCollectionDao.allCollections(), "bookCollections.json", backupPath)
+        writeListToJson(appDb.bookCollectionDao.allItems(), "bookCollectionItems.json", backupPath)
+        writeListToJson(appDb.bookCollectionDao.allChildren(), "bookCollectionChildren.json", backupPath)
+        writeListToJson(appDb.bookIllustrationDao.all, "bookIllustrations.json", backupPath)
+        writeListToJson(appDb.paragraphRuleDao.all(), "paragraphRules.json", backupPath)
+        writeListToJson(appDb.paragraphRuleDao.allBookRules(), "bookParagraphRules.json", backupPath)
+        writeListToJson(appDb.paragraphRuleDao.allVars(), "paragraphRuleVars.json", backupPath)
+        writeListToJson(appDb.readMenuCustomButtonDao.all(), "readMenuCustomButtons.json", backupPath)
+        writeListToJson(appDb.homepageModuleDao.all, "homepageModules.json", backupPath)
+        writeListToJson(appDb.homepageCustomSetDao.all, "homepageCustomSets.json", backupPath)
+        writeListToJson(appDb.readAloudBgmDao.groups(), "readAloudBgmGroups.json", backupPath)
+        writeListToJson(appDb.readAloudBgmDao.allTracks(), "readAloudBgmTracks.json", backupPath)
+        writeListToJson(appDb.readAloudSpeakerGroupDao.groups(), "readAloudSpeakerGroups.json", backupPath)
+        writeListToJson(appDb.readAloudSpeakerGroupDao.items(), "readAloudSpeakerGroupItems.json", backupPath)
+        writeListToJson(appDb.readRecordDailyDao.allDesc, "readRecordDaily.json", backupPath)
+        writeListToJson(appDb.readRecentBookDao.all, "readRecentBooks.json", backupPath)
+        writeListToJson(appDb.rssReadRecordDao.getRecords(), "rssReadRecords.json", backupPath)
+        writeListToJson(appDb.pendingReviewCommentDao.all(), "pendingReviewComments.json", backupPath)
+        writeListToJson(appDb.aiMemoryDao.allItems(), "aiMemoryItems.json", backupPath)
+        writeListToJson(appDb.aiMemoryDao.allFragments(), "aiMemoryFragments.json", backupPath)
+        writeListToJson(appDb.aiImageGroupDao.all(), "aiImageGroups.json", backupPath)
+        writeListToJson(appDb.aiGeneratedImageDao.all(), "aiGeneratedImages.json", backupPath)
         AutoTask.all().takeIf { it.isNotEmpty() }?.let { rules ->
             FileUtils.createFileIfNotExist(backupPath + File.separator + "autoTask.json")
                 .writeText(AutoTaskImport.exportJson(rules), Charsets.UTF_8)
@@ -341,6 +412,15 @@ object Backup {
                     .writeText(it)
             }
         }
+        appDb.cookieDao.all.takeIf { it.isNotEmpty() }?.let { cookies ->
+            val json = GSON.toJson(cookies)
+            aes.runCatching {
+                encryptBase64(json)
+            }.getOrDefault(json).let {
+                FileUtils.createFileIfNotExist(backupPath + File.separator + "cookies.json")
+                    .writeText(it)
+            }
+        }
         currentCoroutineContext().ensureActive()
         ReadBookConfig.backupLayoutFiles().forEach { (name, json) ->
             FileUtils.createFileIfNotExist(backupPath + File.separator + name).writeText(json)
@@ -348,6 +428,18 @@ object Backup {
         GSON.toJson(ThemeConfig.configList).let {
             FileUtils.createFileIfNotExist(backupPath + File.separator + ThemeConfig.configFileName)
                 .writeText(it)
+        }
+        File(EpubReaderTemplateStore.filePath).takeIf { it.isFile && it.length() > 0L }?.let { file ->
+            file.readText(Charsets.UTF_8).takeIf { it.isNotBlank() }?.let { text ->
+                FileUtils.createFileIfNotExist(backupPath + File.separator + EpubReaderTemplateStore.fileName)
+                    .writeText(text, Charsets.UTF_8)
+            }
+        }
+        File(CoverHtmlTemplateConfig.configFilePath).takeIf { it.isFile && it.length() > 0L }?.let { file ->
+            file.readText(Charsets.UTF_8).takeIf { it.isNotBlank() }?.let { text ->
+                FileUtils.createFileIfNotExist(backupPath + File.separator + CoverHtmlTemplateConfig.configFileName)
+                    .writeText(text, Charsets.UTF_8)
+            }
         }
         DirectLinkUpload.getConfig()?.let { rule ->
             DirectLinkUpload.encodeRule(rule)
@@ -372,7 +464,7 @@ object Backup {
             if (BackupConfig.keyIsNotIgnore(key)) {
                 when (key) {
                     PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken,
-                    PreferKey.webServiceToken -> {
+                    PreferKey.webServiceToken, PreferKey.aiTavilyApiKey -> {
                         // SecurePrefs 本地存储值可能是密文 blob：备份包里必须放
                         // 「明文的二次加密」，否则跨设备恢复时本机 KeyStore 密钥解不开。
                         // read 兼容明文（未迁移数据），解密失败按空处理即跳过该键。
@@ -389,16 +481,27 @@ object Backup {
                         configValues[key] = S3ContainerManager.toEncryptedBackupJson(aes) ?: value?.toString()
                     }
 
+                    PreferKey.aiProviderList, PreferKey.aiImageProviderList, PreferKey.aiMcpServerList -> {
+                        val rawJson = value?.toString().orEmpty()
+                        if (rawJson.isNotEmpty()) {
+                            configValues[key] = encodeAiSecretsForBackup(key, rawJson, aes)
+                        }
+                    }
+
                     else -> configValues[key] = value
                 }
             }
         }
         BackupPrefsFile.write(File(backupPath, "config.xml"), configValues)
         currentCoroutineContext().ensureActive()
-        // 直接以文件形式写入 videoConfig.xml（同 config.xml，绕开 SP 进程缓存）
+        // 直接以文件形式写入 videoConfig.xml / sourceConfig.xml（同 config.xml，绕开 SP 进程缓存）
         BackupPrefsFile.write(
             File(backupPath, "videoConfig.xml"),
             appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).all
+        )
+        BackupPrefsFile.write(
+            File(backupPath, sourceConfigFileName),
+            appCtx.getSharedPreferences(sourceConfigPrefName, Context.MODE_PRIVATE).all
         )
         currentCoroutineContext().ensureActive()
         val zipFileName = getNowZipFileName()
@@ -406,35 +509,14 @@ object Backup {
         backupFileNames.forEach { name ->
             zipSources.add(ZipUtils.ZipSource(File(backupPath, name)))
         }
-        File(backupPath, advancedTitlePackagesDirName).takeIf { it.exists() }
+        // 主参数包仅保留 unifiedPackages/param 与 active_prefs.json 以及 highlightRules；
+        // 美术/封面/媒体资产由 AssetsBackupManager 异步分包同步（或单包模式统一并入）。
+        File(backupPath, unifiedPackagesDirName).takeIf { it.exists() }
             ?.let { zipSources.add(ZipUtils.ZipSource(it)) }
-        File(backupPath, bubblePackagesDirName).takeIf { it.exists() }
-            ?.let { zipSources.add(ZipUtils.ZipSource(it)) }
-        // UI 美术资产包（exportVisualResourcePackages 已复制到 backupPath）：打包阶段
-        // 是显式白名单，漏加 = 只导出到暂存区、从不进 zip，下次备份开头
-        // FileUtils.delete(backupPath) 即被丢弃——恢复端永远读不到，整个导出静默空转。
-        UiPackageBackup.packageDirNames.forEach { name ->
-            File(backupPath, name).takeIf { it.exists() }
-                ?.let { zipSources.add(ZipUtils.ZipSource(it)) }
-        }
         File(backupPath, io.legado.app.help.book.highlight.HighlightRules.BACKUP_DIR)
             .takeIf { it.exists() }?.let { zipSources.add(ZipUtils.ZipSource(it)) }
-        File(backupPath, io.legado.app.help.reader.ReaderAssets.BACKUP_DIR)
-            .takeIf { it.exists() }?.let { zipSources.add(ZipUtils.ZipSource(it)) }
-        // 大体积资源直接从源目录压入 zip（entry 前缀与恢复端约定一致），跳过复制到 backupPath 的中间环节。
-        // 开启「资源文件单独备份」时，字体/背景图/头像拆出主包，打包进独立资源包
-        val assetSources = arrayListOf<ZipUtils.ZipSource>()
-        collectBookCharacterAvatarSource()?.let(assetSources::add)
-        assetSources.addAll(collectReaderFontSources())
-        assetSources.addAll(collectBackgroundAssetSources())
-        assetSources.addAll(collectGroupCoverSources())
-        if (AppConfig.backupAssetsSeparately && assetSources.isNotEmpty()) {
-            AppLog.put("资源单独备份：${assetSources.size} 项资源拆分为独立包")
-        } else {
-            if (AppConfig.backupAssetsSeparately && assetSources.isEmpty()) {
-                AppLog.put("资源分离已开启，但没有可拆分的资源（字体/背景图/头像）")
-            }
-            zipSources.addAll(assetSources)
+        if (!AppConfig.backupAssetsSeparately) {
+            zipSources.addAll(AssetsBackupManager.collectArtAndMediaSources(context))
         }
         zipSources.addAll(collectBookFileSources())
         FileUtils.delete(zipFilePath)
@@ -451,26 +533,8 @@ object Backup {
                     reporter.report(BackupProgress(BackupStage.PACKING, processed, total))
                 }) {
                 reporter.report(BackupProgress(BackupStage.SAVING), force = true)
-                when {
-                    path.isNullOrBlank() -> {
-                        val fallbackDir = context.getExternalFilesDir(null)
-                            ?: throw NoStackTraceException("外部存储不可用")
-                        copyBackup(fallbackDir, backupFileName) { processed, total ->
-                            reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
-                        }
-                    }
-
-                    path.isContentScheme() -> {
-                        copyBackup(context, path.toUri(), backupFileName) { processed, total ->
-                            reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
-                        }
-                    }
-
-                    else -> {
-                        copyBackup(File(path), backupFileName) { processed, total ->
-                            reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
-                        }
-                    }
+                copyBackupFile(context, path, backupFileName, File(zipFilePath)) { processed, total ->
+                    reporter.report(BackupProgress(BackupStage.SAVING, processed, total))
                 }
                 if (uploadCloud) {
                     val cloudType = if (uploadWebDavFallback) CloudStorageType.WEBDAV else AppCloudStorage.type
@@ -482,12 +546,8 @@ object Backup {
                         AppCloudStorage.backup(zipFileName)
                     }
                     AppLog.put("Cloud backup finished: ${cloudType.name} $zipFileName")
-                    AppCloudStorage.upBookCovers()
                 }
                 backupSuccess = true
-                if (AppConfig.backupAssetsSeparately && assetSources.isNotEmpty()) {
-                    backupAssetsSeparately(context, path, assetSources, reporter, uploadCloud)
-                }
             } else {
                 throw NoStackTraceException("创建备份压缩包失败")
             }
@@ -501,20 +561,9 @@ object Backup {
             FileUtils.delete(backupPath)
             FileUtils.delete(zipFilePath)
         }
-        // fonts_collect 临时目录保留复用：SAF 字体复制件 mtime 稳定才能让源级指纹命中跳传；
-        // 仅 clearCache 时清理。
         currentCoroutineContext().ensureActive()
-        reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
-        ReadBookConfig.getAllPicBgStr().map {
-            if (it.contains(File.separator)) {
-                File(it)
-            } else {
-                appCtx.externalFiles.getFile("bg", it)
-            }
-        }.let {
-            AppCloudStorage.upBgs(it.toTypedArray())
-        }
         reporter.report(BackupProgress(BackupStage.FINISHED), force = true)
+        return backupSuccess
     }
 
     private fun exportSourceRuntime() {
@@ -566,57 +615,14 @@ object Backup {
         )
     }
 
-    /** 角色头像：直接从源目录压入 zip，entry 前缀与恢复目标目录一致 */
-    private fun collectBookCharacterAvatarSource(): ZipUtils.ZipSource? {
-        val sourceDir = appCtx.externalFiles.getFile("bookCharacters", "avatars")
-        if (!sourceDir.isDirectory) {
-            return null
-        }
-        if (sourceDir.listFiles().isNullOrEmpty()) {
-            return null
-        }
-        return ZipUtils.ZipSource(sourceDir, bookCharacterAvatarsDirName)
-    }
-
     private fun exportVisualResourcePackages() {
-        io.legado.app.help.reader.ReaderAssets.store.backupTo(
-            File(backupPath, io.legado.app.help.reader.ReaderAssets.BACKUP_DIR)
-        )
         io.legado.app.help.book.highlight.HighlightRules.store.backupTo(
             File(backupPath, io.legado.app.help.book.highlight.HighlightRules.BACKUP_DIR)
         )
-        AdvancedTitlePackageManager.exportPackagesTo(
-            File(backupPath, advancedTitlePackagesDirName)
-        )
-        copyPackageDirectories(
-            BubblePackageManager.rootDir,
-            File(backupPath, bubblePackagesDirName)
-        ) { name -> name !in setOf("temp", "remote_cache", BubblePackageManager.BUILTIN_DIR_NAME) }
-        // 主题包/底栏图标包/顶栏包/封面集合：恢复端 Restore.restore* 均会读取这些目录，
-        // 历史上备份端漏导出，换机时只能靠云同步兜底（默认关闭）→ 补齐导出，做到备份自包含。
-        UiPackageBackup.copyVisiblePackages(
-            ThemePackageManager.rootDir,
-            File(backupPath, themePackagesDirName)
-        )
-        UiPackageBackup.copyVisiblePackages(
-            NavigationBarIconConfig.rootDir,
-            File(backupPath, navigationBarPackagesDirName)
-        )
-        UiPackageBackup.copyVisiblePackages(
-            TopBarConfig.rootDir,
-            File(backupPath, topBarPackagesDirName)
-        )
-        UiPackageBackup.copyVisiblePackages(
-            CoverCollectionManager.rootDir,
-            File(backupPath, coverCollectionsDirName)
-        )
-        UiPackageBackup.copyVisiblePackagesAndFiles(
-            AppearanceKitManager.rootDir,
-            File(backupPath, appThemeKitsDirName)
-        )
         UiPackageBackup.copyUnifiedPackages(
             UnifiedPackageRepository.rootDir,
-            File(backupPath, unifiedPackagesDirName)
+            File(backupPath, unifiedPackagesDirName),
+            kindDirNames = listOf(UiPackageBackup.UNIFIED_PARAM)
         )
         val prefs = appCtx.defaultSharedPreferences
         UiPackageBackup.exportUnifiedActivePrefs(
@@ -624,160 +630,6 @@ object Backup {
             readString = { key -> prefs.getString(key, null) },
             readBoolean = { key -> if (prefs.contains(key)) prefs.getBoolean(key, false) else null }
         )
-    }
-
-    /**
-     * 收集阅读字体：应用私有 font 目录整个字体库（阅读菜单「字体」选择列表的全部来源，
-     * 恢复后选择列表完整）+ 各样式引用的字体本体（@font:名 与绝对路径均支持），
-     * 直接以 fonts/ 前缀压入 zip，恢复端将文件还原到应用私有 font 目录后引用即可命中。
-     */
-    private fun collectReaderFontSources(): List<ZipUtils.ZipSource> {
-        val sources = arrayListOf<ZipUtils.ZipSource>()
-        // 字体库目录整个打包；字体选择列表（AppFont.list）即扫描此目录
-        val fontDir = File(FileUtils.getPath(appCtx.externalFiles, "font"))
-        // 已占用的 entry 名（目录条目展开为 fonts/<文件名>，文件条目同为 fonts/<文件名>），
-        // 私有目录版本优先，其余来源同名时跳过，避免 duplicate entry 炸整包
-        val usedEntryNames = hashSetOf<String>()
-        if (fontDir.isDirectory && fontDir.listFiles()?.any { it.isFile } == true) {
-            sources.add(ZipUtils.ZipSource(fontDir, fontsDirName))
-            fontDir.listFiles()?.filter { it.isFile }?.forEach { usedEntryNames.add(it.name) }
-        }
-        val refs = linkedSetOf<String>()
-        ReadBookConfig.allLayoutConfigs().forEach { config ->
-            config.textFont.takeIf { it.isNotBlank() }?.let(refs::add)
-        }
-        // 界面字体（编辑主题里的 UI/标题字体，日夜间分离）同样引用字体文件
-        listOf(
-            PreferKey.uiFontPath,
-            PreferKey.uiFontPathN,
-            PreferKey.titleFontPath,
-            PreferKey.titleFontPathN
-        ).forEach { key ->
-            appCtx.getPrefString(key)?.takeIf { it.isNotBlank() }?.let(refs::add)
-        }
-        // 引用的字体不在字体库目录内时（绝对路径引用）单独补上，避免与目录条目重复
-        val files = refs.mapNotNull { resolveReaderFontFile(it) }
-            .filter { !it.absolutePath.startsWith(fontDir.absolutePath + File.separator) }
-            .distinctBy { it.absolutePath }
-        files.forEach { file ->
-            if (!usedEntryNames.add(file.name)) return@forEach
-            sources.add(ZipUtils.ZipSource(file, fontsDirName))
-        }
-        // 引用的字体在用户字体库目录（fontFolder）时同样纳入备份：
-        // 字体选择列表包含该目录，缺失会导致恢复后字体引用失效
-        refs.filter { resolveReaderFontFile(it) == null }
-            .forEach { ref ->
-                collectFontFolderFile(ref)?.let { file ->
-                    if (!usedEntryNames.add(file.name)) return@forEach
-                    sources.add(ZipUtils.ZipSource(file, fontsDirName))
-                }
-            }
-        if (sources.isNotEmpty()) {
-            AppLog.put("备份阅读字体库 ${sources.size} 项")
-        }
-        return sources
-    }
-
-    /**
-     * 字体引用指向用户字体库目录（fontFolder）时，从该目录取字体文件。
-     * SAF 目录无法直接打包，先复制到临时目录；staging 目录跨备份保留
-     * 以保持 mtime 稳定（源级指纹跳传依赖），仅 clearCache 时清理。
-     */
-    private fun collectFontFolderFile(ref: String): File? {
-        val name = ref.trim().removePrefix(AT_FONT_PREFIX).trim()
-        if (name.isBlank() || name.contains(File.separator) || name.contains("://")) {
-            return null
-        }
-        if (!fontFileRegex.matches(name)) {
-            return null
-        }
-        val fontPath = appCtx.getPrefString(PreferKey.fontFolder)?.takeIf { it.isNotBlank() }
-            ?: return null
-        return runCatching {
-            if (fontPath.isContentScheme()) {
-                val tree = DocumentFile.fromTreeUri(appCtx, Uri.parse(fontPath))
-                    ?: return@runCatching null
-                val doc = tree.findFile(name) ?: return@runCatching null
-                val stagingDir = File(appCtx.cacheDir, fontsCollectDirName)
-                val target = File(stagingDir, name)
-                if (target.isFile && target.length() == doc.length()) {
-                    return@runCatching target
-                }
-                stagingDir.mkdirs()
-                target.outputStream().use { output ->
-                    doc.openInputStream()?.use { input ->
-                        input.copyTo(output)
-                    } ?: return@runCatching null
-                }
-                target.takeIf { it.isFile && it.length() > 0 }
-            } else {
-                File(fontPath, name).takeIf { it.isFile }
-            }
-        }.onFailure {
-            AppLog.put("从字体库目录收集字体失败：$name\n${it.localizedMessage}", it)
-        }.getOrNull()
-    }
-
-    /**
-     * 书架分组封面：GroupEditDialog 选图后复制到 externalFiles/covers/{md5+后缀}，
-     * book_groups.cover 存绝对路径。恢复端按 covers/ 前缀还原（restoreGroupCovers）。
-     */
-    private fun collectGroupCoverSources(): List<ZipUtils.ZipSource> {
-        val sources = arrayListOf<ZipUtils.ZipSource>()
-        val coversDir = appCtx.externalFiles.getFile("covers")
-        appDb.bookGroupDao.all.forEach { group ->
-            val cover = group.cover ?: return@forEach
-            if (cover.isBlank()
-                || cover.startsWith("http", true)
-                || cover.isContentScheme()
-            ) return@forEach
-            val file = File(cover)
-            if (file.isFile && file.parentFile?.absolutePath == coversDir.absolutePath) {
-                sources.add(ZipUtils.ZipSource(file, "covers"))
-            }
-        }
-        if (sources.isNotEmpty()) {
-            AppLog.put("备份书架分组封面 ${sources.size} 项")
-        }
-        return sources
-    }
-
-    private fun resolveReaderFontFile(ref: String): File? {
-        val raw = ref.trim()
-        if (raw.isEmpty() || raw.startsWith("http", ignoreCase = true)) return null
-        // @font:名 / 裸名：应用私有 font 目录
-        val normalized = raw.removePrefix(AT_FONT_PREFIX)
-        val name = if (normalized.contains(File.separator) || normalized.contains("://")) {
-            null
-        } else {
-            normalized.trim().takeIf { it.isNotBlank() }
-        }
-        name?.let {
-            File(FileUtils.getPath(appCtx.externalFiles, "font"), it)
-                .takeIf { file -> file.isFile }?.let { return it }
-        }
-        // 旧数据可能是绝对路径
-        if (raw.startsWith("/")) {
-            File(raw).takeIf { it.isFile }?.let { return it }
-        }
-        return null
-    }
-
-    /**
-     * 收集主题背景图本体：主界面/书籍详情页/面板背景引用的本地图片文件，
-     * 直接以 Restore.backgroundAssetDirNames 对应的目录前缀压入 zip；
-     * 恢复端 restoreBackgroundAssets + normalizeBackgroundPrefs 已有完整管线。
-     */
-    private fun collectBackgroundAssetSources(): List<ZipUtils.ZipSource> {
-        val sources = arrayListOf<ZipUtils.ZipSource>()
-        Restore.backgroundAssetDirNames.forEach { key ->
-            val path = appCtx.getPrefString(key)?.trim().orEmpty()
-            if (path.isEmpty() || !path.startsWith("/")) return@forEach
-            val file = File(path)
-            if (!file.isFile) return@forEach
-            sources.add(ZipUtils.ZipSource(file, key))
-        }
-        return sources
     }
 
     /**
@@ -792,156 +644,55 @@ object Backup {
         return listOf(ZipUtils.ZipSource(sourceDir, bookCacheBackupDirName))
     }
 
-    /**
-     * 「资源文件单独备份」：字体/背景图/头像打包为独立 zip。
-     * - 先算源文件指纹（路径+大小+mtime），未变化时连打包都不做，本地/云端均沿用上次产物
-     * - 云端跳过前校验远端仍存在（手动删除后可自愈补传）
-     * - 失败不影响主备份流程（资源是锦上添花，主包已成功）
-     */
-    private suspend fun backupAssetsSeparately(
-        context: Context,
-        path: String?,
-        assetSources: List<ZipUtils.ZipSource>,
-        reporter: BackupProgressReporter,
-        uploadCloud: Boolean
-    ) {
-        runCatching {
-            currentCoroutineContext().ensureActive()
-            val assetsZipName = getAssetsZipFileName()
-            val target = "${AppCloudStorage.type}:$assetsZipName"
-            // 源级指纹判定：zip 已确定性输出（条目时间取源 mtime），
-            // 指纹不变等价于包字节不变，无需打包后再算哈希
-            val fingerprint = assetsFingerprint(assetSources)
-            val fingerprintUnchanged = fingerprint == LocalConfig.lastAssetsFingerprint
-            // 云端无需重传：源指纹未变，且上次上传目标一致且远端资源包仍在（手动删除可自愈）
-            val cloudUnchanged = fingerprintUnchanged && (!uploadCloud || (
-                target == LocalConfig.lastAssetsTarget &&
-                    AppCloudStorage.assetsBackupExists(assetsZipName)
-                ))
-            // 本地备份目录已有资源包才可整体跳过；缺失时仍需打包补齐本地（云端未变则不重传）
-            val localUnchanged = localAssetsZipExists(context, path, assetsZipName)
-            if (cloudUnchanged && localUnchanged) {
-                AppLog.put("资源未变化，跳过打包与上传：$assetsZipName")
-                return@runCatching
+    internal fun encodeAiSecretsForBackup(key: String, rawJson: String, aes: BackupAES): String {
+        if (rawJson.isBlank()) return rawJson
+        return runCatching {
+            when (key) {
+                PreferKey.aiProviderList -> {
+                    val list = GSON.fromJsonArray<AiProviderConfig>(rawJson).getOrThrow()
+                    GSON.toJson(list.map { provider ->
+                        provider.copy(
+                            apiKey = encryptAiSecretField(provider.apiKey, aes),
+                            headers = provider.headers?.let { encryptAiSecretField(it, aes) }
+                        )
+                    })
+                }
+
+                PreferKey.aiImageProviderList -> {
+                    val list = GSON.fromJsonArray<AiImageProviderConfig>(rawJson).getOrThrow()
+                    GSON.toJson(list.map { provider ->
+                        provider.copy(
+                            apiKey = encryptAiSecretField(provider.apiKey, aes),
+                            headers = encryptAiSecretField(provider.headers, aes)
+                        )
+                    })
+                }
+
+                PreferKey.aiMcpServerList -> {
+                    val list = GSON.fromJsonArray<AiMcpServerConfig>(rawJson).getOrThrow()
+                    GSON.toJson(list.map { server ->
+                        server.copy(apiKey = encryptAiSecretField(server.apiKey, aes))
+                    })
+                }
+
+                else -> rawJson
             }
-            if (cloudUnchanged) {
-                AppLog.put("资源未变化，仅补齐本地资源包：$assetsZipName")
-            }
-            FileUtils.delete(assetsZipFilePath)
-            reporter.report(BackupProgress(BackupStage.PACKING), force = true)
-            if (!ZipUtils.zipFiles(assetSources, assetsZipFilePath, null)) {
-                throw NoStackTraceException("创建资源备份压缩包失败")
-            }
-            val assetsZipFile = File(assetsZipFilePath)
-            reporter.report(BackupProgress(BackupStage.SAVING), force = true)
-            when {
-                path.isNullOrBlank() ->
-                    copyBackup(
-                        context.getExternalFilesDir(null)
-                            ?: throw NoStackTraceException("外部存储不可用"),
-                        assetsZipName,
-                        assetsZipFile
-                    )
-                path.isContentScheme() ->
-                    copyBackup(context, path.toUri(), assetsZipName, assetsZipFile)
-                else ->
-                    copyBackup(File(path), assetsZipName, assetsZipFile)
-            }
-            if (uploadCloud && !cloudUnchanged) {
-                reporter.report(BackupProgress(BackupStage.UPLOADING), force = true)
-                AppLog.put("Upload cloud assets backup: $assetsZipName")
-                AppCloudStorage.backupAssets(assetsZipName, assetsZipFile)
-                AppLog.put("Cloud assets backup finished: $assetsZipName")
-            }
-            // 指纹在成功落盘后记录；云端目标仅在确实执行了云上传时记录，
-            // 避免仅本地备份后误判云端已有资源包而跳过首次上传
-            LocalConfig.lastAssetsFingerprint = fingerprint
-            if (uploadCloud) {
-                LocalConfig.lastAssetsTarget = target
-            }
-            FileUtils.delete(assetsZipFilePath)
-        }.onFailure {
-            AppLog.put("资源包备份失败\n${it.localizedMessage}", it)
+        }.getOrElse {
+            AppLog.put("备份加密 AI 凭据失败($key)，保留原值\n${it.localizedMessage}", it)
+            rawJson
         }
     }
 
-    /**
-     * 资源源文件指纹：条目路径 + 大小 + mtime 的 SHA-256。
-     * 与 ZipUtils 的确定性输出等价（条目时间取源 mtime），
-     * 但只需 stat 文件无需读取内容，未变化时可完全跳过打包。
-     */
-    private fun assetsFingerprint(sources: List<ZipUtils.ZipSource>): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        val lines = sortedSetOf<String>()
-        fun walk(file: File, entryPath: String) {
-            if (file.isDirectory) {
-                file.listFiles()
-                    ?.sortedBy { it.name }
-                    ?.forEach { walk(it, "$entryPath/${it.name}") }
-            } else {
-                lines.add("$entryPath:${file.length()}:${file.lastModified()}")
-            }
-        }
-        sources.forEach { source ->
-            val rootPath = when {
-                source.entryRoot.isBlank() -> source.file.name
-                source.file.isFile -> "${source.entryRoot}/${source.file.name}"
-                else -> source.entryRoot
-            }
-            if (source.file.isFile) {
-                lines.add("$rootPath:${source.file.length()}:${source.file.lastModified()}")
-            } else if (source.file.isDirectory) {
-                // 目录本身的展开与 zipFile() 递归一致；空目录在 zip 中仅是时间戳条目，不影响内容
-                source.file.listFiles()
-                    ?.sortedBy { it.name }
-                    ?.forEach { walk(it, "$rootPath/${it.name}") }
-            }
-        }
-        lines.forEach { digest.update((it + "\n").toByteArray()) }
-        return digest.digest().joinToString("") { "%02x".format(it) }
-    }
-
-    /** 本地备份目录中资源包是否已存在；缺失时需打包补齐本地（云端未变则只做本地同步） */
-    private fun localAssetsZipExists(
-        context: Context,
-        path: String?,
-        assetsZipName: String
-    ): Boolean {
-        return when {
-            path.isNullOrBlank() ->
-                context.getExternalFilesDir(null)?.let { File(it, assetsZipName).exists() } ?: false
-            path.isContentScheme() -> runCatching {
-                DocumentFile.fromTreeUri(context, path.toUri())?.findFile(assetsZipName) != null
-            }.getOrDefault(false)
-            else -> File(path, assetsZipName).exists()
-        }
-    }
-
-    private fun copyPackageDirectories(
-        sourceRoot: File,
-        targetRoot: File,
-        include: (String) -> Boolean
-    ) {
-        sourceRoot.listFiles()
-            ?.filter { it.isDirectory && include(it.name) }
-            .orEmpty()
-            .forEach { directory ->
-                copyDir(directory, File(targetRoot, directory.name))
-            }
-    }
-
-    private fun copyDir(source: File, target: File) {
-        if (!target.exists()) {
-            target.mkdirs()
-        }
-        source.listFiles()?.forEach { file ->
-            val targetFile = File(target, file.name)
-            if (file.isDirectory) {
-                copyDir(file, targetFile)
-            } else {
-                targetFile.parentFile?.mkdirs()
-                file.copyTo(targetFile, overwrite = true)
-            }
+    private fun encryptAiSecretField(raw: String, aes: BackupAES): String {
+        if (raw.isBlank()) return raw
+        if (raw.startsWith(BACKUP_AI_SECRET_PREFIX)) return raw
+        val plain = AiSecretCipher.decrypt(raw)
+        if (plain.isEmpty()) return ""
+        return runCatching {
+            BACKUP_AI_SECRET_PREFIX + aes.encryptBase64(plain)
+        }.getOrElse {
+            AppLog.put("备份加密 AI 字段失败，已清空该字段\n${it.localizedMessage}", it)
+            ""
         }
     }
 
@@ -988,6 +739,31 @@ object Backup {
     }
 
     @Throws(Exception::class)
+    internal fun copyBackupFile(
+        context: Context,
+        path: String?,
+        fileName: String,
+        sourceFile: File = File(zipFilePath),
+        onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)? = null
+    ) {
+        when {
+            path.isNullOrBlank() -> {
+                val fallbackDir = context.getExternalFilesDir(null)
+                    ?: throw NoStackTraceException("外部存储不可用")
+                copyBackup(fallbackDir, fileName, sourceFile, onProgress)
+            }
+
+            path.isContentScheme() -> {
+                copyBackup(context, path.toUri(), fileName, sourceFile, onProgress)
+            }
+
+            else -> {
+                copyBackup(File(path), fileName, sourceFile, onProgress)
+            }
+        }
+    }
+
+    @Throws(Exception::class)
     @Suppress("SameParameterValue")
     private fun copyBackup(
         context: Context,
@@ -996,7 +772,8 @@ object Backup {
         sourceFile: File = File(zipFilePath),
         onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)? = null
     ) {
-        val treeDoc = DocumentFile.fromTreeUri(context, uri)!!
+        val treeDoc = DocumentFile.fromTreeUri(context, uri)
+            ?: throw NoStackTraceException("无法访问备份目录")
         // 写临时文件成功后再替换目标：直接删旧建新再覆盖写，过程中断
         // （进程被杀/断电/存储瞬满）会把上一份完好的备份一并毁掉
         val tmpName = "$fileName.tmp"
@@ -1017,13 +794,25 @@ object Backup {
                 DocumentsContract.renameDocument(context.contentResolver, tmpDoc.uri, fileName)
             }.getOrNull()
             if (renamed == null) {
-                // provider 不支持重命名：退回复制临时文件内容到目标
+                // provider 不支持重命名：退回复制临时文件内容到目标，失败必抛异常并清理残余空文件
                 val fileDoc = treeDoc.createFile("", fileName)
                     ?: throw NoStackTraceException("创建文件失败")
-                runCatching {
-                    context.contentResolver.openInputStream(tmpDoc.uri)?.use { input ->
-                        fileDoc.openOutputStream()?.use { output -> input.copyTo(output) }
+                try {
+                    val input = context.contentResolver.openInputStream(tmpDoc.uri)
+                        ?: throw NoStackTraceException("读取临时文件失败")
+                    val output = fileDoc.openOutputStream()
+                        ?: throw NoStackTraceException("打开目标文件失败")
+                    input.use { inStream ->
+                        output.use { outStream ->
+                            inStream.copyTo(outStream, COPY_BUFFER_SIZE)
+                        }
                     }
+                    if (sourceFile.length() > 0L && fileDoc.length() == 0L) {
+                        throw NoStackTraceException("写入目标文件后大小为 0")
+                    }
+                } catch (t: Throwable) {
+                    runCatching { fileDoc.delete() }
+                    throw t
                 }
             }
         } finally {
@@ -1040,7 +829,10 @@ object Backup {
         sourceFile: File = File(zipFilePath),
         onProgress: ((processedBytes: Long, totalBytes: Long) -> Unit)? = null
     ) {
-        val file = FileUtils.createFileIfNotExist(rootFile, fileName)
+        if (!rootFile.exists()) {
+            rootFile.mkdirs()
+        }
+        val file = File(rootFile, fileName)
         // 先写临时文件再替换：FileOutputStream 直接截断覆盖旧备份，中断即毁唯一备份
         val tmp = File(rootFile, "$fileName.tmp")
         try {
@@ -1083,7 +875,7 @@ object Backup {
     fun clearCache() {
         FileUtils.delete(backupPath)
         FileUtils.delete(zipFilePath)
-        FileUtils.delete(File(appCtx.cacheDir, fontsCollectDirName).absolutePath)
+        AssetsBackupManager.clearCache()
     }
 
     /** 备份进度上报：按时间节流，避免高频刷新界面 */

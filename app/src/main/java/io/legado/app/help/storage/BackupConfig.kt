@@ -160,7 +160,9 @@ object BackupConfig {
         PreferKey.tNavBarN
     )
 
-    private val coverPrefKeys = arrayOf(
+    private const val lastNonEInkThemeModeKey = "lastNonEInkThemeMode"
+
+    internal val coverPrefKeys = arrayOf(
         PreferKey.useDefaultCover,
         PreferKey.loadCoverOnlyWifi,
         PreferKey.loadCoverHighQuality,
@@ -182,13 +184,26 @@ object BackupConfig {
         PreferKey.coverCollectionShuffleSeeds
     )
 
+    internal val artParamActivePrefKeys = arrayOf(
+        PreferKey.currentArtPackageId,
+        PreferKey.activeDayArtPackageId,
+        PreferKey.activeNightArtPackageId,
+        PreferKey.currentParamPackageId,
+        PreferKey.activeDayParamPackageId,
+        PreferKey.activeNightParamPackageId
+    )
+
     fun keyIsNotIgnore(key: String): Boolean {
         return when {
             ignorePrefKeys.contains(key) -> false
             ignoreReadConfig && readPreferenceKeys.contains(key) -> false
             ignoreThemeConfig && themePrefKeys.contains(key) -> false
             ignoreCoverConfig && coverPrefKeys.contains(key) -> false
-            PreferKey.themeMode == key && ignoreThemeMode -> false
+            ignoreThemeMode && (
+                PreferKey.themeMode == key ||
+                    PreferKey.eInkMode == key ||
+                    lastNonEInkThemeModeKey == key
+                ) -> false
             PreferKey.bookshelfLayout == key && ignoreBookshelfLayout -> false
             PreferKey.showRss == key && ignoreShowRss -> false
             PreferKey.threadCount == key && ignoreThreadCount -> false
@@ -200,7 +215,7 @@ object BackupConfig {
         get() = ignoreConfig[readConfigKey] == true
     private val ignoreThemeMode: Boolean
         get() = ignoreConfig[PreferKey.themeMode] == true
-    private val ignoreThemeConfig: Boolean
+    val ignoreThemeConfig: Boolean
         get() = ignoreConfig[themeConfigKey] == true
     val ignoreCoverConfig: Boolean
         get() = ignoreConfig[coverConfigKey] == true

@@ -57,6 +57,7 @@ object AppCloudStorage {
     private const val BUBBLES_DIR = "bubbles/"
     private const val COVERS_DIR = "covers/"
     private const val UI_PACKAGES_DIR = "uiPackages/"
+    private const val ASSETS_BACKUP_PREFIX = "backup_assets"
 
     private val webDavBackend = WebDavCloudStorageBackend()
     private val s3Backend = S3CloudStorageBackend()
@@ -90,7 +91,7 @@ object AppCloudStorage {
         ensureNetwork()
         val files = backupFiles()
             // 资源包不作为独立恢复项出现，云端恢复时单独询问
-            .filter { !it.displayName.startsWith("backup_assets") }
+            .filter { !it.displayName.startsWith(ASSETS_BACKUP_PREFIX, ignoreCase = true) }
             .sortedWith { o1, o2 -> AlphanumComparator.compare(o1.displayName, o2.displayName) }
             .reversed()
         return ArrayList(files.map { it.displayName })
@@ -112,7 +113,12 @@ object AppCloudStorage {
             assetsFileNames.forEach { assetsName ->
                 val assetsZip = File(appCtx.cacheDir, "restore_assets_${UUID.randomUUID()}.zip")
                 try {
-                    storage(S3ContainerScope.MAIN_BACKUP).downloadTo(assetsName, assetsZip, true)
+                    val assetLocation = if (type == CloudStorageType.S3) findAssetLocation(assetsName) else null
+                    if (assetLocation != null && type == CloudStorageType.S3) {
+                        s3Backend.downloadTo(assetLocation.containerId, assetsName, assetsZip, true)
+                    } else {
+                        storage(S3ContainerScope.MAIN_BACKUP).downloadTo(assetsName, assetsZip, true)
+                    }
                     // 追加解压：不清空目标目录，否则会把主包已恢复的书架/书源等全部删掉
                     BackupArchiveExtractor.extract(assetsZip, File(Backup.backupPath), resetDestination = false)
                 } catch (e: Exception) {
@@ -126,14 +132,58 @@ object AppCloudStorage {
 
     /**
      * 云端资源包文件名列表（backup_assets 前缀），供云端恢复时询问用户是否一并恢复。
-     * 列取失败返回空列表，不应因此中断恢复流程。
+     * S3 模式下跨启用容器扫描去重；列取失败返回空列表，不应因此中断恢复流程。
      */
     suspend fun listAssetsBackupNames(): List<String> {
         return runCatching {
-            storage(S3ContainerScope.MAIN_BACKUP).listFiles("")
-                .map { it.displayName }
-                .filter { it.startsWith("backup_assets") }
+            if (type == CloudStorageType.S3) {
+                scanAssetsBackupIndexItems()
+                    .sortedByDescending { it.time }
+                    .map { it.fileName }
+                    .distinct()
+            } else {
+                storage(S3ContainerScope.MAIN_BACKUP).listFiles("")
+                    .filter { !it.isDir && it.displayName.startsWith(ASSETS_BACKUP_PREFIX, ignoreCase = true) }
+                    .map { it.displayName }
+                    .distinct()
+            }
         }.getOrDefault(emptyList())
+    }
+
+    /**
+     * 按主备份名筛选最匹配的资源包：
+     * - 主包带设备后缀（如 `backup2026-11-24-PhoneA.zip`）：优先匹配 `backup_assets-PhoneA.zip`，
+     *   若不存在则回退到无后缀 `backup_assets.zip`，若均无则返回空列表（绝不返回其他设备资源包）；
+     * - 主包无设备后缀（如 `backup2026-11-24.zip`）：只返回无后缀 `backup_assets.zip`，
+     *   不存在则返回空列表，避免混压其他设备资源包。
+     */
+    fun filterMatchingAssets(assetsNames: List<String>, mainBackupName: String): List<String> {
+        if (assetsNames.isEmpty()) return emptyList()
+        val deviceSuffix = Regex("^backup\\d{4}-\\d{2}-\\d{2}-(.+)\\.zip$", RegexOption.IGNORE_CASE)
+            .matchEntire(mainBackupName.trim())
+            ?.groupValues?.getOrNull(1)
+            ?.takeIf { it.isNotBlank() }
+        val defaultName = "$ASSETS_BACKUP_PREFIX.zip"
+        return if (deviceSuffix != null) {
+            val expectedName = "$ASSETS_BACKUP_PREFIX-$deviceSuffix.zip"
+            val normalizedExpectedName = expectedName.normalizeFileName()
+            val deviceMatched = assetsNames.firstOrNull {
+                it.equals(expectedName, ignoreCase = true)
+            } ?: assetsNames.firstOrNull {
+                it.equals(normalizedExpectedName, ignoreCase = true)
+            }
+            if (deviceMatched != null) {
+                listOf(deviceMatched)
+            } else {
+                assetsNames.firstOrNull { it.equals(defaultName, ignoreCase = true) }
+                    ?.let(::listOf)
+                    ?: emptyList()
+            }
+        } else {
+            assetsNames.firstOrNull { it.equals(defaultName, ignoreCase = true) }
+                ?.let(::listOf)
+                ?: emptyList()
+        }
     }
 
     suspend fun hasBackup(name: String): Boolean {
@@ -167,6 +217,15 @@ object AppCloudStorage {
     }
 
     /**
+     * 通过 WebDAV 通道上传资源包（供 S3 满容降级到 WebDAV 时透传调用）。
+     */
+    suspend fun backupAssetsToWebDav(fileName: String, file: File) {
+        ensureNetwork()
+        webDavBackend.upConfig()
+        webDavBackend.upload(fileName, file)
+    }
+
+    /**
      * 上传「资源文件单独备份」包（字体/背景图/头像）。
      * 不做旧备份清理：资源包用稳定文件名覆盖上传，
      * 且主备份的清理逻辑会跳过 backup_assets 包。
@@ -179,15 +238,46 @@ object AppCloudStorage {
     /**
      * 资源包是否仍存在于云端。哈希未变化准备跳过上传前调用；
      * 若用户手动删除了云端资源包可自愈补传。
-     * 仅 WebDAV 支持廉价的存在性检查，其余类型保守返回 true。
-     * 查询失败时也保守返回 true，避免网络抖动导致每次备份都重传大包。
+     * WebDAV 与 S3 均执行真实列表检查；查询失败时返回 false，避免假阳性跳过补传。
      */
-    suspend fun assetsBackupExists(fileName: String): Boolean {
-        if (type != CloudStorageType.WEBDAV) return true
+    suspend fun assetsBackupExists(fileName: String, useWebDavFallback: Boolean = false): Boolean {
+        if (!NetworkUtils.isAvailable()) return false
+        if (useWebDavFallback || type == CloudStorageType.WEBDAV) {
+            return runCatching {
+                webDavBackend.listFiles("")
+                    .any { !it.isDir && it.displayName == fileName }
+            }.getOrDefault(false)
+        }
         return runCatching {
-            webDavBackend.listFiles("")
-                .any { !it.isDir && it.displayName == fileName }
-        }.getOrDefault(true)
+            val containers = S3ContainerManager.listContainers().filter { it.enabled }
+            if (containers.isEmpty()) {
+                storage(S3ContainerScope.MAIN_BACKUP).listFiles("")
+                    .any { !it.isDir && it.displayName == fileName }
+            } else {
+                containers.any { container ->
+                    runCatching {
+                        s3Backend.listFiles(container.id, "")
+                            .any { !it.isDir && it.displayName == fileName }
+                    }.getOrDefault(false)
+                }
+            }
+        }.getOrDefault(false)
+    }
+
+    /**
+     * 返回用于绑定资源包远端目标（`lastAssetsTarget`）的存储标识键。
+     */
+    fun assetsStorageKey(useWebDavFallback: Boolean = false): String {
+        return if (useWebDavFallback) {
+            listOf(
+                CloudStorageType.WEBDAV.name,
+                AppConfig.webDavDir.orEmpty(),
+                appCtx.getPrefString(PreferKey.webDavUrl).orEmpty(),
+                appCtx.getPrefString(PreferKey.webDavAccount).orEmpty()
+            ).joinToString("|")
+        } else {
+            cacheStorageKey()
+        }
     }
 
     /**
@@ -432,17 +522,9 @@ object AppCloudStorage {
         target.upload(EXPORTS_DIR + CacheCloudIndexStore.remoteFileName(), GSON.toJson(index).toByteArray(), "application/json")
     }
 
-    suspend fun upBgs(files: Array<File>) {
-        val target = storage(S3ContainerScope.DEFAULT)
-        if (!NetworkUtils.isAvailable() || !target.isOk) return
-        val remoteNames = runCatching { target.listFiles(BG_DIR).map { it.displayName }.toSet() }.getOrDefault(emptySet())
-        files.forEach {
-            if (!remoteNames.contains(it.name) && it.exists()) {
-                target.upload(BG_DIR + it.name, it)
-            }
-        }
-    }
-
+    /**
+     * 从云端 background 目录下载背景图到本地（保留作为老版本云备份恢复兜底）
+     */
     suspend fun downBgs(names: Collection<String>): Map<String, File> {
         val fileNames = names
             .mapNotNull { File(it).name.takeIf { name -> name.isNotBlank() } }
@@ -472,38 +554,11 @@ object AppCloudStorage {
     }
 
     /**
-     * 上传书架中本地存储的封面文件到 WebDAV covers 目录
-     */
-    suspend fun upBookCovers() {
-        if (!AppConfig.webDavBackupCover) return
-        val target = webDavBackend
-        if (!NetworkUtils.isAvailable() || !target.isOk) return
-        val files = collectBookCoverFiles()
-        if (files.isEmpty()) return
-        runCatching {
-            target.makeDir(COVERS_DIR)
-            val remoteFiles = target.listFiles(COVERS_DIR).associate { it.displayName to it.size }
-            files.forEach { file ->
-                if (remoteFiles[file.name] == file.length()) return@forEach
-                runCatching {
-                    target.upload(COVERS_DIR + file.name, file)
-                }.onFailure {
-                    io.legado.app.constant.AppLog.put(
-                        appCtx.getString(R.string.misc_failed_upload_bookshelf_cover_n, file.name, it.localizedMessage), it
-                    )
-                }
-            }
-        }.onFailure {
-            io.legado.app.constant.AppLog.put("备份书架封面出错\n${it.localizedMessage}", it)
-        }
-    }
-
-    /**
-     * 从 WebDAV covers 目录下载书架封面到本地
+     * 从云端 covers 目录下载书架封面到本地（兼容 WebDAV 与 S3，保留作为老版本云备份恢复兜底）
      */
     suspend fun downBookCovers() {
         if (!AppConfig.webDavBackupCover) return
-        val target = webDavBackend
+        val target = storage(S3ContainerScope.DEFAULT)
         if (!NetworkUtils.isAvailable() || !target.isOk) return
         val wanted = collectBookCoverRestoreTargets()
         if (wanted.exactNames.isEmpty() && wanted.prefixes.isEmpty()) return
@@ -533,7 +588,7 @@ object AppCloudStorage {
         normalizeBookCoverPaths()
     }
 
-    private fun normalizeBookCoverPaths() {
+    internal fun normalizeBookCoverPaths() {
         val coversDir = appCtx.externalFiles.getFile("covers")
         if (!coversDir.isDirectory) return
         appDb.bookDao.all.forEach { book ->
@@ -559,7 +614,28 @@ object AppCloudStorage {
         }
     }
 
-    private fun collectBookCoverFiles(): List<File> {
+    internal fun hasMissingBookCovers(): Boolean {
+        val coversDir = appCtx.externalFiles.getFile("covers")
+        return appDb.bookDao.all.any { book ->
+            val display = book.getDisplayCover()
+            if (book.isLocal) {
+                val hasLocal = LocalBook.findCoverPath(book) != null
+                !hasLocal && (display.isNullOrBlank() || (
+                    !display.startsWith("http", true) &&
+                        !display.isContentScheme() &&
+                        !File(display).exists()
+                    ))
+            } else {
+                !display.isNullOrBlank() &&
+                    !display.startsWith("http", true) &&
+                    !display.isContentScheme() &&
+                    !File(display).exists() &&
+                    !coversDir.getFile(File(display).name).isFile
+            }
+        }
+    }
+
+    internal fun collectBookCoverFiles(): List<File> {
         val files = linkedSetOf<File>()
         val localBookCoverPrefixes = hashSetOf<String>()
         val coversDir = appCtx.externalFiles.getFile("covers")
@@ -737,7 +813,11 @@ object AppCloudStorage {
             scanBackupFiles()
         } else {
             storage(S3ContainerScope.MAIN_BACKUP).listFiles("")
-                .filter { it.displayName.startsWith("backup") }
+                .filter {
+                    !it.isDir &&
+                        it.displayName.startsWith("backup") &&
+                        !it.displayName.startsWith(ASSETS_BACKUP_PREFIX, ignoreCase = true)
+                }
         }
     }
 
@@ -756,12 +836,35 @@ object AppCloudStorage {
         return S3ContainerManager.listContainers().filter { it.enabled }.flatMap { container ->
             runCatching {
                 s3Backend.listFiles(container.id, "")
-                    .filter { it.displayName.startsWith("backup") }
+                    .filter {
+                        !it.isDir &&
+                            it.displayName.startsWith("backup") &&
+                            !it.displayName.startsWith(ASSETS_BACKUP_PREFIX, ignoreCase = true)
+                    }
                     .map { file ->
                         S3BackupIndexItem(file.displayName, file.lastModify, file.size, container.id)
                     }
             }.getOrDefault(emptyList())
         }
+    }
+
+    private suspend fun scanAssetsBackupIndexItems(): List<S3BackupIndexItem> {
+        if (type != CloudStorageType.S3) return emptyList()
+        return S3ContainerManager.listContainers().filter { it.enabled }.flatMap { container ->
+            runCatching {
+                s3Backend.listFiles(container.id, "")
+                    .filter { !it.isDir && it.displayName.startsWith(ASSETS_BACKUP_PREFIX, ignoreCase = true) }
+                    .map { file ->
+                        S3BackupIndexItem(file.displayName, file.lastModify, file.size, container.id)
+                    }
+            }.getOrDefault(emptyList())
+        }
+    }
+
+    private suspend fun findAssetLocation(fileName: String): S3BackupIndexItem? {
+        return scanAssetsBackupIndexItems()
+            .filter { it.fileName == fileName }
+            .maxByOrNull { it.time }
     }
     private fun getThemeTypePath(isNightTheme: Boolean): String = THEMES_DIR + if (isNightTheme) "night/" else "day/"
     private fun getNavigationBarTypePath(isNightTheme: Boolean): String = NAVIGATION_BARS_DIR + if (isNightTheme) "night/" else "day/"

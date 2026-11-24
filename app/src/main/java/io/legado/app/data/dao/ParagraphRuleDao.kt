@@ -29,6 +29,9 @@ interface ParagraphRuleDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(rule: ParagraphRule): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(vararg rules: ParagraphRule)
+
     @Update
     fun update(rule: ParagraphRule)
 
@@ -43,6 +46,9 @@ interface ParagraphRuleDao {
     """)
     fun enabledRulesForBook(bookUrl: String): List<ParagraphRule>
 
+    @Query("SELECT * FROM book_paragraph_rules")
+    fun allBookRules(): List<BookParagraphRule>
+
     @Query("SELECT * FROM book_paragraph_rules WHERE bookUrl = :bookUrl ORDER BY sortOrder ASC, ruleId ASC")
     fun bookRules(bookUrl: String): List<BookParagraphRule>
 
@@ -51,6 +57,9 @@ interface ParagraphRuleDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertBookRule(rule: BookParagraphRule)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertBookRules(rules: List<BookParagraphRule>)
 
     @Update
     fun updateBookRule(rule: BookParagraphRule)
@@ -61,6 +70,9 @@ interface ParagraphRuleDao {
     @Query("DELETE FROM book_paragraph_rules WHERE ruleId = :ruleId")
     fun deleteBookRulesByRule(ruleId: Long)
 
+    @Query("SELECT * FROM paragraph_rule_vars")
+    fun allVars(): List<ParagraphRuleVar>
+
     @Query("SELECT * FROM paragraph_rule_vars WHERE ruleId = :ruleId ORDER BY name ASC")
     fun vars(ruleId: Long): List<ParagraphRuleVar>
 
@@ -69,6 +81,9 @@ interface ParagraphRuleDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun putVar(value: ParagraphRuleVar)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun putVars(vars: List<ParagraphRuleVar>)
 
     @Query("DELETE FROM paragraph_rule_vars WHERE ruleId = :ruleId")
     fun deleteVars(ruleId: Long)

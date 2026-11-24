@@ -5,6 +5,7 @@ import android.database.sqlite.SQLiteConstraintException
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.withTransaction
+import com.bumptech.glide.Glide
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -17,18 +18,41 @@ import io.legado.app.constant.EventBus
 import io.legado.app.constant.PreferKey
 import io.legado.app.exception.NoStackTraceException
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.AiGeneratedImage
+import io.legado.app.data.entities.AiImageGroup
+import io.legado.app.data.entities.AiMemoryFragment
+import io.legado.app.data.entities.AiMemoryItem
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookCharacter
 import io.legado.app.data.entities.BookCharacterRelation
+import io.legado.app.data.entities.BookCollection
+import io.legado.app.data.entities.BookCollectionChild
+import io.legado.app.data.entities.BookCollectionItem
 import io.legado.app.data.entities.BookGroup
+import io.legado.app.data.entities.BookIllustration
+import io.legado.app.data.entities.BookParagraphRule
 import io.legado.app.data.entities.BookSource
 import io.legado.app.data.entities.Bookmark
+import io.legado.app.data.entities.Cookie
 import io.legado.app.data.entities.DictRule
+import io.legado.app.data.entities.HomepageCustomSet
+import io.legado.app.data.entities.HomepageModule
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.KeyboardAssist
+import io.legado.app.data.entities.ParagraphRule
+import io.legado.app.data.entities.ParagraphRuleVar
+import io.legado.app.data.entities.PendingReviewComment
+import io.legado.app.data.entities.ReadAloudBgmGroup
+import io.legado.app.data.entities.ReadAloudBgmTrack
+import io.legado.app.data.entities.ReadAloudSpeakerGroup
+import io.legado.app.data.entities.ReadAloudSpeakerGroupItem
+import io.legado.app.data.entities.ReadMenuCustomButton
+import io.legado.app.data.entities.ReadRecentBook
 import io.legado.app.data.entities.ReadRecord
+import io.legado.app.data.entities.ReadRecordDaily
 import io.legado.app.data.entities.ReplaceRule
+import io.legado.app.data.entities.RssReadRecord
 import io.legado.app.data.entities.RssSource
 import io.legado.app.data.entities.RssStar
 import io.legado.app.data.entities.RuleSub
@@ -39,6 +63,8 @@ import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.lib.cloud.S3ContainerManager
 import io.legado.app.help.LauncherIconHelp
+import io.legado.app.help.ai.AiMemoryStore
+import io.legado.app.help.ai.AiSecretCipher
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.ShelfIdentity
@@ -51,6 +77,7 @@ import io.legado.app.help.config.AdvancedTitlePackageManager
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.CoverCollectionManager
+import io.legado.app.help.config.CoverHtmlTemplateConfig
 import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.SecurePrefs
@@ -58,12 +85,19 @@ import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.AppearanceKitManager
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.TopBarConfig
+import io.legado.app.help.config.pkg.UnifiedPackageRepository
+import io.legado.app.help.readaloud.speech.SpeechVoiceGroupRepository
 import io.legado.app.model.VideoPlay.VIDEO_PREF_NAME
 import io.legado.app.model.BookCover
 import io.legado.app.model.AutoTask
 import io.legado.app.model.AutoTaskImport
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplateStore
+import io.legado.app.ui.book.read.ReadMenuButtonConfig
+import io.legado.app.ui.config.FontProtocolResolver
+import io.legado.app.ui.main.ai.AiImageProviderConfig
+import io.legado.app.ui.main.ai.AiMcpServerConfig
+import io.legado.app.ui.main.ai.AiProviderConfig
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.LogUtils
@@ -82,6 +116,7 @@ import io.legado.app.utils.postEvent
 import io.legado.app.utils.restart
 import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.Dispatchers.Main
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.withLock
@@ -122,7 +157,37 @@ object Restore {
         PreferKey.bookInfoBgImage,
         PreferKey.bookInfoBgImageN,
         PreferKey.panelBgImage,
-        PreferKey.panelBgImageN
+        PreferKey.panelBgImageN,
+        PreferKey.topBarBgImage,
+        PreferKey.topBarBgImageN,
+        PreferKey.welcomeImage,
+        PreferKey.welcomeImageDark
+    )
+
+    private val uiFontPrefKeys = arrayOf(
+        PreferKey.uiFontPath,
+        PreferKey.uiFontPathN,
+        PreferKey.titleFontPath,
+        PreferKey.titleFontPathN
+    )
+
+    private val artActivePackagePrefKeys = arrayOf(
+        PreferKey.currentArtPackageId,
+        PreferKey.activeDayArtPackageId,
+        PreferKey.activeNightArtPackageId
+    )
+
+    private val coverSlotActivePackagePrefKeys = arrayOf(
+        PreferKey.currentCoverSlotPackageId,
+        PreferKey.activeDayCoverSlotPackageId,
+        PreferKey.activeNightCoverSlotPackageId
+    )
+
+    private data class LocalUiStateSnapshot(
+        val artPackageIds: Map<String, String>,
+        val coverSlotPackageIds: Map<String, String>,
+        val uiFontPaths: Map<String, String>,
+        val backgroundPaths: Map<String, String>
     )
 
     /** 恢复成功后书架需要重建；由书架界面 onResume 时消费，避免事件在主界面后台时被丢弃。 */
@@ -194,7 +259,11 @@ object Restore {
                 // 失败时尽力复制回去；无状态机、无原子发布。
                 val snapshot = RestoreSnapshot.create(path)
                 try {
-                    restore(path)
+                    restore(path) {
+                        io.legado.app.help.config.pkg.UnifiedPackageRepository.invalidateCache()
+                        snapshot.delete()
+                        isRestoring = false
+                    }
                     io.legado.app.help.config.pkg.UnifiedPackageRepository.invalidateCache()
                 } catch (e: Throwable) {
                     snapshot.rollback(appCtx.getString(R.string.misc_restore_failed_2, e.localizedMessage))
@@ -209,7 +278,10 @@ object Restore {
         }
     }
 
-    private suspend fun restore(path: String) {
+    private suspend fun restore(
+        path: String,
+        onBeforeRestart: (() -> Unit)? = null
+    ) {
         val aes = BackupAES()
         // 「按备份覆盖」的本机快照必须在合并之前取：合并会把备份书并入本机记录、
         // 并可能插入新行，之后取会把新行算进来，导致本该删掉的本机旧记录被新行
@@ -283,19 +355,29 @@ object Restore {
             }
         }
         restoreBookCharacters(path)
-        restoreGroupCovers(path)
-        File(path, "servers.json").takeIf {
-            it.exists()
-        }?.runCatching {
-            var json = readText()
-            if (!json.isJsonArray()) {
-                json = aes.decryptStr(json)
-            }
-            GSON.fromJsonArray<Server>(json).getOrNull()?.let {
-                insertRestored(it) { items -> appDb.serverDao.insert(*items) }
-            }
-        }?.onFailure {
-            AppLog.put("恢复服务器配置出错\n${it.localizedMessage}", it)
+        restoreBookCollections(path)
+        restoreBookIllustrations(path)
+        restoreParagraphRules(path)
+        val readMenuButtonIdMap = restoreReadMenuCustomButtons(path)
+        restoreHomepageModules(path)
+        restoreReadAloudBgm(path)
+        restoreReadAloudSpeakerGroups(path)
+        restoreReadRecordDaily(path)
+        fileToListT<ReadRecentBook>(path, "readRecentBooks.json")?.let {
+            insertRestored(it) { items -> appDb.readRecentBookDao.insert(*items) }
+        }
+        fileToListT<RssReadRecord>(path, "rssReadRecords.json")?.let {
+            insertRestored(it) { items -> appDb.rssReadRecordDao.insertRecord(*items) }
+        }
+        restorePendingReviewComments(path)
+        restoreAiMemory(path)
+        restoreAiImageGallery(path)
+        restoreCoversFromBackup(path)
+        restoreEncryptedJsonList<Server>(path, "servers.json", aes, "恢复服务器配置出错") { items ->
+            appDb.serverDao.insert(*items)
+        }
+        restoreEncryptedJsonList<Cookie>(path, "cookies.json", aes, "恢复 Cookie 出错") { items ->
+            appDb.cookieDao.insert(*items)
         }
         File(path, DirectLinkUpload.ruleFileName).takeIf {
             it.isFile
@@ -328,6 +410,12 @@ object Restore {
         }?.onFailure {
             AppLog.put("恢复封面规则出错\n${it.localizedMessage}", it)
         }
+        restoreFile(
+            File(path, CoverHtmlTemplateConfig.configFileName),
+            File(CoverHtmlTemplateConfig.configFilePath)
+        ) {
+            CoverHtmlTemplateConfig.reload()
+        }
         if (!BackupConfig.ignoreReadConfig) {
             //恢复阅读界面配置
             File(path, EpubReaderTemplateStore.fileName).takeIf { it.isFile }?.let {
@@ -347,6 +435,11 @@ object Restore {
             ReadBookConfig.initConfigs()
             ReadBookConfig.initShareConfig()
         }
+        val unifiedBackupDir = File(path, Backup.unifiedPackagesDirName)
+        val backupHasArtDir = File(unifiedBackupDir, UiPackageBackup.UNIFIED_ART).isDirectory
+        val backupHasCoverSlotDir = File(unifiedBackupDir, UiPackageBackup.UNIFIED_COVER_SLOT).isDirectory
+        val backupHasFontsDir = File(path, Backup.fontsDirName).isDirectory
+        val localUiSnapshot = captureLocalUiStateSnapshot()
         restoreBackgroundAssets(path)
         restoreFonts(path)
         restoreBookFiles(path)
@@ -377,7 +470,7 @@ object Restore {
                 ) {
                     when (key) {
                         PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken,
-                        PreferKey.webServiceToken -> {
+                        PreferKey.webServiceToken, PreferKey.aiTavilyApiKey -> {
                             // 解密失败说明本机加密密码与备份端不同：跳过该键，
                             // 绝不能把密文当明文写入造成永久认证失败。
                             // 经 SecurePrefs.write 落盘会用本机 KeyStore 重新加密
@@ -393,57 +486,73 @@ object Restore {
                             edit.putString(key, S3ContainerManager.restoreEncryptedBackupJson(value.toString(), aes))
                         }
 
+                        PreferKey.aiProviderList, PreferKey.aiImageProviderList, PreferKey.aiMcpServerList -> {
+                            val rawJson = value?.toString().orEmpty()
+                            if (rawJson.isNotEmpty()) {
+                                edit.putString(key, decodeAiSecretsFromBackup(key, rawJson, aes))
+                            }
+                        }
+
                         else -> when (value) {
                             is Int -> edit.putInt(key, value)
                             is Boolean -> edit.putBoolean(key, value)
                             is Long -> edit.putLong(key, value)
                             is Float -> edit.putFloat(key, value)
                             is String -> edit.putString(key, value)
+                            is Set<*> -> edit.putStringSet(key, value.filterIsInstance<String>().toSet())
                         }
                     }
                 }
             }
             edit.commit()
         }
-        normalizeBackgroundPrefs()
-        normalizeUiFontPathPrefs()
+        normalizeBackgroundPrefs(path, localUiSnapshot.backgroundPaths)
+        normalizeUiFontPathPrefs(backupHasFontsDir, localUiSnapshot.uiFontPaths)
+        normalizeReadMenuButtonLayoutPrefs(readMenuButtonIdMap)
+        reconcileRestoredUiPackageIds(
+            backupHasArtDir = backupHasArtDir,
+            backupHasCoverSlotDir = backupHasCoverSlotDir,
+            localSnapshot = localUiSnapshot
+        )
         // The restored preferences can point at a different font folder, and any cached
         // lookup from before the restore would now be answering for the wrong one.
         io.legado.app.help.AppFont.invalidateFontList()
         ReaderDataRepair.repairAfterRestore()
         refreshWebDavAfterRestore()
         restoreBookCovers()
-        restoreReadConfigBackgrounds()
-        // restoreBookCovers/restoreReadConfigBackgrounds 恢复的资源可能再次引入
+        restoreReadingBackgrounds(path)
+        // restoreBookCovers/restoreReadingBackgrounds 恢复的资源可能再次引入
         // 待修复状态（封面引用/背景文件），故在资源恢复完成后再次执行修复
         ReaderDataRepair.repairAfterRestore()
         restoreAppliedUiPackages()
         // 直接读文件（同 config.xml，绕开 SharedPreferences 进程缓存）；
         // commit 同步落盘：随后 1.5 秒即整进程重启，apply 异步写可能丢失
-        BackupPrefsFile.read(File(path, "videoConfig.xml"))?.let { map ->
-            val videoEdit = appCtx.getSharedPreferences(VIDEO_PREF_NAME, Context.MODE_PRIVATE).edit()
-            map.forEach { (key, value) ->
-                when (value) {
-                    is Int -> videoEdit.putInt(key, value)
-                    is Boolean -> videoEdit.putBoolean(key, value)
-                    is Long -> videoEdit.putLong(key, value)
-                    is Float -> videoEdit.putFloat(key, value)
-                    is String -> videoEdit.putString(key, value)
-                }
-            }
-            videoEdit.commit()
-        }
+        restoreSharedPrefsFile(File(path, "videoConfig.xml"), VIDEO_PREF_NAME)
+        restoreSharedPrefsFile(File(path, Backup.sourceConfigFileName), Backup.sourceConfigPrefName)
         AutoTask.refreshSchedule()
         // ⚠️ 「按备份覆盖」的删书放在所有可能失败的步骤之后：若在前面执行，
         // 后续步骤失败触发回滚时书已被永久删除——「看起来恢复失败，书其实已经没了」。
         overwriteShelfIfNeeded(path)
         bookshelfRebuildPending = true
         appCtx.toastOnUi(R.string.restore_success)
+        withContext(IO) {
+            runCatching {
+                Glide.get(appCtx).clearDiskCache()
+            }.onFailure {
+                AppLog.put("清理 Glide 磁盘缓存出错\n${it.localizedMessage}", it)
+            }
+        }
+        LocalConfig.lastAssetsFingerprint = ""
+        LocalConfig.lastAssetsTarget = ""
+        LocalConfig.lastShelfKeys = ""
+        LocalConfig.lastBackup = System.currentTimeMillis()
+        LocalConfig.edit().commit()
         withContext(Main) {
             delay(1500)
             if (!BuildConfig.DEBUG) {
                 LauncherIconHelp.changeIcon(appCtx.getPrefString(PreferKey.launcherIcon))
             }
+            onBeforeRestart?.invoke()
             // 恢复覆盖了偏好/主题/书架等全局状态。此处不能走原 applyDayNight 的
             // RECREATE 风暴：多 Activity 同时 recreate 会让 Compose retained store
             // 条目跨 Activity 复用，并与 setDefaultNightMode 触发的 recreate 二次
@@ -591,17 +700,17 @@ object Restore {
     }
 
     /**
-     * 恢复书架分组封面图片：备份 covers/ 条目（来源 collectGroupCoverSources）
-     * 复制到应用 covers 目录，并改写指向旧设备绝对路径的分组 cover 引用。
+     * 恢复备份包内 covers/ 目录：复制到应用 externalFiles/covers/，
+     * 并修正指向旧设备绝对路径的分组封面与书籍本地/自定义封面路径。
      */
-    private fun restoreGroupCovers(path: String) {
+    private fun restoreCoversFromBackup(path: String) {
         val sourceDir = File(path, "covers")
         if (!sourceDir.isDirectory) return
         val coversDir = appCtx.externalFiles.getFile("covers")
         runCatching {
             copyDir(sourceDir, coversDir)
         }.onFailure {
-            AppLog.put("恢复分组封面出错\n${it.localizedMessage}", it)
+            AppLog.put("恢复封面目录出错\n${it.localizedMessage}", it)
             return
         }
         runCatching {
@@ -620,6 +729,11 @@ object Restore {
             }
         }.onFailure {
             AppLog.put("修正分组封面路径出错\n${it.localizedMessage}", it)
+        }
+        runCatching {
+            AppCloudStorage.normalizeBookCoverPaths()
+        }.onFailure {
+            AppLog.put("修正书籍封面路径出错\n${it.localizedMessage}", it)
         }
     }
 
@@ -822,7 +936,16 @@ object Restore {
         }
     }
 
-    private suspend fun restoreReadConfigBackgrounds() {
+    private suspend fun restoreReadingBackgrounds(path: String) {
+        val bgDir = appCtx.externalFiles.getFile("bg").apply { mkdirs() }
+        val backupBgDir = File(path, "bg")
+        if (backupBgDir.isDirectory) {
+            runCatching {
+                copyDir(backupBgDir, bgDir)
+            }.onFailure {
+                AppLog.put("恢复正文背景图片出错\n${it.localizedMessage}", it)
+            }
+        }
         val names = linkedSetOf<String>()
         fun collect(config: ReadBookConfig.Config) {
             readConfigBgFileName(config.bgType, config.bgStr)?.let(names::add)
@@ -831,7 +954,19 @@ object Restore {
         }
         ReadBookConfig.allLayoutConfigs().forEach(::collect)
         if (names.isEmpty()) return
-        val restored = AppCloudStorage.downBgs(names)
+        val restored = linkedMapOf<String, File>()
+        val missingNames = arrayListOf<String>()
+        names.forEach { fileName ->
+            val localFile = bgDir.getFile(fileName)
+            if (localFile.isFile) {
+                restored[fileName] = localFile
+            } else {
+                missingNames.add(fileName)
+            }
+        }
+        if (missingNames.isNotEmpty()) {
+            restored.putAll(AppCloudStorage.downBgs(missingNames))
+        }
         if (restored.isEmpty()) return
         var changed = false
         fun normalize(config: ReadBookConfig.Config) {
@@ -1032,6 +1167,7 @@ object Restore {
 
     private suspend fun restoreBookCovers() {
         if (!AppConfig.webDavBackupCover) return
+        if (!AppCloudStorage.hasMissingBookCovers()) return
         runCatching {
             AppCloudStorage.downBookCovers()
         }.onFailure {
@@ -1039,11 +1175,67 @@ object Restore {
         }
     }
 
+    internal fun decodeAiSecretsFromBackup(key: String, rawJson: String, aes: BackupAES): String {
+        if (rawJson.isBlank()) return rawJson
+        return runCatching {
+            when (key) {
+                PreferKey.aiProviderList -> {
+                    val list = GSON.fromJsonArray<AiProviderConfig>(rawJson).getOrThrow()
+                    GSON.toJson(list.map { provider ->
+                        provider.copy(
+                            apiKey = decodeAiSecretField(provider.apiKey, aes),
+                            headers = provider.headers?.let { decodeAiSecretField(it, aes) }
+                        )
+                    })
+                }
+
+                PreferKey.aiImageProviderList -> {
+                    val list = GSON.fromJsonArray<AiImageProviderConfig>(rawJson).getOrThrow()
+                    GSON.toJson(list.map { provider ->
+                        provider.copy(
+                            apiKey = decodeAiSecretField(provider.apiKey, aes),
+                            headers = decodeAiSecretField(provider.headers, aes)
+                        )
+                    })
+                }
+
+                PreferKey.aiMcpServerList -> {
+                    val list = GSON.fromJsonArray<AiMcpServerConfig>(rawJson).getOrThrow()
+                    GSON.toJson(list.map { server ->
+                        server.copy(apiKey = decodeAiSecretField(server.apiKey, aes))
+                    })
+                }
+
+                else -> rawJson
+            }
+        }.getOrElse {
+            AppLog.put("恢复解密 AI 凭据失败($key)，保留原值\n${it.localizedMessage}", it)
+            rawJson
+        }
+    }
+
+    private fun decodeAiSecretField(raw: String, aes: BackupAES): String {
+        if (raw.isBlank()) return raw
+        if (raw.startsWith(Backup.BACKUP_AI_SECRET_PREFIX)) {
+            val payload = raw.removePrefix(Backup.BACKUP_AI_SECRET_PREFIX)
+            val plain = runCatching { aes.decryptStr(payload) }.getOrNull()
+            return if (plain.isNullOrBlank()) "" else AiSecretCipher.encrypt(plain)
+        }
+        if (raw.startsWith("enc:v1:")) {
+            val plain = AiSecretCipher.decrypt(raw)
+            return if (plain.isBlank()) "" else AiSecretCipher.encrypt(plain)
+        }
+        return AiSecretCipher.encrypt(raw)
+    }
+
     private suspend fun restoreAppliedUiPackages() {
-        kotlin.runCatching {
-            ThemePackageManager.restoreAppliedThemes(appCtx)
-        }.onFailure {
-            AppLog.put("恢复主题包出错\n${it.localizedMessage}", it)
+        val useLegacy = appCtx.getPrefBoolean(PreferKey.useLegacyPackageManager, false)
+        if (useLegacy) {
+            kotlin.runCatching {
+                ThemePackageManager.restoreAppliedThemes(appCtx)
+            }.onFailure {
+                AppLog.put("恢复主题包出错\n${it.localizedMessage}", it)
+            }
         }
         listOf(false, true).forEach { isNight ->
             kotlin.runCatching { TopBarConfig.restoreApplied(isNight) }.onFailure {
@@ -1053,10 +1245,12 @@ object Restore {
                 AppLog.put("恢复底栏包出错\n${it.localizedMessage}", it)
             }
         }
-        kotlin.runCatching {
-            io.legado.app.help.config.pkg.UnifiedPackageRepository.reapplyActiveCoverSlotsAfterRestore(appCtx)
-        }.onFailure {
-            AppLog.put("恢复书架封面包出错\n${it.localizedMessage}", it)
+        if (!useLegacy) {
+            kotlin.runCatching {
+                io.legado.app.help.config.pkg.UnifiedPackageRepository.reapplyActiveUnifiedPackagesAfterRestore(appCtx)
+            }.onFailure {
+                AppLog.put("恢复统一外观包出错\n${it.localizedMessage}", it)
+            }
         }
         // 不再发 RECREATE 事件：恢复成功后统一重启应用（见 restore 尾部），
         // 顶栏/底栏包在新进程加载；RECREATE 会让多 Activity 同时重建，
@@ -1064,8 +1258,17 @@ object Restore {
         postEvent(EventBus.TOP_BAR_CHANGED, AppConfig.isNightTheme)
         postEvent(EventBus.NAVIGATION_BAR_CHANGED, AppConfig.isNightTheme)
     }
+
     private fun restoreCoverCollections(path: String) {
-        restorePackageDirectory(File(path, Backup.coverCollectionsDirName), CoverCollectionManager.rootDir)
+        val sourceDir = File(path, Backup.coverCollectionsDirName)
+        restorePackageDirectory(sourceDir, CoverCollectionManager.rootDir)
+        if (sourceDir.exists()) {
+            runCatching {
+                CoverCollectionManager.migrateAndReloadAfterRestore()
+            }.onFailure {
+                AppLog.put("迁移并重载封面集合出错\n${it.localizedMessage}", it)
+            }
+        }
     }
 
     private suspend fun restoreAppearanceKits(path: String) {
@@ -1083,17 +1286,28 @@ object Restore {
      */
     private suspend fun restoreUnifiedPackages(path: String) {
         val backupUnifiedDir = File(path, Backup.unifiedPackagesDirName)
-        restorePackageDirectory(
-            backupUnifiedDir,
-            io.legado.app.help.config.pkg.UnifiedPackageRepository.rootDir
-        )
+        if (backupUnifiedDir.isDirectory) {
+            UiPackageBackup.unifiedKindDirNames.forEach { kindDirName ->
+                val kindSourceDir = File(backupUnifiedDir, kindDirName)
+                if (kindSourceDir.isDirectory) {
+                    restorePackageDirectory(
+                        kindSourceDir,
+                        File(io.legado.app.help.config.pkg.UnifiedPackageRepository.rootDir, kindDirName)
+                    )
+                }
+            }
+        }
         io.legado.app.help.config.pkg.UnifiedPackageRepository.invalidateCache()
-        if (!BackupConfig.ignoreCoverConfig && backupUnifiedDir.isDirectory) {
+        if (backupUnifiedDir.isDirectory) {
             val edit = appCtx.defaultSharedPreferences.edit()
             val restored = UiPackageBackup.importUnifiedActivePrefs(
                 sourceRoot = backupUnifiedDir,
                 writeString = { key, value -> edit.putString(key, value) },
-                writeBoolean = { key, value -> edit.putBoolean(key, value) }
+                writeBoolean = { key, value -> edit.putBoolean(key, value) },
+                keyFilter = { key ->
+                    !(BackupConfig.ignoreCoverConfig && key in BackupConfig.coverPrefKeys) &&
+                        !(BackupConfig.ignoreThemeConfig && key in BackupConfig.artParamActivePrefKeys)
+                }
             )
             if (restored) {
                 edit.commit()
@@ -1116,17 +1330,204 @@ object Restore {
         }
     }
 
-    private fun normalizeBackgroundPrefs() {
+    private suspend fun captureLocalUiStateSnapshot(): LocalUiStateSnapshot {
+        val localArtIds = runCatching {
+            UnifiedPackageRepository.listArtPackages().mapTo(hashSetOf()) { it.manifest.id }
+        }.getOrDefault(emptySet())
+        val localCoverSlotIds = runCatching {
+            UnifiedPackageRepository.listCoverSlotPackages().mapTo(hashSetOf()) { it.manifest.id }
+        }.getOrDefault(emptySet())
+
+        val artPackageIds = buildMap {
+            artActivePackagePrefKeys.forEach { key ->
+                val value = appCtx.getPrefString(key)?.trim().orEmpty()
+                if (value.isNotBlank() &&
+                    hasLocalUnifiedPackage(UiPackageBackup.UNIFIED_ART, value, localArtIds)
+                ) {
+                    put(key, value)
+                }
+            }
+        }
+        val coverSlotPackageIds = buildMap {
+            coverSlotActivePackagePrefKeys.forEach { key ->
+                val value = appCtx.getPrefString(key)?.trim().orEmpty()
+                if (value.isNotBlank() &&
+                    hasLocalUnifiedPackage(UiPackageBackup.UNIFIED_COVER_SLOT, value, localCoverSlotIds)
+                ) {
+                    put(key, value)
+                }
+            }
+        }
+        val uiFontPaths = buildMap {
+            uiFontPrefKeys.forEach { key ->
+                val value = appCtx.getPrefString(key)?.trim().orEmpty()
+                if (value.isNotBlank() && isValidLocalFontPref(value)) {
+                    put(key, value)
+                }
+            }
+        }
+        val backgroundPaths = buildMap {
+            backgroundAssetDirNames.forEach { key ->
+                val value = appCtx.getPrefString(key)?.trim().orEmpty()
+                if (value.isNotBlank() && isValidLocalBackgroundPref(value)) {
+                    put(key, value)
+                }
+            }
+        }
+        return LocalUiStateSnapshot(
+            artPackageIds = artPackageIds,
+            coverSlotPackageIds = coverSlotPackageIds,
+            uiFontPaths = uiFontPaths,
+            backgroundPaths = backgroundPaths
+        )
+    }
+
+    private suspend fun reconcileRestoredUiPackageIds(
+        backupHasArtDir: Boolean,
+        backupHasCoverSlotDir: Boolean,
+        localSnapshot: LocalUiStateSnapshot
+    ) {
+        if (backupHasArtDir && backupHasCoverSlotDir) return
+        val edit = appCtx.defaultSharedPreferences.edit()
+        var changed = false
+
+        if (!backupHasArtDir) {
+            val availableArtIds = runCatching {
+                UnifiedPackageRepository.listArtPackages().mapTo(hashSetOf()) { it.manifest.id }
+            }.getOrDefault(emptySet())
+            artActivePackagePrefKeys.forEach { key ->
+                val currentId = appCtx.getPrefString(key)?.trim().orEmpty()
+                if (currentId.isNotBlank() &&
+                    !hasLocalUnifiedPackage(UiPackageBackup.UNIFIED_ART, currentId, availableArtIds)
+                ) {
+                    val fallbackId = localSnapshot.artPackageIds[key]?.takeIf {
+                        hasLocalUnifiedPackage(UiPackageBackup.UNIFIED_ART, it, availableArtIds)
+                    }
+                    if (fallbackId != null) {
+                        edit.putString(key, fallbackId)
+                    } else {
+                        edit.remove(key)
+                    }
+                    changed = true
+                }
+            }
+        }
+
+        if (!backupHasCoverSlotDir) {
+            val availableCoverSlotIds = runCatching {
+                UnifiedPackageRepository.listCoverSlotPackages().mapTo(hashSetOf()) { it.manifest.id }
+            }.getOrDefault(emptySet())
+            coverSlotActivePackagePrefKeys.forEach { key ->
+                val currentId = appCtx.getPrefString(key)?.trim().orEmpty()
+                if (currentId.isNotBlank() &&
+                    !hasLocalUnifiedPackage(UiPackageBackup.UNIFIED_COVER_SLOT, currentId, availableCoverSlotIds)
+                ) {
+                    val fallbackId = localSnapshot.coverSlotPackageIds[key]?.takeIf {
+                        hasLocalUnifiedPackage(UiPackageBackup.UNIFIED_COVER_SLOT, it, availableCoverSlotIds)
+                    }
+                    if (fallbackId != null) {
+                        edit.putString(key, fallbackId)
+                    } else {
+                        edit.remove(key)
+                    }
+                    changed = true
+                }
+            }
+        }
+
+        if (changed) {
+            edit.commit()
+        }
+    }
+
+    private fun hasLocalUnifiedPackage(
+        kindDirName: String,
+        packageId: String,
+        loadedIds: Set<String>
+    ): Boolean {
+        if (packageId in loadedIds) return true
+        if (packageId.isBlank() ||
+            packageId == "." ||
+            packageId == ".." ||
+            packageId.contains('/') ||
+            packageId.contains('\\')
+        ) {
+            return false
+        }
+        val kindRoot = File(UnifiedPackageRepository.rootDir, kindDirName)
+        return File(kindRoot, packageId).isDirectory
+    }
+
+    private fun isValidLocalFontPref(raw: String): Boolean {
+        val value = raw.trim()
+        if (value.isEmpty()) return false
+        if (value.startsWith("http", ignoreCase = true)) return true
+        if (FontProtocolResolver.normalizeSystemProtocol(value) != null) return true
+        FontProtocolResolver.extractAtFontName(value)?.let { name ->
+            return FontProtocolResolver.resolveAtFontTarget(appCtx, name) != null
+        }
+        if (value.isContentScheme()) return isReadableContentUri(value)
+        val filePath = if (value.startsWith("file://", ignoreCase = true)) {
+            runCatching { Uri.parse(value).path }.getOrNull().orEmpty()
+        } else {
+            value
+        }
+        return filePath.isNotBlank() && File(filePath).isFile
+    }
+
+    private fun isValidLocalBackgroundPref(raw: String): Boolean {
+        val value = raw.trim()
+        if (value.isEmpty()) return false
+        if (value.startsWith("http", ignoreCase = true)) return true
+        if (value.isContentScheme()) return isReadableContentUri(value)
+        return File(value).isFile
+    }
+
+    private fun isReadableContentUri(raw: String): Boolean {
+        return runCatching {
+            val doc = DocumentFile.fromSingleUri(appCtx, Uri.parse(raw))
+            doc != null && doc.exists() && doc.canRead()
+        }.getOrDefault(false)
+    }
+
+    private fun normalizeBackgroundPrefs(
+        path: String,
+        localBgSnapshot: Map<String, String>
+    ) {
         val edit = appCtx.defaultSharedPreferences.edit()
         var changed = false
         backgroundAssetDirNames.forEach { key ->
-            val current = appCtx.getPrefString(key) ?: return@forEach
-            if (current.isBlank() || current.startsWith("http")) return@forEach
-            if (File(current).exists()) return@forEach
-            val fileName = File(current).name.takeIf { it.isNotBlank() } ?: return@forEach
-            val restoredFile = appCtx.externalFiles.getFile(key, fileName)
-            if (restoredFile.exists()) {
+            val current = appCtx.getPrefString(key)?.trim() ?: return@forEach
+            if (current.isBlank() || current.startsWith("http", ignoreCase = true)) return@forEach
+            if (!current.isContentScheme() && File(current).isFile) return@forEach
+
+            val backupKeyDir = File(path, key)
+            val backupHasKeyDir = backupKeyDir.isDirectory
+            val targetDir = appCtx.externalFiles.getFile(key)
+
+            val restoredFile = if (current.isContentScheme()) {
+                if (isReadableContentUri(current)) return@forEach
+                if (backupHasKeyDir) {
+                    val backupFileName = backupKeyDir.listFiles()?.firstOrNull { it.isFile }?.name
+                    backupFileName?.let { File(targetDir, it) }?.takeIf { it.isFile }
+                } else {
+                    null
+                }
+            } else {
+                val fileName = File(current).name.takeIf { it.isNotBlank() }
+                fileName?.let { File(targetDir, it) }?.takeIf { it.isFile }
+            }
+
+            if (restoredFile != null) {
                 edit.putString(key, restoredFile.absolutePath)
+                changed = true
+            } else {
+                val fallback = if (!backupHasKeyDir) localBgSnapshot[key] else null
+                if (!fallback.isNullOrBlank()) {
+                    edit.putString(key, fallback)
+                } else {
+                    edit.remove(key)
+                }
                 changed = true
             }
         }
@@ -1138,27 +1539,66 @@ object Restore {
     /**
      * 修正界面/标题字体路径：恢复后的 pref 指向旧设备的绝对路径且已失效时，
      * 若备份 fonts/ 内有同名文件（restoreFonts 已还原到应用私有 font 目录），
-     * 改写为新路径，使 UI/标题字体在换设备后仍然生效。
+     * 改写为新路径，使 UI/标题字体在换设备后仍然生效；
+     * 若找不到文件且未恢复字体包，则还原本地有效快照或移除悬空引用。
      */
-    private fun normalizeUiFontPathPrefs() {
+    private fun normalizeUiFontPathPrefs(
+        backupHasFontsDir: Boolean,
+        localFontSnapshot: Map<String, String>
+    ) {
         val fontDir = File(FileUtils.getPath(appCtx.externalFiles, "font"))
-        if (!fontDir.isDirectory) return
         val edit = appCtx.defaultSharedPreferences.edit()
         var changed = false
-        listOf(
-            PreferKey.uiFontPath,
-            PreferKey.uiFontPathN,
-            PreferKey.titleFontPath,
-            PreferKey.titleFontPathN
-        ).forEach { key ->
-            val current = appCtx.getPrefString(key) ?: return@forEach
-            if (current.isBlank() || current.startsWith("http") || current.startsWith("content://")) return@forEach
-            if (File(current).exists()) return@forEach
-            val fileName = File(current).name.takeIf { it.isNotBlank() } ?: return@forEach
-            val restoredFile = File(fontDir, fileName)
-            if (restoredFile.exists()) {
+
+        fun fallbackOrRemove(key: String) {
+            val fallback = if (!backupHasFontsDir) localFontSnapshot[key] else null
+            if (!fallback.isNullOrBlank()) {
+                edit.putString(key, fallback)
+            } else {
+                edit.remove(key)
+            }
+            changed = true
+        }
+
+        uiFontPrefKeys.forEach { key ->
+            val current = appCtx.getPrefString(key)?.trim() ?: return@forEach
+            if (current.isBlank() || current.startsWith("http", ignoreCase = true)) return@forEach
+            if (FontProtocolResolver.normalizeSystemProtocol(current) != null) return@forEach
+
+            val atFontName = FontProtocolResolver.extractAtFontName(current)
+            if (atFontName != null) {
+                if (FontProtocolResolver.resolveAtFontTarget(appCtx, atFontName) == null) {
+                    fallbackOrRemove(key)
+                }
+                return@forEach
+            }
+
+            if (current.isContentScheme()) {
+                if (!isReadableContentUri(current)) {
+                    fallbackOrRemove(key)
+                }
+                return@forEach
+            }
+
+            val rawPath = if (current.startsWith("file://", ignoreCase = true)) {
+                runCatching { Uri.parse(current).path }.getOrNull().orEmpty()
+            } else {
+                current
+            }
+            if (rawPath.isNotBlank() && File(rawPath).isFile) return@forEach
+
+            val fileName = rawPath.takeIf { it.isNotBlank() }?.let { File(it).name }
+                ?.takeIf { it.isNotBlank() }
+            val restoredFile = if (fontDir.isDirectory && fileName != null) {
+                File(fontDir, fileName).takeIf { it.isFile }
+            } else {
+                null
+            }
+            if (restoredFile != null) {
                 edit.putString(key, restoredFile.absolutePath)
                 changed = true
+            } else {
+                fallbackOrRemove(key)
             }
         }
         if (changed) {
@@ -1179,6 +1619,758 @@ object Restore {
                 file.copyTo(targetFile, overwrite = true)
             }
         }
+    }
+
+    private inline fun <T, K> mergeWithIdRemap(
+        incoming: List<T>,
+        existing: List<T>,
+        idOf: (T) -> Long,
+        naturalKeyOf: (T) -> K,
+        withId: (T, Long) -> T,
+        mergeUpdate: (existingItem: T, incomingItem: T) -> T?,
+        updateItem: (T) -> Unit,
+        insertItem: (T) -> Long
+    ): Map<Long, Long> {
+        val occupiedIds = existing.mapTo(hashSetOf(), idOf)
+        val byKey = existing.associateByTo(hashMapOf(), naturalKeyOf)
+        val idMap = hashMapOf<Long, Long>()
+        incoming.forEach { item ->
+            val oldId = idOf(item)
+            val key = naturalKeyOf(item)
+            val hit = byKey[key]
+            if (hit != null) {
+                val hitId = idOf(hit)
+                idMap[oldId] = hitId
+                mergeUpdate(hit, item)?.let { updated ->
+                    updateItem(updated)
+                    byKey[key] = updated
+                }
+            } else {
+                val candidate = if (oldId > 0L && oldId !in occupiedIds) item else withId(item, 0L)
+                val insertedId = insertItem(candidate)
+                val finalId = if (insertedId > 0L) insertedId else idOf(candidate)
+                occupiedIds.add(finalId)
+                byKey[key] = withId(candidate, finalId)
+                idMap[oldId] = finalId
+            }
+        }
+        return idMap
+    }
+
+    private inline fun <T, K> mergeBatchByNaturalKey(
+        incoming: List<T>,
+        existing: List<T>,
+        idOf: (T) -> Long,
+        naturalKeyOf: (T) -> K,
+        clearId: (T) -> T,
+        mergeUpdate: (current: T, incoming: T) -> T?,
+        updateExisting: (T) -> Unit,
+        insertBatch: (List<T>) -> Unit
+    ) {
+        val occupiedIds = existing.mapTo(hashSetOf(), idOf)
+        val existingByKey = existing.associateByTo(hashMapOf(), naturalKeyOf)
+        val toInsert = arrayListOf<T>()
+        val pendingIdxByKey = hashMapOf<K, Int>()
+
+        incoming.forEach { item ->
+            val key = naturalKeyOf(item)
+            val hit = existingByKey[key]
+            if (hit != null) {
+                mergeUpdate(hit, item)?.let { updated ->
+                    updateExisting(updated)
+                    existingByKey[key] = updated
+                }
+                return@forEach
+            }
+            val pendingIdx = pendingIdxByKey[key]
+            if (pendingIdx != null) {
+                mergeUpdate(toInsert[pendingIdx], item)?.let { mergedPending ->
+                    toInsert[pendingIdx] = mergedPending
+                }
+                return@forEach
+            }
+            val rawId = idOf(item)
+            val prepared = if (rawId > 0L && occupiedIds.add(rawId)) item else clearId(item)
+            pendingIdxByKey[key] = toInsert.size
+            toInsert.add(prepared)
+        }
+        toInsert.chunked(RESTORE_INSERT_BATCH_SIZE).forEach { chunk ->
+            insertBatch(chunk)
+        }
+    }
+
+    private fun bookCollectionNaturalKey(collection: BookCollection): String {
+        val trimmed = collection.name.trim()
+        return if (trimmed.isNotEmpty()) {
+            "name:$trimmed"
+        } else {
+            "blank:${collection.createdTime}"
+        }
+    }
+
+    private suspend fun restoreBookCollections(path: String) {
+        val collections = fileToListT<BookCollection>(path, "bookCollections.json")
+        val items = fileToListT<BookCollectionItem>(path, "bookCollectionItems.json")
+        val children = fileToListT<BookCollectionChild>(path, "bookCollectionChildren.json")
+        if (collections.isNullOrEmpty() && items.isNullOrEmpty() && children.isNullOrEmpty()) return
+        runCatching {
+            appDb.withTransaction {
+                val existingCollections = appDb.bookCollectionDao.allCollections()
+                val existingCollectionIds = existingCollections.mapTo(hashSetOf()) { it.collectionId }
+                val idMap = if (!collections.isNullOrEmpty()) {
+                    mergeWithIdRemap(
+                        incoming = collections,
+                        existing = existingCollections,
+                        idOf = { it.collectionId },
+                        naturalKeyOf = ::bookCollectionNaturalKey,
+                        withId = { col, id -> col.copy(collectionId = id) },
+                        mergeUpdate = { hit, inc ->
+                            if (inc.updatedTime > hit.updatedTime) {
+                                inc.copy(
+                                    collectionId = hit.collectionId,
+                                    createdTime = minOf(hit.createdTime, inc.createdTime)
+                                )
+                            } else {
+                                null
+                            }
+                        },
+                        updateItem = { appDb.bookCollectionDao.update(it) },
+                        insertItem = { appDb.bookCollectionDao.insert(it) }
+                    )
+                } else {
+                    emptyMap()
+                }
+                fun resolveCollectionId(oldId: Long): Long? {
+                    return if (!collections.isNullOrEmpty()) {
+                        idMap[oldId]
+                    } else {
+                        oldId.takeIf { it in existingCollectionIds }
+                    }
+                }
+                if (!items.isNullOrEmpty()) {
+                    val bookExistsCache = hashMapOf<String, Boolean>()
+                    val validItems = items.mapNotNull { item ->
+                        val mappedId = resolveCollectionId(item.collectionId) ?: return@mapNotNull null
+                        val hasBook = bookExistsCache.getOrPut(item.bookUrl) { appDb.bookDao.has(item.bookUrl) }
+                        if (!hasBook) return@mapNotNull null
+                        if (mappedId != item.collectionId) item.copy(collectionId = mappedId) else item
+                    }
+                    validItems.chunked(RESTORE_INSERT_BATCH_SIZE).forEach { chunk ->
+                        appDb.bookCollectionDao.insertItems(chunk)
+                    }
+                }
+                if (!children.isNullOrEmpty()) {
+                    val validChildren = children.mapNotNull { child ->
+                        val parentId = resolveCollectionId(child.parentCollectionId) ?: return@mapNotNull null
+                        val childId = resolveCollectionId(child.childCollectionId) ?: return@mapNotNull null
+                        if (parentId == childId) return@mapNotNull null
+                        if (parentId != child.parentCollectionId || childId != child.childCollectionId) {
+                            child.copy(parentCollectionId = parentId, childCollectionId = childId)
+                        } else {
+                            child
+                        }
+                    }
+                    validChildren.chunked(RESTORE_INSERT_BATCH_SIZE).forEach { chunk ->
+                        appDb.bookCollectionDao.insertChildren(chunk)
+                    }
+                }
+            }
+        }.onFailure {
+            if (it is CancellationException) throw it
+            AppLog.put("恢复自建书单出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun bookIllustrationNaturalKey(item: BookIllustration): String {
+        return listOf(
+            item.bookUrl,
+            item.chapterIndex.toString(),
+            item.anchorType,
+            item.anchorPos.toString(),
+            item.imageSrcs,
+            item.pdfPage.toString(),
+            item.pdfRect
+        ).joinToString("\u0000")
+    }
+
+    private fun restoreBookIllustrations(path: String) {
+        val sourceDir = File(path, Backup.illustrationsDirName)
+        if (sourceDir.isDirectory) {
+            runCatching {
+                copyDir(sourceDir, appCtx.externalFiles.getFile(Backup.illustrationsDirName))
+            }.onFailure {
+                AppLog.put("恢复书籍插图目录出错\n${it.localizedMessage}", it)
+            }
+        }
+        val illustrations = fileToListT<BookIllustration>(path, "bookIllustrations.json") ?: return
+        if (illustrations.isEmpty()) return
+        runCatching {
+            appDb.runInTransaction {
+                val bookExistsCache = hashMapOf<String, Boolean>()
+                val validIllustrations = illustrations.filter { item ->
+                    bookExistsCache.getOrPut(item.bookUrl) { appDb.bookDao.has(item.bookUrl) }
+                }
+                if (validIllustrations.isEmpty()) return@runInTransaction
+                mergeBatchByNaturalKey(
+                    incoming = validIllustrations,
+                    existing = appDb.bookIllustrationDao.all,
+                    idOf = { it.id },
+                    naturalKeyOf = ::bookIllustrationNaturalKey,
+                    clearId = { it.copy(id = 0L) },
+                    mergeUpdate = { current, incoming ->
+                        incoming.copy(id = current.id).takeIf { it != current }
+                    },
+                    updateExisting = { appDb.bookIllustrationDao.update(it) },
+                    insertBatch = { chunk ->
+                        appDb.bookIllustrationDao.insert(*chunk.toTypedArray())
+                    }
+                )
+            }
+        }.onFailure {
+            AppLog.put("恢复书籍插图记录出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun paragraphRuleNaturalKey(rule: ParagraphRule): String {
+        val name = rule.name.trim()
+        val script = rule.script.trim()
+        val jsLib = rule.jsLib.trim()
+        return if (name.isEmpty() && script.isEmpty() && jsLib.isEmpty()) {
+            "blank\u0000${rule.updateTime}"
+        } else {
+            "$name\u0000$script\u0000$jsLib"
+        }
+    }
+
+    private suspend fun restoreParagraphRules(path: String) {
+        val rules = fileToListT<ParagraphRule>(path, "paragraphRules.json")
+        val bookRules = fileToListT<BookParagraphRule>(path, "bookParagraphRules.json")
+        val vars = fileToListT<ParagraphRuleVar>(path, "paragraphRuleVars.json")
+        if (rules.isNullOrEmpty() && bookRules.isNullOrEmpty() && vars.isNullOrEmpty()) return
+        runCatching {
+            appDb.withTransaction {
+                val existingRules = appDb.paragraphRuleDao.all()
+                val existingRuleIds = existingRules.mapTo(hashSetOf()) { it.id }
+                val ruleIdMap = if (!rules.isNullOrEmpty()) {
+                    mergeWithIdRemap(
+                        incoming = rules,
+                        existing = existingRules,
+                        idOf = { it.id },
+                        naturalKeyOf = ::paragraphRuleNaturalKey,
+                        withId = { rule, id -> rule.copy(id = id) },
+                        mergeUpdate = { hit, inc ->
+                            if (inc.updateTime > hit.updateTime) inc.copy(id = hit.id) else null
+                        },
+                        updateItem = { appDb.paragraphRuleDao.update(it) },
+                        insertItem = { appDb.paragraphRuleDao.insert(it) }
+                    )
+                } else {
+                    emptyMap()
+                }
+                fun resolveRuleId(oldRuleId: Long): Long? {
+                    return if (!rules.isNullOrEmpty()) {
+                        ruleIdMap[oldRuleId]
+                    } else {
+                        oldRuleId.takeIf { it in existingRuleIds }
+                    }
+                }
+                if (!bookRules.isNullOrEmpty()) {
+                    bookRules.mapNotNull { bookRule ->
+                        val mappedId = resolveRuleId(bookRule.ruleId) ?: return@mapNotNull null
+                        if (mappedId != bookRule.ruleId) bookRule.copy(ruleId = mappedId) else bookRule
+                    }.chunked(RESTORE_INSERT_BATCH_SIZE).forEach { chunk ->
+                        appDb.paragraphRuleDao.insertBookRules(chunk)
+                    }
+                }
+                if (!vars.isNullOrEmpty()) {
+                    vars.mapNotNull { ruleVar ->
+                        val mappedId = resolveRuleId(ruleVar.ruleId) ?: return@mapNotNull null
+                        if (mappedId != ruleVar.ruleId) ruleVar.copy(ruleId = mappedId) else ruleVar
+                    }.chunked(RESTORE_INSERT_BATCH_SIZE).forEach { chunk ->
+                        appDb.paragraphRuleDao.putVars(chunk)
+                    }
+                }
+            }
+        }.onFailure {
+            if (it is CancellationException) throw it
+            AppLog.put("恢复段落规则出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun readMenuCustomButtonNaturalKey(button: ReadMenuCustomButton): String {
+        val name = button.name.trim()
+        val script = button.script.trim()
+        val jsLib = button.jsLib.trim()
+        return if (name.isEmpty() && script.isEmpty() && jsLib.isEmpty()) {
+            "blank\u0000${button.updateTime}"
+        } else {
+            "$name\u0000$script\u0000$jsLib"
+        }
+    }
+
+    private fun restoreReadMenuCustomButtons(path: String): Map<Long, Long> {
+        val iconsDir = appCtx.externalFiles.getFile(Backup.readMenuIconsDirName)
+        val sourceDir = File(path, Backup.readMenuIconsDirName)
+        if (sourceDir.isDirectory) {
+            runCatching {
+                copyDir(sourceDir, iconsDir)
+            }.onFailure {
+                AppLog.put("恢复阅读菜单图标出错\n${it.localizedMessage}", it)
+            }
+        }
+        val buttons = fileToListT<ReadMenuCustomButton>(path, "readMenuCustomButtons.json")
+            ?: return emptyMap()
+        if (buttons.isEmpty()) return emptyMap()
+        return runCatching {
+            val remapped = buttons.map { button ->
+                val mappedIcon = remapFilePathByName(button.iconPath, iconsDir)
+                if (mappedIcon != button.iconPath) button.copy(iconPath = mappedIcon) else button
+            }
+            appDb.runInTransaction<Map<Long, Long>> {
+                mergeWithIdRemap(
+                    incoming = remapped,
+                    existing = appDb.readMenuCustomButtonDao.all(),
+                    idOf = { it.id },
+                    naturalKeyOf = ::readMenuCustomButtonNaturalKey,
+                    withId = { btn, id -> btn.copy(id = id) },
+                    mergeUpdate = { hit, inc ->
+                        if (inc.updateTime > hit.updateTime) {
+                            val resolvedIcon = if (inc.iconPath.isBlank() ||
+                                File(inc.iconPath).isFile ||
+                                !File(hit.iconPath).isFile
+                            ) {
+                                inc.iconPath
+                            } else {
+                                hit.iconPath
+                            }
+                            inc.copy(id = hit.id, iconPath = resolvedIcon)
+                        } else {
+                            null
+                        }
+                    },
+                    updateItem = { appDb.readMenuCustomButtonDao.update(it) },
+                    insertItem = { appDb.readMenuCustomButtonDao.insert(it) }
+                )
+            }
+        }.onFailure {
+            AppLog.put("恢复阅读菜单自定义按钮出错\n${it.localizedMessage}", it)
+        }.getOrDefault(emptyMap())
+    }
+
+    private fun normalizeReadMenuButtonLayoutPrefs(buttonIdMap: Map<Long, Long>) {
+        val raw = appCtx.getPrefString(PreferKey.readMenuButtonLayout)?.takeIf { it.isNotBlank() } ?: return
+        val iconsDir = appCtx.externalFiles.getFile(Backup.readMenuIconsDirName)
+        val layout = runCatching {
+            GSON.fromJson(raw, ReadMenuButtonConfig.ButtonLayout::class.java)
+        }.getOrNull() ?: return
+        var changed = false
+        fun remapRow(row: List<ReadMenuButtonConfig.ButtonRef>?): List<ReadMenuButtonConfig.ButtonRef> {
+            return row.orEmpty().map { ref ->
+                val newIcon = remapFilePathByName(ref.iconPath, iconsDir)
+                val newNightIcon = remapFilePathByName(ref.nightIconPath, iconsDir)
+                val newId = if (ref.type == ReadMenuButtonConfig.TYPE_CUSTOM && buttonIdMap.isNotEmpty()) {
+                    ref.id.toLongOrNull()?.let { buttonIdMap[it]?.toString() } ?: ref.id
+                } else {
+                    ref.id
+                }
+                if (newIcon != ref.iconPath || newNightIcon != ref.nightIconPath || newId != ref.id) {
+                    changed = true
+                    ref.copy(id = newId, iconPath = newIcon, nightIconPath = newNightIcon)
+                } else {
+                    ref
+                }
+            }
+        }
+        val updated = ReadMenuButtonConfig.ButtonLayout(
+            firstRow = remapRow(layout.firstRow),
+            secondRow = remapRow(layout.secondRow)
+        )
+        if (changed) {
+            appCtx.defaultSharedPreferences.edit()
+                .putString(PreferKey.readMenuButtonLayout, GSON.toJson(updated))
+                .commit()
+        }
+    }
+
+    private suspend fun restoreHomepageModules(path: String) {
+        val customSets = fileToListT<HomepageCustomSet>(path, "homepageCustomSets.json")
+        val modules = fileToListT<HomepageModule>(path, "homepageModules.json")
+        if (customSets.isNullOrEmpty() && modules.isNullOrEmpty()) return
+        runCatching {
+            appDb.withTransaction {
+                customSets?.chunked(RESTORE_INSERT_BATCH_SIZE)?.forEach { chunk ->
+                    appDb.homepageCustomSetDao.upsertAll(chunk)
+                }
+                modules?.chunked(RESTORE_INSERT_BATCH_SIZE)?.forEach { chunk ->
+                    appDb.homepageModuleDao.upsertAll(chunk)
+                }
+            }
+        }.onFailure {
+            if (it is CancellationException) throw it
+            AppLog.put("恢复聚合主页配置出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun bgmGroupNaturalKey(group: ReadAloudBgmGroup): String {
+        val type = ReadAloudBgmTrack.normalizeAssetType(group.assetType)
+        val name = group.name.trim()
+        return if (name.isNotEmpty()) {
+            "$type\u0000name:$name"
+        } else {
+            "$type\u0000blank:${group.createdAt}"
+        }
+    }
+
+    private fun bgmTrackNaturalKey(track: ReadAloudBgmTrack): String {
+        val filePart = File(track.filePath).name.takeIf { it.isNotBlank() }
+            ?: track.fileName.trim().takeIf { it.isNotBlank() }
+            ?: track.checksum.trim().takeIf { it.isNotBlank() }
+            ?: "${track.name.trim()}#${track.createdAt}"
+        return "${track.groupId}\u0000${track.normalizedAssetType()}\u0000$filePart"
+    }
+
+    private fun restoreReadAloudBgm(path: String) {
+        val audioDir = File(appCtx.filesDir, Backup.readAloudAudioDirName)
+        val sourceDir = File(path, Backup.readAloudAudioDirName)
+        if (sourceDir.isDirectory) {
+            runCatching {
+                copyDir(sourceDir, audioDir)
+            }.onFailure {
+                AppLog.put("恢复听书音效目录出错\n${it.localizedMessage}", it)
+            }
+        }
+        val groups = fileToListT<ReadAloudBgmGroup>(path, "readAloudBgmGroups.json")
+        val tracks = fileToListT<ReadAloudBgmTrack>(path, "readAloudBgmTracks.json")
+        if (groups.isNullOrEmpty() && tracks.isNullOrEmpty()) return
+        runCatching {
+            appDb.runInTransaction {
+                val existingGroups = appDb.readAloudBgmDao.groups()
+                val existingGroupIds = existingGroups.mapTo(hashSetOf()) { it.id }
+                val groupIdMap = if (!groups.isNullOrEmpty()) {
+                    mergeWithIdRemap(
+                        incoming = groups,
+                        existing = existingGroups,
+                        idOf = { it.id },
+                        naturalKeyOf = ::bgmGroupNaturalKey,
+                        withId = { group, id -> group.copy(id = id) },
+                        mergeUpdate = { hit, inc ->
+                            if (inc.updatedAt > hit.updatedAt) {
+                                inc.copy(
+                                    id = hit.id,
+                                    createdAt = minOf(hit.createdAt, inc.createdAt)
+                                )
+                            } else {
+                                null
+                            }
+                        },
+                        updateItem = { appDb.readAloudBgmDao.updateGroup(it) },
+                        insertItem = { appDb.readAloudBgmDao.insertGroup(it) }
+                    )
+                } else {
+                    emptyMap()
+                }
+                if (!tracks.isNullOrEmpty()) {
+                    val remappedTracks = tracks.map { track ->
+                        val mappedGroupId = when {
+                            track.groupId <= 0L -> 0L
+                            !groups.isNullOrEmpty() -> groupIdMap[track.groupId] ?: 0L
+                            track.groupId in existingGroupIds -> track.groupId
+                            else -> 0L
+                        }
+                        val mappedPath = remapReadAloudTrackPath(track, audioDir)
+                        if (mappedGroupId != track.groupId || mappedPath != track.filePath) {
+                            track.copy(groupId = mappedGroupId, filePath = mappedPath)
+                        } else {
+                            track
+                        }
+                    }
+                    mergeWithIdRemap(
+                        incoming = remappedTracks,
+                        existing = appDb.readAloudBgmDao.allTracks(),
+                        idOf = { it.id },
+                        naturalKeyOf = ::bgmTrackNaturalKey,
+                        withId = { track, id -> track.copy(id = id) },
+                        mergeUpdate = { hit, inc ->
+                            if (inc.updatedAt > hit.updatedAt) {
+                                val resolvedPath = if (inc.filePath.isBlank() ||
+                                    File(inc.filePath).isFile ||
+                                    !File(hit.filePath).isFile
+                                ) {
+                                    inc.filePath
+                                } else {
+                                    hit.filePath
+                                }
+                                inc.copy(
+                                    id = hit.id,
+                                    filePath = resolvedPath,
+                                    createdAt = minOf(hit.createdAt, inc.createdAt)
+                                )
+                            } else {
+                                null
+                            }
+                        },
+                        updateItem = { appDb.readAloudBgmDao.updateTrack(it) },
+                        insertItem = { appDb.readAloudBgmDao.insertTrack(it) }
+                    )
+                }
+            }
+        }.onFailure {
+            AppLog.put("恢复听书音效配置出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun remapReadAloudTrackPath(track: ReadAloudBgmTrack, audioDir: File): String {
+        val raw = track.filePath
+        if (raw.isBlank() || File(raw).isFile) return raw
+        val relative = raw.substringAfter("/${Backup.readAloudAudioDirName}/", "")
+            .trimStart('/', '\\')
+            .takeIf { it.isNotBlank() }
+        val relativeCandidate = relative?.let { File(audioDir, it) }?.takeIf { it.isFile }
+        if (relativeCandidate != null) return relativeCandidate.absolutePath
+        val fileName = File(raw).name.takeIf { it.isNotBlank() } ?: return raw
+        val typedCandidate = File(audioDir, "${track.normalizedAssetType()}/$fileName")
+        return if (typedCandidate.isFile) typedCandidate.absolutePath else raw
+    }
+
+    private fun speakerGroupNaturalKey(group: ReadAloudSpeakerGroup): String {
+        val name = group.name.trim()
+        return if (name.isNotEmpty()) {
+            "name:$name"
+        } else {
+            "blank:${group.createdAt}"
+        }
+    }
+
+    private fun speakerItemNaturalKey(item: ReadAloudSpeakerGroupItem): String {
+        return "${item.groupId}\u0000${SpeechVoiceGroupRepository.itemKey(item)}"
+    }
+
+    private fun restoreReadAloudSpeakerGroups(path: String) {
+        val groups = fileToListT<ReadAloudSpeakerGroup>(path, "readAloudSpeakerGroups.json")
+        val items = fileToListT<ReadAloudSpeakerGroupItem>(path, "readAloudSpeakerGroupItems.json")
+        if (groups.isNullOrEmpty() && items.isNullOrEmpty()) return
+        runCatching {
+            appDb.runInTransaction {
+                val existingGroups = appDb.readAloudSpeakerGroupDao.groups()
+                val existingGroupIds = existingGroups.mapTo(hashSetOf()) { it.id }
+                val groupIdMap = if (!groups.isNullOrEmpty()) {
+                    mergeWithIdRemap(
+                        incoming = groups,
+                        existing = existingGroups,
+                        idOf = { it.id },
+                        naturalKeyOf = ::speakerGroupNaturalKey,
+                        withId = { group, id -> group.copy(id = id) },
+                        mergeUpdate = { hit, inc ->
+                            if (inc.updatedAt > hit.updatedAt) {
+                                inc.copy(
+                                    id = hit.id,
+                                    createdAt = minOf(hit.createdAt, inc.createdAt)
+                                )
+                            } else {
+                                null
+                            }
+                        },
+                        updateItem = { appDb.readAloudSpeakerGroupDao.updateGroup(it) },
+                        insertItem = { appDb.readAloudSpeakerGroupDao.insertGroup(it) }
+                    )
+                } else {
+                    emptyMap()
+                }
+                if (!items.isNullOrEmpty()) {
+                    val remappedItems = items.mapNotNull { item ->
+                        val mappedGroupId = if (!groups.isNullOrEmpty()) {
+                            groupIdMap[item.groupId]
+                        } else {
+                            item.groupId.takeIf { it in existingGroupIds }
+                        } ?: return@mapNotNull null
+                        if (mappedGroupId != item.groupId) item.copy(groupId = mappedGroupId) else item
+                    }
+                    if (remappedItems.isEmpty()) return@runInTransaction
+                    mergeBatchByNaturalKey(
+                        incoming = remappedItems,
+                        existing = appDb.readAloudSpeakerGroupDao.items(),
+                        idOf = { it.id },
+                        naturalKeyOf = ::speakerItemNaturalKey,
+                        clearId = { it.copy(id = 0L) },
+                        mergeUpdate = { cur, inc ->
+                            if (inc.updatedAt > cur.updatedAt) {
+                                inc.copy(
+                                    id = cur.id,
+                                    createdAt = minOf(cur.createdAt, inc.createdAt)
+                                )
+                            } else {
+                                null
+                            }
+                        },
+                        updateExisting = { appDb.readAloudSpeakerGroupDao.updateItem(it) },
+                        insertBatch = { chunk -> appDb.readAloudSpeakerGroupDao.insertItems(chunk) }
+                    )
+                }
+            }
+        }.onFailure {
+            AppLog.put("恢复听书发音人分组出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun restoreReadRecordDaily(path: String) {
+        val records = fileToListT<ReadRecordDaily>(path, "readRecordDaily.json") ?: return
+        if (records.isEmpty()) return
+        runCatching {
+            val merged = records.mapNotNull { restored ->
+                if (restored.date.isBlank()) return@mapNotNull null
+                val local = appDb.readRecordDailyDao.get(restored.date)
+                if (local == null) {
+                    restored
+                } else {
+                    ReadRecordDaily(
+                        date = restored.date,
+                        readTime = maxOf(local.readTime, restored.readTime),
+                        updatedAt = maxOf(local.updatedAt, restored.updatedAt)
+                    )
+                }
+            }
+            insertRestored(merged) { items -> appDb.readRecordDailyDao.insert(*items) }
+        }.onFailure {
+            AppLog.put("恢复每日阅读统计出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun pendingReviewCommentNaturalKey(item: PendingReviewComment): String {
+        return listOf(
+            item.bookUrl,
+            item.chapterIndex.toString(),
+            item.chapterUrl,
+            item.kind.toString(),
+            item.para.orEmpty(),
+            item.content,
+            item.createdAt.toString()
+        ).joinToString("\u0000")
+    }
+
+    private suspend fun restorePendingReviewComments(path: String) {
+        val comments = fileToListT<PendingReviewComment>(path, "pendingReviewComments.json") ?: return
+        if (comments.isEmpty()) return
+        runCatching {
+            appDb.withTransaction {
+                mergeBatchByNaturalKey(
+                    incoming = comments,
+                    existing = appDb.pendingReviewCommentDao.all(),
+                    idOf = { it.id },
+                    naturalKeyOf = ::pendingReviewCommentNaturalKey,
+                    clearId = { it.copy(id = 0L) },
+                    mergeUpdate = { cur, inc ->
+                        val shouldUpdate = when {
+                            cur.status == PendingReviewComment.STATUS_SENT &&
+                                inc.status != PendingReviewComment.STATUS_SENT -> false
+                            inc.status == PendingReviewComment.STATUS_SENT &&
+                                cur.status != PendingReviewComment.STATUS_SENT -> true
+                            (inc.lastAttemptAt ?: 0L) > (cur.lastAttemptAt ?: 0L) -> true
+                            inc.attempts > cur.attempts -> true
+                            else -> false
+                        }
+                        if (shouldUpdate) inc.copy(id = cur.id) else null
+                    },
+                    updateExisting = { appDb.pendingReviewCommentDao.update(it) },
+                    insertBatch = { chunk -> appDb.pendingReviewCommentDao.insertAll(chunk) }
+                )
+            }
+        }.onFailure {
+            if (it is CancellationException) throw it
+            AppLog.put("恢复离线评论账本出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun restoreAiMemory(path: String) {
+        val items = fileToListT<AiMemoryItem>(path, "aiMemoryItems.json")
+        val fragments = fileToListT<AiMemoryFragment>(path, "aiMemoryFragments.json")
+        if (items.isNullOrEmpty() && fragments.isNullOrEmpty()) return
+        runCatching {
+            appDb.runInTransaction {
+                items?.forEach { AiMemoryStore.upsertItem(it) }
+                fragments?.forEach { AiMemoryStore.upsertFragment(it) }
+            }
+        }.onFailure {
+            AppLog.put("恢复 AI 长期记忆出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun restoreAiImageGallery(path: String) {
+        val aiImagesDir = File(appCtx.filesDir, Backup.aiImagesDirName)
+        val sourceDir = File(path, Backup.aiImagesDirName)
+        if (sourceDir.isDirectory) {
+            runCatching {
+                copyDir(sourceDir, aiImagesDir)
+            }.onFailure {
+                AppLog.put("恢复 AI 图库图片出错\n${it.localizedMessage}", it)
+            }
+        }
+        val groups = fileToListT<AiImageGroup>(path, "aiImageGroups.json")
+        val images = fileToListT<AiGeneratedImage>(path, "aiGeneratedImages.json")
+        if (groups.isNullOrEmpty() && images.isNullOrEmpty()) return
+        runCatching {
+            appDb.runInTransaction {
+                if (!groups.isNullOrEmpty()) {
+                    insertRestored(groups) { items -> appDb.aiImageGroupDao.insert(*items) }
+                }
+                if (!images.isNullOrEmpty()) {
+                    val remapped = images.map { image ->
+                        val mappedPath = remapFilePathByName(image.localPath, aiImagesDir)
+                        if (mappedPath != image.localPath) image.copy(localPath = mappedPath) else image
+                    }
+                    insertRestored(remapped) { items -> appDb.aiGeneratedImageDao.insert(*items) }
+                }
+            }
+        }.onFailure {
+            AppLog.put("恢复 AI 图库记录出错\n${it.localizedMessage}", it)
+        }
+    }
+
+    private inline fun <reified T> restoreEncryptedJsonList(
+        path: String,
+        fileName: String,
+        aes: BackupAES,
+        errorLabel: String,
+        insert: (Array<T>) -> Unit
+    ) {
+        File(path, fileName).takeIf { it.exists() }?.runCatching {
+            var json = readText()
+            if (!json.isJsonArray()) {
+                json = aes.decryptStr(json)
+            }
+            GSON.fromJsonArray<T>(json).getOrNull()?.let {
+                insertRestored(it, insert)
+            }
+        }?.onFailure {
+            AppLog.put("${errorLabel}\n${it.localizedMessage}", it)
+        }
+    }
+
+    private fun restoreSharedPrefsFile(file: File, prefName: String) {
+        BackupPrefsFile.read(file)?.let { map ->
+            val edit = appCtx.getSharedPreferences(prefName, Context.MODE_PRIVATE).edit()
+            map.forEach { (key, value) ->
+                when (value) {
+                    is Int -> edit.putInt(key, value)
+                    is Boolean -> edit.putBoolean(key, value)
+                    is Long -> edit.putLong(key, value)
+                    is Float -> edit.putFloat(key, value)
+                    is String -> edit.putString(key, value)
+                    is Set<*> -> edit.putStringSet(key, value.filterIsInstance<String>().toSet())
+                }
+            }
+            edit.commit()
+        }
+    }
+
+    private fun remapFilePathByName(rawPath: String?, targetDir: File): String {
+        val value = rawPath.orEmpty()
+        if (value.isBlank() || value.startsWith("http", ignoreCase = true) || value.isContentScheme()) {
+            return value
+        }
+        if (File(value).isFile) return value
+        val fileName = File(value).name.takeIf { it.isNotBlank() } ?: return value
+        val restoredFile = File(targetDir, fileName)
+        return if (restoredFile.isFile) restoredFile.absolutePath else value
     }
 
 }

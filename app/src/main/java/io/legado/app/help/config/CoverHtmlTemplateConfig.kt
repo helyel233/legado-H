@@ -23,13 +23,28 @@ object CoverHtmlTemplateConfig {
     const val configFileName = "coverHtmlTemplate.json"
     val configFilePath = FileUtils.getPath(appCtx.filesDir, configFileName)
 
+    private val templateListLazy = lazy {
+        synchronized(this) {
+            val list = getTemplates() ?: getDefaultTemplates()
+            ArrayList(list)
+        }
+    }
+
     /**
      * 模板列表
      * 首次访问时从文件加载，若文件不存在则使用默认模板
      */
-    val templateList: ArrayList<Template> by lazy {
-        val list = getTemplates() ?: getDefaultTemplates()
-        ArrayList(list)
+    val templateList: ArrayList<Template> by templateListLazy
+
+    /**
+     * 从磁盘配置文件重新加载模板列表并原子刷新内存缓存
+     */
+    @Synchronized
+    fun reload() {
+        if (!templateListLazy.isInitialized()) return
+        val latest = getTemplates() ?: getDefaultTemplates()
+        templateList.clear()
+        templateList.addAll(latest)
     }
 
     /**

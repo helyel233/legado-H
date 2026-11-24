@@ -60,6 +60,9 @@ interface AiGeneratedImageDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(image: AiGeneratedImage)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(vararg images: AiGeneratedImage)
+
     @Query("update ai_generated_images set name = :name, updatedAt = :updatedAt where id = :id")
     fun rename(id: String, name: String, updatedAt: Long)
 

@@ -1268,6 +1268,129 @@ object UnifiedPackageRepository {
         }
     }
 
+    suspend fun reapplyActiveUnifiedPackagesAfterRestore(context: Context = appCtx) {
+        if (context.getPrefBoolean(PreferKey.useLegacyPackageManager, false)) return
+        invalidateCache()
+        val artMap = listArtPackages().associateBy { it.manifest.id }
+        val paramMap = listParamPackages().associateBy { it.manifest.id }
+        val coverSlotMap = listCoverSlotPackages().associateBy { it.manifest.id }
+        val currentIsNight = AppConfig.isNightTheme
+        val orderedModes = listOf(!currentIsNight, currentIsNight)
+        var appliedAny = false
+
+        orderedModes.forEach { forNight ->
+            val specificArtKey = if (forNight) PreferKey.activeNightArtPackageId else PreferKey.activeDayArtPackageId
+            val artId = context.getPrefString(specificArtKey, null)?.takeIf { it.isNotBlank() }
+                ?: if (forNight == currentIsNight) context.getPrefString(PreferKey.currentArtPackageId, "").orEmpty() else ""
+            val artEntry = artId.takeIf { it.isNotBlank() }?.let { artMap[it] }
+            if (artEntry != null && artEntry.manifest.art != null) {
+                reprojectArtSlotAfterRestore(context, artEntry, artMap, coverSlotMap, forNight)
+                appliedAny = true
+            }
+
+            val specificParamKey = if (forNight) PreferKey.activeNightParamPackageId else PreferKey.activeDayParamPackageId
+            val paramId = context.getPrefString(specificParamKey, null)?.takeIf { it.isNotBlank() }
+                ?: if (forNight == currentIsNight) context.getPrefString(PreferKey.currentParamPackageId, "").orEmpty() else ""
+            val paramEntry = paramId.takeIf { it.isNotBlank() }?.let { paramMap[it] }
+            if (paramEntry != null && paramEntry.manifest.param != null) {
+                reprojectParamSlotAfterRestore(context, paramEntry, forNight)
+                appliedAny = true
+            }
+        }
+
+        reapplyActiveCoverSlotsAfterRestore(context)
+
+        if (appliedAny) {
+            withContext(Dispatchers.Main.immediate) {
+                ThemeConfig.applyTheme(context)
+                ThemeStore.markChanged(context)
+                BookCover.upDefaultCover()
+                postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
+                postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
+            }
+        }
+    }
+
+    private suspend fun reprojectArtSlotAfterRestore(
+        context: Context,
+        entry: StoredEntry,
+        artMap: Map<String, StoredEntry>,
+        coverSlotMap: Map<String, StoredEntry>,
+        forNight: Boolean
+    ) {
+        val art = entry.manifest.art ?: return
+        val baseDir = resolveBaseDir(entry, artMap)
+        val palette = if (forNight) (art.nightPalette ?: art.dayPalette) else (art.dayPalette ?: art.nightPalette)
+        val wallpapers = if (forNight) (art.nightWallpapers ?: art.dayWallpapers) else (art.dayWallpapers ?: art.nightWallpapers)
+        val typography = if (forNight) (art.nightTypography ?: art.dayTypography) else (art.dayTypography ?: art.nightTypography)
+        val iconId = if (forNight) (art.mounts.nightIconSlotId ?: art.mounts.dayIconSlotId) else (art.mounts.dayIconSlotId ?: art.mounts.nightIconSlotId)
+        val iconEntry = resolveMountIconEntry(iconId, forNight)
+        val coverId = if (forNight) (art.mounts.nightCoverSlotId ?: art.mounts.dayCoverSlotId) else (art.mounts.dayCoverSlotId ?: art.mounts.nightCoverSlotId)
+        val allowArtCover = shouldApplyArtCoverMount(context, forNight)
+
+        withContext(Dispatchers.Main.immediate) {
+            PrefBatchTransaction.beginBatch()
+            try {
+                palette?.let { applyPalette(context, isNight = forNight, it) }
+                wallpapers?.let { applyWallpapers(context, entry.dir, baseDir, isNight = forNight, it) }
+                typography?.let { applyTypography(context, entry.dir, baseDir, isNight = forNight, it) }
+                if (allowArtCover) {
+                    applyDefaultCover(context, entry.dir, baseDir, isNight = forNight, null)
+                    applyArtRecommendedCoverSlotLocked(context, forNight, coverId, coverSlotMap)
+                }
+                iconEntry?.let { NavigationBarIconConfig.select(it) }
+                context.putPrefString(
+                    if (forNight) PreferKey.activeNightArtPackageId else PreferKey.activeDayArtPackageId,
+                    entry.manifest.id
+                )
+                if (AppConfig.isNightTheme == forNight) {
+                    context.putPrefString(PreferKey.currentArtPackageId, entry.manifest.id)
+                }
+            } finally {
+                UiTypefaceCache.invalidate()
+                ThemeConfig.clearUsableBgImageCache()
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
+            }
+        }
+    }
+
+    private suspend fun reprojectParamSlotAfterRestore(
+        context: Context,
+        entry: StoredEntry,
+        forNight: Boolean
+    ) {
+        val param = entry.manifest.param ?: return
+        val isActiveMode = AppConfig.isNightTheme == forNight
+        withContext(Dispatchers.Main.immediate) {
+            PrefBatchTransaction.beginBatch()
+            try {
+                param.surfaceGlobal?.let { g ->
+                    applyParamAtmosphere(context, g, isNight = forNight, activateGlassNow = isActiveMode)
+                    applyParamGeometryGlobal(context, g, param.surfaceScopes, param.layout?.densityScale)
+                } ?: run {
+                    if (param.surfaceScopes != null) {
+                        applySurfaceScopes(context, param.surfaceScopes)
+                    }
+                }
+                param.layout?.let { applyLayoutParams(context, it) }
+                context.putPrefString(
+                    if (forNight) PreferKey.activeNightParamPackageId else PreferKey.activeDayParamPackageId,
+                    entry.manifest.id
+                )
+                if (isActiveMode) {
+                    context.putPrefString(PreferKey.currentParamPackageId, entry.manifest.id)
+                }
+                context.putPrefBoolean(PreferKey.paramPackageDirty, false)
+            } finally {
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
+            }
+        }
+    }
+
     suspend fun reapplyActiveCoverSlotsAfterRestore(context: Context = appCtx) {
         invalidateCache()
         ensureInitialized(context)

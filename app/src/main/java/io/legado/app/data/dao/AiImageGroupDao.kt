@@ -18,6 +18,9 @@ interface AiImageGroupDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(group: AiImageGroup)
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(vararg groups: AiImageGroup)
+
     @Query("update ai_image_groups set name = :name where id = :id")
     fun updateName(id: String, name: String)
 

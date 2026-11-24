@@ -37,6 +37,15 @@ interface BookCollectionDao {
     @Query("SELECT * FROM book_collections WHERE collectionId = :collectionId")
     fun getCollection(collectionId: Long): BookCollection?
 
+    @Query("SELECT * FROM book_collections ORDER BY `order` ASC, collectionId ASC")
+    fun allCollections(): List<BookCollection>
+
+    @Query("SELECT * FROM book_collection_items")
+    fun allItems(): List<BookCollectionItem>
+
+    @Query("SELECT * FROM book_collection_children")
+    fun allChildren(): List<BookCollectionChild>
+
     @Transaction
     @Query(
         """
@@ -62,6 +71,9 @@ interface BookCollectionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(collection: BookCollection): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertCollections(collections: List<BookCollection>)
 
     @Update
     fun update(vararg collection: BookCollection)

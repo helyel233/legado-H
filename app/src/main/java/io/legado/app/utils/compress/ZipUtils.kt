@@ -219,7 +219,7 @@ object ZipUtils {
     ): Boolean {
         if (!srcFile.exists()) return true
         if (srcFile.isDirectory) {
-            val fileList = srcFile.listFiles()
+            val fileList = srcFile.listFiles()?.sortedBy { it.name }
             if (fileList == null || fileList.isEmpty()) {
                 val entry = ZipEntry("$entryPath/").also { e ->
                     e.comment = comment

@@ -4,6 +4,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.help.DirectLinkUpload
 import io.legado.app.help.config.AdvancedTitlePackageManager
 import io.legado.app.help.config.CoverCollectionManager
+import io.legado.app.help.config.CoverHtmlTemplateConfig
 import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
@@ -118,15 +119,29 @@ internal object RestoreSnapshot {
         addIfBackupExists(ReadBookConfig.epubConfigFileName, ReadBookConfig.epubConfigFilePath)
         addIfBackupExists(ReadBookConfig.epubShareConfigFileName, ReadBookConfig.epubShareConfigFilePath)
         addIfBackupExists(EpubReaderTemplateStore.fileName, EpubReaderTemplateStore.filePath)
+        addIfBackupExists(CoverHtmlTemplateConfig.configFileName, CoverHtmlTemplateConfig.configFilePath)
         if (File(backupDir, DirectLinkUpload.ruleFileName).isFile) {
             DirectLinkUpload.configStorageFile()?.let(targets::add)
         }
         addIfBackupExists("config.xml", sharedPrefsFile("${appCtx.packageName}_preferences").absolutePath)
         addIfBackupExists("videoConfig.xml", sharedPrefsFile(VIDEO_PREF_NAME).absolutePath)
+        addIfBackupExists(Backup.sourceConfigFileName, sharedPrefsFile(Backup.sourceConfigPrefName).absolutePath)
         Restore.backgroundAssetDirNames.forEach { dirName ->
             if (File(backupDir, dirName).isDirectory) {
                 targets.add(appCtx.externalFiles.getFile(dirName))
             }
+        }
+        if (File(backupDir, Backup.illustrationsDirName).isDirectory) {
+            targets.add(appCtx.externalFiles.getFile(Backup.illustrationsDirName))
+        }
+        if (File(backupDir, Backup.readMenuIconsDirName).isDirectory) {
+            targets.add(appCtx.externalFiles.getFile(Backup.readMenuIconsDirName))
+        }
+        if (File(backupDir, Backup.readAloudAudioDirName).isDirectory) {
+            targets.add(File(appCtx.filesDir, Backup.readAloudAudioDirName))
+        }
+        if (File(backupDir, Backup.aiImagesDirName).isDirectory) {
+            targets.add(File(appCtx.filesDir, Backup.aiImagesDirName))
         }
         if (File(backupDir, Backup.themePackagesDirName).isDirectory) {
             targets.add(ThemePackageManager.rootDir)

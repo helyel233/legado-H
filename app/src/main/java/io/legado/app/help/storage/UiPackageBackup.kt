@@ -116,9 +116,13 @@ internal object UiPackageBackup {
      * 导出 V4 统一三轨包目录（`unifiedPackages/{art,param,cover_slot}/<pkgId>`）：
      * 过滤掉各目录下的临时/内置/隐藏子目录。
      */
-    fun copyUnifiedPackages(sourceRoot: File, targetRoot: File) {
+    fun copyUnifiedPackages(
+        sourceRoot: File,
+        targetRoot: File,
+        kindDirNames: List<String> = unifiedKindDirNames
+    ) {
         if (!sourceRoot.isDirectory) return
-        unifiedKindDirNames.forEach { kindDirName ->
+        kindDirNames.forEach { kindDirName ->
             val kindSource = File(sourceRoot, kindDirName)
             if (kindSource.isDirectory) {
                 copyVisiblePackages(kindSource, File(targetRoot, kindDirName))
@@ -154,7 +158,8 @@ internal object UiPackageBackup {
     fun importUnifiedActivePrefs(
         sourceRoot: File,
         writeString: (String, String) -> Unit,
-        writeBoolean: (String, Boolean) -> Unit
+        writeBoolean: (String, Boolean) -> Unit,
+        keyFilter: (String) -> Boolean = { true }
     ): Boolean {
         val file = File(sourceRoot, UNIFIED_ACTIVE_PREFS_FILE)
         if (!file.isFile) return false
@@ -162,6 +167,7 @@ internal object UiPackageBackup {
             val obj = JsonParser.parseString(file.readText()).asJsonObject
             var restoredAny = false
             unifiedActivePrefKeys.forEach { key ->
+                if (!keyFilter(key)) return@forEach
                 val elem = obj.get(key) ?: return@forEach
                 if (!elem.isJsonPrimitive) return@forEach
                 val prim = elem.asJsonPrimitive

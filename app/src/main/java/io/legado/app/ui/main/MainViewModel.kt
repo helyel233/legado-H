@@ -260,9 +260,16 @@ class MainViewModel(application: Application) : BaseViewModel(application) {
         }
     }
 
-    fun restoreWebDav(name: String, assetsFileNames: List<String> = emptyList()) {
+    fun restoreWebDav(name: String, assetsFileNames: List<String>? = null) {
         execute {
-            AppCloudStorage.restore(name, assetsFileNames)
+            val resolvedAssets = assetsFileNames
+                ?: runCatching {
+                    AppCloudStorage.filterMatchingAssets(
+                        AppCloudStorage.listAssetsBackupNames(),
+                        name
+                    )
+                }.getOrDefault(emptyList())
+            AppCloudStorage.restore(name, resolvedAssets)
         }
     }
 

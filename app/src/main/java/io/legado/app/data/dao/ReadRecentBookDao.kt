@@ -10,6 +10,9 @@ import io.legado.app.data.entities.ReadRecentBook
 @Dao
 interface ReadRecentBookDao {
 
+    @get:Query("SELECT * FROM readRecentBooks")
+    val all: List<ReadRecentBook>
+
     @Query(
         """
         select books.* from readRecentBooks
@@ -34,6 +37,9 @@ interface ReadRecentBookDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insert(record: ReadRecentBook)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insert(vararg items: ReadRecentBook)
 
     @Query("delete from readRecentBooks")
     fun clear()

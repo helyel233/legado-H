@@ -3,6 +3,7 @@ package io.legado.app.data.dao
 import androidx.room.Dao
 import androidx.room.Delete
 import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import io.legado.app.data.entities.PendingReviewComment
@@ -12,6 +13,9 @@ interface PendingReviewCommentDao {
 
     @Insert
     suspend fun insert(item: PendingReviewComment): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(items: List<PendingReviewComment>)
 
     @Update
     suspend fun update(item: PendingReviewComment)

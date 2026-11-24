@@ -2899,8 +2899,8 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     /** 备份/恢复已下载书籍本体与正文缓存（体积较大，默认关闭） */
     val backupBookFiles get() = appCtx.getPrefBoolean(PreferKey.backupBookFiles, false)
 
-    /** 字体/背景图/头像等文件资源拆分为独立备份包（主包保持轻量） */
-    val backupAssetsSeparately get() = appCtx.getPrefBoolean(PreferKey.backupAssetsSeparately, false)
+    /** 参数包与美术/封面等资源文件拆分为独立备份包异步同步（默认开启，主包保持轻量） */
+    val backupAssetsSeparately get() = appCtx.getPrefBoolean(PreferKey.backupAssetsSeparately, true)
 
     val webDavDeleteOldBackup get() = appCtx.getPrefBoolean(PreferKey.webDavDeleteOldBackup, false)
 

@@ -138,6 +138,13 @@ class ReaderAssetStore(val directory: File) {
     fun removeFolder(id: String) { save(library().let { it.copy(folders = it.folders.filterNot { folder -> folder.id == id }) }) }
 
     @Synchronized
+    fun exportBackupLibraryJson(): String? {
+        val source = library()
+        if (source.assets.isEmpty()) return null
+        return gson.toJson(source.copy(folders = emptyList()))
+    }
+
+    @Synchronized
     fun backupTo(target: File) {
         val source = library()
         target.mkdirs()

@@ -22,6 +22,9 @@ interface ReadAloudBgmDao {
     @Query("SELECT * FROM read_aloud_bgm_groups WHERE assetType = :assetType ORDER BY sortOrder ASC, id ASC")
     fun groupsByType(assetType: String): List<ReadAloudBgmGroup>
 
+    @Query("SELECT * FROM read_aloud_bgm_tracks")
+    fun allTracks(): List<ReadAloudBgmTrack>
+
     @Query("SELECT * FROM read_aloud_bgm_tracks ORDER BY groupId ASC, sortOrder ASC, id ASC")
     fun flowTracks(): Flow<List<ReadAloudBgmTrack>>
 
@@ -55,11 +58,17 @@ interface ReadAloudBgmDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertGroup(group: ReadAloudBgmGroup): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertGroups(groups: List<ReadAloudBgmGroup>)
+
     @Update
     fun updateGroup(group: ReadAloudBgmGroup)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertTrack(track: ReadAloudBgmTrack): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    fun insertTracks(tracks: List<ReadAloudBgmTrack>)
 
     @Update
     fun updateTrack(track: ReadAloudBgmTrack)

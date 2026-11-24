@@ -2717,8 +2717,12 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     okButton {
                         lifecycleScope.launch {
                             val assetsNames = withContext(IO) {
-                                runCatching { AppCloudStorage.listAssetsBackupNames() }
-                                    .getOrDefault(emptyList())
+                                runCatching {
+                                    AppCloudStorage.filterMatchingAssets(
+                                        AppCloudStorage.listAssetsBackupNames(),
+                                        lastBackupFile.displayName
+                                    )
+                                }.getOrDefault(emptyList())
                             }
                             if (assetsNames.isEmpty()) {
                                 viewModel.restoreWebDav(lastBackupFile.displayName)
@@ -2733,7 +2737,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                                     viewModel.restoreWebDav(lastBackupFile.displayName, assetsNames)
                                 },
                                 onNegative = {
-                                    viewModel.restoreWebDav(lastBackupFile.displayName)
+                                    viewModel.restoreWebDav(lastBackupFile.displayName, emptyList())
                                 }
                             )
                         }
