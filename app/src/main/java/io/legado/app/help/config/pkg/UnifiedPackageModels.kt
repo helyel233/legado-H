@@ -1,6 +1,7 @@
 package io.legado.app.help.config.pkg
 
 import com.google.gson.JsonElement
+import java.util.Locale
 
 enum class UiScope(val id: String) {
     TOP_BAR("topBar"),
@@ -178,7 +179,7 @@ object CoverSlotApplyMode {
     const val FALLBACK_ONLY = "FALLBACK_ONLY"
 
     fun normalize(raw: String?): String {
-        return when (raw?.trim()?.uppercase()) {
+        return when (raw?.trim()?.uppercase(Locale.ROOT)) {
             SEQUENCE -> SEQUENCE
             MIXED -> MIXED
             FALLBACK_ONLY, "FALLBACK" -> FALLBACK_ONLY
@@ -188,9 +189,25 @@ object CoverSlotApplyMode {
     }
 }
 
+object CoverSlotApplyTarget {
+    const val GROUPS = "groups"
+    const val BOOKS = "books"
+    const val BOTH = "both"
+
+    fun normalize(raw: String?, defaultValue: String = BOOKS): String {
+        return when (raw?.trim()?.lowercase(Locale.ROOT)) {
+            GROUPS, "group", "folder", "folders" -> GROUPS
+            BOOKS, "book" -> BOOKS
+            BOTH, "all" -> BOTH
+            else -> defaultValue
+        }
+    }
+}
+
 data class CoverSlotPackagePayload(
     val covers: List<String> = emptyList(),
     val applyMode: String? = null,
+    val applyTarget: String? = null,
     val dayDefaultCoverPath: String? = null,
     val nightDefaultCoverPath: String? = null,
     val groupCoverPath: String? = null,

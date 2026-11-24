@@ -647,6 +647,8 @@
 
     <string name="e_ink_mode">E-Ink 模式</string>
     <string name="e_ink_mode_detail">去除动画，优化电纸书使用体验</string>
+    <string name="e_ink_render_degrade">墨水屏渲染降级</string>
+    <string name="e_ink_render_degrade_summary">与日/夜模式正交；开启后强制高对比实底、零模糊与 0ms 直切</string>
     <string name="web_menu">Web 服务</string>
     <string name="web_port_title">Web 端口</string>
     <string name="web_port_summary">当前端口 %s</string>

@@ -65,6 +65,7 @@ import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 internal enum class MySettingsRowKind {
     Action,
     ThemeMode,
+    EInkMode,
     AutoTaskService
 }
 
@@ -140,8 +141,10 @@ internal fun MySettingsScreen(
     searchQuery: String,
     themeOptions: List<MySettingsThemeOption>,
     themeModeValue: String,
+    eInkModeEnabled: Boolean,
     autoTaskServiceState: MyServiceToggleUiState,
     onThemeModeSelect: (String) -> Unit,
+    onToggleEInkMode: (Boolean) -> Unit,
     onAutoTaskServiceCheckedChange: (Boolean) -> Unit,
     onAutoTaskServiceClick: () -> Unit,
     onRowClick: (String, MySettingsSubSearchItem?) -> Unit
@@ -197,8 +200,10 @@ internal fun MySettingsScreen(
                         searchQuery = searchQuery,
                         themeOptions = themeOptions,
                         themeModeValue = themeModeValue,
+                        eInkModeEnabled = eInkModeEnabled,
                         autoTaskServiceState = autoTaskServiceState,
                         onThemeModeSelect = onThemeModeSelect,
+                        onToggleEInkMode = onToggleEInkMode,
                         onAutoTaskServiceCheckedChange = onAutoTaskServiceCheckedChange,
                         onAutoTaskServiceClick = onAutoTaskServiceClick,
                         onRowClick = onRowClick
@@ -227,8 +232,10 @@ private fun SettingsSectionCard(
     searchQuery: String,
     themeOptions: List<MySettingsThemeOption>,
     themeModeValue: String,
+    eInkModeEnabled: Boolean,
     autoTaskServiceState: MyServiceToggleUiState,
     onThemeModeSelect: (String) -> Unit,
+    onToggleEInkMode: (Boolean) -> Unit,
     onAutoTaskServiceCheckedChange: (Boolean) -> Unit,
     onAutoTaskServiceClick: () -> Unit,
     onRowClick: (String, MySettingsSubSearchItem?) -> Unit
@@ -272,6 +279,22 @@ private fun SettingsSectionCard(
                         options = themeOptions,
                         selectedValue = themeModeValue,
                         onSelect = onThemeModeSelect
+                    )
+
+                    MySettingsRowKind.EInkMode -> ServiceSwitchRow(
+                        item = item,
+                        state = MyServiceToggleUiState(
+                            checked = eInkModeEnabled,
+                            summary = item.summary
+                        ),
+                        colors = colors,
+                        panelRadiusPx = panelRadiusPx,
+                        searchQuery = searchQuery,
+                        isFirst = false,
+                        isLast = isLastRowInSection,
+                        showDivider = showDivider,
+                        onCheckedChange = onToggleEInkMode,
+                        onClick = { onToggleEInkMode(!eInkModeEnabled) }
                     )
 
                     MySettingsRowKind.AutoTaskService -> ServiceSwitchRow(
@@ -669,6 +692,7 @@ private fun MySettingsRowModel.effectiveSummary(
     return when (kind) {
         // 主题模式的当前值由分段控件自己展示，摘要保持静态描述
         MySettingsRowKind.ThemeMode -> summary.orEmpty()
+        MySettingsRowKind.EInkMode -> summary.orEmpty()
         MySettingsRowKind.AutoTaskService -> autoTaskServiceState.summary
         MySettingsRowKind.Action -> summary.orEmpty()
     }

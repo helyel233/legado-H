@@ -5,12 +5,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
 import java.io.File
 import java.io.FileOutputStream
+import java.util.Locale
 
 class UnifiedPackageCodecTest {
 
@@ -322,5 +324,133 @@ class UnifiedPackageCodecTest {
         assertEquals(convertedFromZip.contentHash, convertedFromRed.contentHash)
         assertEquals(convertedFromZip.coverSlot?.covers, convertedFromRed.coverSlot?.covers)
         assertFalse(UnifiedPackageCodec.validateCoverSlotPackage(convertedFromRed, convertedRedDir).isNotEmpty())
+    }
+
+    @Test
+    fun coverSlotApplyTargetNormalize_handlesCanonicalAliasesWhitespaceFallbackAndTurkishLocale() {
+        assertEquals(CoverSlotApplyTarget.GROUPS, CoverSlotApplyTarget.normalize("groups"))
+        assertEquals(CoverSlotApplyTarget.BOOKS, CoverSlotApplyTarget.normalize("books"))
+        assertEquals(CoverSlotApplyTarget.BOTH, CoverSlotApplyTarget.normalize("both"))
+
+        assertEquals(CoverSlotApplyTarget.GROUPS, CoverSlotApplyTarget.normalize("group"))
+        assertEquals(CoverSlotApplyTarget.GROUPS, CoverSlotApplyTarget.normalize("folder"))
+        assertEquals(CoverSlotApplyTarget.GROUPS, CoverSlotApplyTarget.normalize("folders"))
+        assertEquals(CoverSlotApplyTarget.BOOKS, CoverSlotApplyTarget.normalize("book"))
+        assertEquals(CoverSlotApplyTarget.BOTH, CoverSlotApplyTarget.normalize("all"))
+
+        assertEquals(CoverSlotApplyTarget.GROUPS, CoverSlotApplyTarget.normalize("  Folder  "))
+        assertEquals(CoverSlotApplyTarget.BOTH, CoverSlotApplyTarget.normalize("ALL"))
+        assertEquals(CoverSlotApplyTarget.GROUPS, CoverSlotApplyTarget.normalize("GROUPS"))
+
+        assertEquals(CoverSlotApplyTarget.BOOKS, CoverSlotApplyTarget.normalize(null))
+        assertEquals(CoverSlotApplyTarget.BOOKS, CoverSlotApplyTarget.normalize(""))
+        assertEquals(CoverSlotApplyTarget.BOOKS, CoverSlotApplyTarget.normalize("   "))
+        assertEquals(CoverSlotApplyTarget.BOOKS, CoverSlotApplyTarget.normalize("unknown_target"))
+        assertEquals(
+            CoverSlotApplyTarget.GROUPS,
+            CoverSlotApplyTarget.normalize(null, defaultValue = CoverSlotApplyTarget.GROUPS)
+        )
+        assertEquals(
+            CoverSlotApplyTarget.GROUPS,
+            CoverSlotApplyTarget.normalize("   ", defaultValue = CoverSlotApplyTarget.GROUPS)
+        )
+        assertEquals(
+            CoverSlotApplyTarget.GROUPS,
+            CoverSlotApplyTarget.normalize("invalid", defaultValue = CoverSlotApplyTarget.GROUPS)
+        )
+
+        val previousLocale = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale("tr", "TR"))
+            assertEquals(CoverSlotApplyTarget.GROUPS, CoverSlotApplyTarget.normalize("  Folder  "))
+            assertEquals(CoverSlotApplyTarget.BOTH, CoverSlotApplyTarget.normalize("ALL"))
+            assertEquals(CoverSlotApplyTarget.GROUPS, CoverSlotApplyTarget.normalize("GROUPS"))
+            assertEquals(CoverSlotApplyTarget.BOOKS, CoverSlotApplyTarget.normalize("BOOKS"))
+            assertEquals(CoverSlotApplyTarget.BOOKS, CoverSlotApplyTarget.normalize("INVALID"))
+        } finally {
+            Locale.setDefault(previousLocale)
+        }
+    }
+
+    @Test
+    fun coverSlotApplyTargetCodec_roundTripsKnownKeysValidationAndLegacyCompatibility() {
+        val targets = listOf(
+            CoverSlotApplyTarget.GROUPS,
+            CoverSlotApplyTarget.BOOKS,
+            CoverSlotApplyTarget.BOTH,
+            null
+        )
+        targets.forEach { target ->
+            val manifest = UnifiedPackageManifest(
+                kind = PackageKind.COVER_SLOT,
+                id = "cover_target_${target ?: "null"}",
+                name = "目标测试_${target ?: "null"}",
+                updatedAt = 1000L,
+                coverSlot = CoverSlotPackagePayload(
+                    covers = listOf("assets/c1.jpg"),
+                    applyMode = CoverSlotApplyMode.RANDOM,
+                    applyTarget = target
+                )
+            )
+            val encoded = UnifiedPackageCodec.encode(manifest)
+            val decoded = UnifiedPackageCodec.decode(encoded)
+            assertEquals(target, decoded.coverSlot?.applyTarget)
+            assertTrue(decoded.coverSlot!!.unknownFields.isEmpty())
+            assertTrue(UnifiedPackageCodec.validateCoverSlotPackage(decoded).isEmpty())
+        }
+
+        val withApplyTargetJson = """
+            {
+              "schemaVersion": 1,
+              "kind": "cover_slot",
+              "id": "cover_known_key",
+              "name": "KnownKeyTest",
+              "updatedAt": 2000,
+              "coverSlot": {
+                "covers": ["assets/cover_01.jpg"],
+                "applyMode": "RANDOM",
+                "applyTarget": "groups"
+              }
+            }
+        """.trimIndent()
+        val decodedKnown = UnifiedPackageCodec.decode(withApplyTargetJson)
+        assertEquals(CoverSlotApplyTarget.GROUPS, decodedKnown.coverSlot?.applyTarget)
+        assertFalse(decodedKnown.coverSlot!!.unknownFields.containsKey("applyTarget"))
+        assertTrue(decodedKnown.coverSlot!!.unknownFields.isEmpty())
+        assertTrue(UnifiedPackageCodec.validateCoverSlotPackage(decodedKnown).isEmpty())
+
+        val invalidTargetManifest = UnifiedPackageManifest(
+            kind = PackageKind.COVER_SLOT,
+            id = "cover_invalid_target",
+            name = "非法目标",
+            updatedAt = 3000L,
+            coverSlot = CoverSlotPackagePayload(
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = "invalid_target"
+            )
+        )
+        val invalidErrors = UnifiedPackageCodec.validateCoverSlotPackage(invalidTargetManifest)
+        assertTrue(invalidErrors.any { it.contains("Unsupported coverSlot applyTarget") })
+
+        val legacyWithoutApplyTargetJson = """
+            {
+              "schemaVersion": 1,
+              "kind": "cover_slot",
+              "id": "cover_legacy_no_target",
+              "name": "旧版封面包",
+              "updatedAt": 4000,
+              "coverSlot": {
+                "covers": ["assets/cover_01.jpg"],
+                "applyMode": "SEQUENCE"
+              }
+            }
+        """.trimIndent()
+        val decodedLegacy = UnifiedPackageCodec.decode(legacyWithoutApplyTargetJson)
+        assertNull(decodedLegacy.coverSlot?.applyTarget)
+        assertEquals(
+            CoverSlotApplyTarget.BOOKS,
+            CoverSlotApplyTarget.normalize(decodedLegacy.coverSlot?.applyTarget)
+        )
+        assertTrue(UnifiedPackageCodec.validateCoverSlotPackage(decodedLegacy).isEmpty())
     }
 }

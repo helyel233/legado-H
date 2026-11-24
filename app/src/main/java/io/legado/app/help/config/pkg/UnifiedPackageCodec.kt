@@ -271,6 +271,22 @@ object UnifiedPackageCodec {
                 errors += "Unsupported coverSlot applyMode: $rawMode"
             }
         }
+        val rawTarget = slot.applyTarget?.trim()?.takeIf { it.isNotBlank() }
+        if (rawTarget != null) {
+            val allowedTargets = setOf(
+                CoverSlotApplyTarget.GROUPS,
+                CoverSlotApplyTarget.BOOKS,
+                CoverSlotApplyTarget.BOTH,
+                "group",
+                "folder",
+                "folders",
+                "book",
+                "all"
+            )
+            if (rawTarget.lowercase(Locale.ROOT) !in allowedTargets) {
+                errors += "Unsupported coverSlot applyTarget: $rawTarget"
+            }
+        }
         collectAssetPaths(manifest).forEach { rel ->
             if (!isSafeRelativePackagePath(rel)) {
                 errors += "Unsafe asset path: $rel"
@@ -673,6 +689,7 @@ object UnifiedPackageCodec {
             if (arr.size() > 0) add("covers", arr)
         }
         putStr("applyMode", slot.applyMode)
+        putStr("applyTarget", slot.applyTarget)
         putStr("dayDefaultCoverPath", slot.dayDefaultCoverPath)
         putStr("nightDefaultCoverPath", slot.nightDefaultCoverPath)
         putStr("groupCoverPath", slot.groupCoverPath)
@@ -692,6 +709,7 @@ object UnifiedPackageCodec {
         val known = setOf(
             "covers",
             "applyMode",
+            "applyTarget",
             "dayDefaultCoverPath",
             "nightDefaultCoverPath",
             "groupCoverPath"
@@ -699,6 +717,7 @@ object UnifiedPackageCodec {
         return CoverSlotPackagePayload(
             covers = coversList,
             applyMode = obj.stringOrNull("applyMode")?.takeIf { it.isNotBlank() },
+            applyTarget = obj.stringOrNull("applyTarget")?.takeIf { it.isNotBlank() },
             dayDefaultCoverPath = obj.stringOrNull("dayDefaultCoverPath")?.takeIf { it.isNotBlank() },
             nightDefaultCoverPath = obj.stringOrNull("nightDefaultCoverPath")?.takeIf { it.isNotBlank() },
             groupCoverPath = obj.stringOrNull("groupCoverPath")?.takeIf { it.isNotBlank() },

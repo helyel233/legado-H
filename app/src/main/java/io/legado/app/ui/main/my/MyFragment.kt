@@ -22,6 +22,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.lib.theme.TopBarSearchStyle
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
+import io.legado.app.lib.theme.recomputeThemeUiSignatureAfterBatch
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.model.AutoTask
 import io.legado.app.ui.about.AboutActivity
@@ -64,6 +65,7 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config),
     }
     private val searchQueryState = mutableStateOf("")
     private val themeModeState = mutableStateOf("0")
+    private val eInkModeState = mutableStateOf(AppConfig.isEInkMode)
     private val autoTaskServiceState = mutableStateOf(
         MyServiceToggleUiState(checked = false, summary = "")
     )
@@ -110,7 +112,7 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config),
         when (key) {
             PreferKey.themeMode,
             PreferKey.eInkMode -> {
-                themeModeState.value = resolveDisplayThemeMode()
+                syncThemeAndEInkStates()
             }
 
             PreferKey.autoTaskService -> updateAutoTaskServiceState()
@@ -135,8 +137,10 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config),
                     searchQuery = searchQueryState.value,
                     themeOptions = themeOptions,
                     themeModeValue = themeModeState.value,
+                    eInkModeEnabled = eInkModeState.value,
                     autoTaskServiceState = autoTaskServiceState.value,
                     onThemeModeSelect = ::setThemeMode,
+                    onToggleEInkMode = ::setEInkMode,
                     onAutoTaskServiceCheckedChange = ::setAutoTaskServiceEnabled,
                     onAutoTaskServiceClick = ::handleAutoTaskServiceClick,
                     onRowClick = ::handleRowClick
@@ -184,8 +188,19 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config),
         )
     }
 
-    private fun updateSettingsState() {
+    private fun resolveEInkModeEnabled(): Boolean {
+        val ctx = requireContext()
+        return ctx.getPrefBoolean(PreferKey.eInkMode, false) ||
+            ctx.getPrefString(PreferKey.themeMode, "0") == "3"
+    }
+
+    private fun syncThemeAndEInkStates() {
         themeModeState.value = resolveDisplayThemeMode()
+        eInkModeState.value = resolveEInkModeEnabled()
+    }
+
+    private fun updateSettingsState() {
+        syncThemeAndEInkStates()
         updateAutoTaskServiceState()
     }
 
@@ -199,7 +214,17 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config),
 
     private fun setThemeMode(value: String) {
         AppConfig.setThemeModeSelection(value)
-        themeModeState.value = resolveDisplayThemeMode()
+        applyThemeChanges()
+    }
+
+    private fun setEInkMode(enabled: Boolean) {
+        AppConfig.setEInkModeEnabled(enabled)
+        applyThemeChanges()
+    }
+
+    private fun applyThemeChanges() {
+        syncThemeAndEInkStates()
+        context?.recomputeThemeUiSignatureAfterBatch()
         view?.post {
             //延迟到下一帧执行时 Fragment 可能已分离，requireContext 会抛 IllegalStateException
             val context = context ?: return@post
@@ -398,6 +423,13 @@ class MyFragment : BaseFragment(R.layout.fragment_my_config),
                         title = getString(R.string.theme_mode),
                         kind = MySettingsRowKind.ThemeMode,
                         iconRes = R.drawable.ic_daytime
+                    ),
+                    MySettingsRowModel(
+                        key = PreferKey.eInkMode,
+                        title = getString(R.string.e_ink_render_degrade),
+                        summary = getString(R.string.e_ink_render_degrade_summary),
+                        kind = MySettingsRowKind.EInkMode,
+                        iconRes = R.drawable.ic_brightness
                     ),
                     MySettingsRowModel(
                         key = "appearanceKit",

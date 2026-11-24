@@ -108,6 +108,8 @@ private val themeUiDependencyKeySet = (
         PreferKey.coverSlotLocked,
         PreferKey.defaultGroupCover,
         PreferKey.defaultGroupCoverDark,
+        PreferKey.coverCollectionTargetDay,
+        PreferKey.coverCollectionTargetNight,
         PreferKey.paramPackageDirty,
         PreferKey.bgImage,
         PreferKey.bgImageN,
@@ -357,6 +359,7 @@ fun Context.themeUiSignature(): String {
         "cParam=${getPrefString(PreferKey.currentParamPackageId).orEmpty()}",
         "cCover=${getPrefString(PreferKey.currentCoverSlotPackageId).orEmpty()}",
         "cLock=${getPrefBoolean(PreferKey.coverSlotLocked, false)}",
+        "cTarget=${getPrefString(if (AppConfig.isNightTheme) PreferKey.coverCollectionTargetNight else PreferKey.coverCollectionTargetDay).orEmpty()}",
         "dirty=${getPrefBoolean(PreferKey.paramPackageDirty, false)}"
     ).joinToString("|")
     return "mode=$themeMode|night=${AppConfig.isNightTheme}|eInk=${AppConfig.isEInkMode}|themeStore=${ThemeStore.valuesChanged(this)}|$activePkgSig|$rawPrefs|$shapePrefs|$computedColors"

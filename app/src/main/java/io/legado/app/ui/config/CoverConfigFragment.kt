@@ -124,6 +124,8 @@ class CoverConfigFragment : ComposeSettingFragment() {
             PreferKey.coverShowAuthorN,
             PreferKey.coverCollectionModeDay,
             PreferKey.coverCollectionModeNight,
+            PreferKey.coverCollectionTargetDay,
+            PreferKey.coverCollectionTargetNight,
             PreferKey.bookCoverShadow -> refreshCoverCollection()
         }
     }

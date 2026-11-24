@@ -57,11 +57,13 @@ class CoverSlotRepositoryTest {
 
     private fun resetState() {
         UnifiedPackageRepository.invalidateCache()
+        CoverCollectionManager.invalidateCache()
         context.defaultSharedPreferences.edit().clear().commit()
         AppConfig.isNightTheme = false
         FileUtils.delete(UnifiedPackageRepository.rootDir, deleteRootDir = true)
         FileUtils.delete(CoverCollectionManager.rootDir, deleteRootDir = true)
         UnifiedPackageRepository.invalidateCache()
+        CoverCollectionManager.invalidateCache()
     }
 
     @Test
@@ -142,7 +144,26 @@ class CoverSlotRepositoryTest {
         assertEquals(savedSlot.manifest.id, context.getPrefString(PreferKey.coverCollectionDay))
         assertEquals(CoverCollectionManager.MODE_MIXED, context.getPrefString(PreferKey.coverCollectionModeDay))
 
-        // Mount an ArtPackage that carries its own defaultCoverPath and mounts.dayCoverSlotId
+        // Create recommended COVER_SLOT ("art_recommended_cover_id") with its own dayDefaultCoverPath
+        val recGalleryImg = tempFolder.newFile("rec_gallery_1.jpg").apply { writeBytes(byteArrayOf(51, 52, 53)) }
+        val recDayDefaultImg = tempFolder.newFile("rec_day_default.jpg").apply { writeBytes(byteArrayOf(61, 62, 63)) }
+        val recSlotCreated = UnifiedPackageRepository.createEmptyPackage(
+            PackageKind.COVER_SLOT,
+            "art_recommended_cover_id"
+        )
+        val recSlotSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = recSlotCreated.manifest.id,
+            newName = "art_recommended_cover_id",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = listOf(recGalleryImg.absolutePath),
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.BOOKS,
+                dayDefaultCoverPath = recDayDefaultImg.absolutePath
+            )
+        )
+
+        // Mount an ArtPackage that carries legacy defaultCoverPath and mounts.dayCoverSlotId
         val artCoverImg = tempFolder.newFile("art_embedded_cover.jpg").apply { writeBytes(byteArrayOf(99, 98, 97)) }
         val artBase = UnifiedPackageRepository.listArtPackages().first()
         val artEdited = UnifiedPackageRepository.saveEditedArtPackage(
@@ -176,15 +197,17 @@ class CoverSlotRepositoryTest {
         assertFalse(nightDefault.contains("art_"))
         assertEquals(savedSlot.manifest.id, context.getPrefString(PreferKey.coverCollectionNight))
 
-        // Unlock (follow ArtPackage recommendation): ArtPackage cover now takes effect
+        // Unlock (follow ArtPackage recommendation): recommended CoverSlot's dayDefaultCoverPath takes over
         AppConfig.isNightTheme = false
         UnifiedPackageRepository.setCoverSlotFollowArt(context, followArt = true)
         assertFalse(context.getPrefBoolean(PreferKey.coverSlotLocked, true))
 
         val followArtCover = context.getPrefString(PreferKey.defaultCover)
         assertNotNull(followArtCover)
+        assertTrue(File(followArtCover!!).isFile)
         assertTrue(followArtCover != lockedDayCover)
-        assertEquals("art_recommended_cover_id", context.getPrefString(PreferKey.coverCollectionDay))
+        assertTrue(followArtCover.startsWith(recSlotSaved.dir.absolutePath))
+        assertEquals(recSlotSaved.manifest.id, context.getPrefString(PreferKey.coverCollectionDay))
     }
 
     /**
@@ -288,5 +311,220 @@ class CoverSlotRepositoryTest {
         val customReq = customGroup.toCoverRequest()
         assertEquals("/custom/scifi_group.jpg", customReq.path)
         assertFalse(customReq.forcePath)
+    }
+
+    @Test
+    fun followArt_doesNotResurrectLegacyArtDefaultCoverPathWhenNoRecommendedSlot() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val lockedDefaultImg = tempFolder.newFile("locked_day_default.jpg").apply {
+            writeBytes(byteArrayOf(1, 3, 5))
+        }
+        val slot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "锁定封面包")
+        val savedSlot = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "锁定封面包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                applyMode = CoverSlotApplyMode.FALLBACK_ONLY,
+                dayDefaultCoverPath = lockedDefaultImg.absolutePath
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, savedSlot, forNight = false)
+        assertFalse(context.getPrefString(PreferKey.defaultCover).isNullOrEmpty())
+
+        val legacyArtCoverImg = tempFolder.newFile("legacy_art_default_cover.jpg").apply {
+            writeBytes(byteArrayOf(9, 7, 5))
+        }
+        val artBase = UnifiedPackageRepository.listArtPackages().first()
+        val artEdited = UnifiedPackageRepository.saveEditedArtPackage(
+            context = context,
+            entryId = artBase.manifest.id,
+            newName = "仅含旧defaultCover的美术包",
+            updatedArt = (artBase.manifest.art ?: ArtPackagePayload()).copy(
+                defaultCoverPath = legacyArtCoverImg.absolutePath,
+                mounts = ArtAssetMounts(dayCoverSlotId = null, nightCoverSlotId = null)
+            )
+        )
+        UnifiedPackageRepository.mountArtPackage(context, artEdited, forNight = false)
+        UnifiedPackageRepository.applyArtPackage(context, artEdited)
+
+        UnifiedPackageRepository.setCoverSlotFollowArt(context, followArt = true)
+        assertFalse(context.getPrefBoolean(PreferKey.coverSlotLocked, true))
+        assertTrue(context.getPrefString(PreferKey.defaultCover).isNullOrEmpty())
+        assertTrue(context.getPrefString(PreferKey.defaultCoverDark).isNullOrEmpty())
+        assertTrue(context.getPrefString(PreferKey.coverCollectionDay).isNullOrEmpty())
+    }
+
+    @Test
+    fun coverSlotApplyTarget_routesBetweenGroupsBooksAndBothWithNamePriorityAndAsyncSequence() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val xuanhuanImg = tempFolder.newFile("玄幻.jpg").apply { writeBytes(byteArrayOf(1, 2, 3)) }
+        val random1Img = tempFolder.newFile("random_01.jpg").apply { writeBytes(byteArrayOf(4, 5, 6)) }
+        val random2Img = tempFolder.newFile("random_02.jpg").apply { writeBytes(byteArrayOf(7, 8, 9)) }
+        val groupFallbackImg = tempFolder.newFile("group_fallback.png").apply { writeBytes(byteArrayOf(10, 11, 12)) }
+        val customGroupCoverFile = tempFolder.newFile("custom_group_cover.jpg").apply {
+            writeBytes(byteArrayOf(13, 14, 15))
+        }
+
+        val slot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "作用域路由封面包")
+        val gallerySources = listOf(
+            xuanhuanImg.absolutePath,
+            random1Img.absolutePath,
+            random2Img.absolutePath
+        )
+
+        // 1. applyTarget = GROUPS: name-matched group cover first, random gallery for other groups, books unaffected
+        val groupsSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "作用域路由封面包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = gallerySources,
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.GROUPS,
+                groupCoverPath = groupFallbackImg.absolutePath
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, groupsSaved, forNight = false)
+
+        val xuanhuanReq = BookGroup(groupId = 1L, groupName = "玄幻").toCoverRequest()
+        assertNotNull(xuanhuanReq.path)
+        assertEquals("玄幻.jpg", File(xuanhuanReq.path!!).name)
+        assertTrue(xuanhuanReq.forcePath)
+
+        val scifiReq = BookGroup(groupId = 2L, groupName = "科幻").toCoverRequest()
+        assertNotNull(scifiReq.path)
+        assertTrue(File(scifiReq.path!!).isFile)
+        assertTrue(File(scifiReq.path!!).name in setOf("玄幻.jpg", "random_01.jpg", "random_02.jpg"))
+        assertTrue(scifiReq.forcePath)
+
+        assertNull(CoverCollectionManager.selectedCollectionCover("book_url_1"))
+
+        // 2. Switch to applyTarget = BOOKS: books hit gallery, groups return null and fall back to groupCoverPath
+        val booksSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "作用域路由封面包",
+            updatedCoverSlot = groupsSaved.manifest.coverSlot!!.copy(
+                applyTarget = CoverSlotApplyTarget.BOOKS
+            )
+        )
+        assertNotNull(CoverCollectionManager.selectedCollectionCover("book_url_1"))
+        assertNull(CoverCollectionManager.selectedGroupCollectionCover(1L, "玄幻"))
+        val booksFallbackGroupReq = BookGroup(groupId = 1L, groupName = "玄幻").toCoverRequest()
+        assertEquals(resolveMountedGroupDefaultCover(), booksFallbackGroupReq.path)
+        assertTrue(booksFallbackGroupReq.forcePath)
+
+        // Legacy package with applyTarget = null behaves identically to BOOKS
+        val legacyNullTargetSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "作用域路由封面包",
+            updatedCoverSlot = booksSaved.manifest.coverSlot!!.copy(applyTarget = null)
+        )
+        assertNull(legacyNullTargetSaved.manifest.coverSlot?.applyTarget)
+        assertNotNull(CoverCollectionManager.selectedCollectionCover("book_url_1"))
+        assertNull(CoverCollectionManager.selectedGroupCollectionCover(1L, "玄幻"))
+        val legacyFallbackGroupReq = BookGroup(groupId = 1L, groupName = "玄幻").toCoverRequest()
+        assertEquals(resolveMountedGroupDefaultCover(), legacyFallbackGroupReq.path)
+        assertTrue(legacyFallbackGroupReq.forcePath)
+
+        // 3. Switch to applyTarget = BOTH: both groups and books hit gallery
+        val bothSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "作用域路由封面包",
+            updatedCoverSlot = legacyNullTargetSaved.manifest.coverSlot!!.copy(
+                applyTarget = CoverSlotApplyTarget.BOTH
+            )
+        )
+        assertNotNull(CoverCollectionManager.selectedCollectionCover("book_url_1"))
+        val bothGroupReq = BookGroup(groupId = 1L, groupName = "玄幻").toCoverRequest()
+        assertEquals("玄幻.jpg", File(bothGroupReq.path!!).name)
+        assertTrue(bothGroupReq.forcePath)
+
+        // 4. MODE_MIXED for groups: custom group.cover preserved, empty group.cover hits gallery
+        val mixedSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "作用域路由封面包",
+            updatedCoverSlot = bothSaved.manifest.coverSlot!!.copy(
+                applyMode = CoverSlotApplyMode.MIXED,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        val mixedCustomReq = BookGroup(
+            groupId = 3L,
+            groupName = "玄幻",
+            cover = customGroupCoverFile.absolutePath
+        ).toCoverRequest()
+        assertEquals(customGroupCoverFile.absolutePath, mixedCustomReq.path)
+        assertFalse(mixedCustomReq.forcePath)
+
+        val mixedEmptyReq = BookGroup(groupId = 4L, groupName = "都市", cover = null).toCoverRequest()
+        assertNotNull(mixedEmptyReq.path)
+        assertTrue(File(mixedEmptyReq.path!!).name in setOf("玄幻.jpg", "random_01.jpg", "random_02.jpg"))
+        assertTrue(mixedEmptyReq.forcePath)
+
+        // 5. MODE_FALLBACK_ONLY for groups: skips gallery and falls back to groupCoverPath
+        val fallbackOnlySaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "作用域路由封面包",
+            updatedCoverSlot = mixedSaved.manifest.coverSlot!!.copy(
+                applyMode = CoverSlotApplyMode.FALLBACK_ONLY,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        assertNull(CoverCollectionManager.selectedGroupCollectionCover(1L, "玄幻"))
+        val fallbackOnlyReq = BookGroup(groupId = 1L, groupName = "玄幻", cover = null).toCoverRequest()
+        assertEquals(resolveMountedGroupDefaultCover(), fallbackOnlyReq.path)
+        assertTrue(fallbackOnlyReq.forcePath)
+
+        // 6. MODE_SEQUENCE for groups: returns immediately on first read and flushes async assignment JSON
+        val sequenceSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "作用域路由封面包",
+            updatedCoverSlot = fallbackOnlySaved.manifest.coverSlot!!.copy(
+                applyMode = CoverSlotApplyMode.SEQUENCE,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        val seqReqFirst = BookGroup(groupId = 20L, groupName = "科幻").toCoverRequest()
+        val seqReqSecond = BookGroup(groupId = 21L, groupName = "奇幻").toCoverRequest()
+        assertNotNull(seqReqFirst.path)
+        assertTrue(File(seqReqFirst.path!!).isFile)
+        assertTrue(seqReqFirst.forcePath)
+        assertNotNull(seqReqSecond.path)
+        assertTrue(File(seqReqSecond.path!!).isFile)
+        assertEquals(seqReqFirst.path, BookGroup(groupId = 20L, groupName = "科幻").toCoverRequest().path)
+
+        CoverCollectionManager.flushPendingAssignmentWritesForTest()
+        val assignmentFile = File(CoverCollectionManager.rootDir, "assignments/${sequenceSaved.manifest.id}.json")
+        assertTrue(assignmentFile.isFile)
+        val assignmentJson = assignmentFile.readText()
+        assertTrue(assignmentJson.contains("\"group:20\""))
+        assertTrue(assignmentJson.contains("\"group:21\""))
+    }
+
+    @Test
+    fun createEmptyCoverSlot_defaultsToGroupsAndRespectsRememberedTarget() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val defaultCreated = UnifiedPackageRepository.createEmptyPackage(
+            kind = PackageKind.COVER_SLOT,
+            name = "默认目标封面包"
+        )
+        assertEquals(CoverSlotApplyTarget.GROUPS, defaultCreated.manifest.coverSlot?.applyTarget)
+
+        val booksCreated = UnifiedPackageRepository.createEmptyPackage(
+            kind = PackageKind.COVER_SLOT,
+            name = "记住书籍目标封面包",
+            initialCoverSlotApplyTarget = CoverSlotApplyTarget.BOOKS
+        )
+        assertEquals(CoverSlotApplyTarget.BOOKS, booksCreated.manifest.coverSlot?.applyTarget)
     }
 }

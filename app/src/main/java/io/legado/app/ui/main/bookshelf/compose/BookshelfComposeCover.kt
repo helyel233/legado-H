@@ -174,6 +174,22 @@ internal fun BookGroup.toCoverRequest(
     fallbackGroupCover: String? = resolveMountedGroupDefaultCover()
 ): BookshelfCoverRequest {
     val ownCover = cover?.trim()?.takeIf { it.isNotBlank() }
+    val collectionCover = CoverCollectionManager.selectedGroupCollectionCover(
+        groupId = groupId,
+        groupName = groupName,
+        hasOriginalCover = ownCover
+    )
+    if (collectionCover != null) {
+        return buildCoverRequest(
+            path = collectionCover,
+            name = groupName,
+            author = null,
+            sourceOrigin = null,
+            preferThumb = true,
+            forcePath = true,
+            allowNameOverlay = true
+        )
+    }
     val fallback = fallbackGroupCover?.trim()?.takeIf { it.isNotBlank() }
     val resolvedPath = ownCover ?: fallback
     return buildCoverRequest(
@@ -183,7 +199,7 @@ internal fun BookGroup.toCoverRequest(
         sourceOrigin = null,
         preferThumb = true,
         forcePath = ownCover == null && fallback != null,
-        allowNameOverlay = true,
+        allowNameOverlay = true
     )
 }
 

@@ -2,6 +2,7 @@ package io.legado.app.ui.config
 
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.View
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
@@ -32,7 +33,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -43,15 +43,18 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.core.graphics.ColorUtils
 import androidx.core.graphics.toColorInt
 import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
@@ -61,10 +64,10 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppearanceKitManager
-import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.pkg.ArtPackagePayload
 import io.legado.app.help.config.pkg.CoverSlotApplyMode
+import io.legado.app.help.config.pkg.CoverSlotApplyTarget
 import io.legado.app.help.config.pkg.CoverSlotPackagePayload
 import io.legado.app.help.config.pkg.LegacyPackageMigrator
 import io.legado.app.help.config.pkg.PackageKind
@@ -106,9 +109,12 @@ import io.legado.app.ui.widget.compose.rememberAppDialogStyle
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
 import io.legado.app.ui.widget.compose.toMiuixPalette
+import io.legado.app.utils.externalFiles
+import io.legado.app.utils.getFile
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefInt
 import io.legado.app.utils.getPrefString
+import io.legado.app.utils.normalizeFileName
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
@@ -170,7 +176,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private var activeDayCoverSlotIdState by mutableStateOf("")
     private var activeNightCoverSlotIdState by mutableStateOf("")
     private var coverSlotLockedState by mutableStateOf(false)
-    private var scrollToCoverSlotSignal by mutableIntStateOf(0)
+    private var coverSlotTargetHintDismissedState by mutableStateOf(false)
 
     private var cornerScaleState by mutableFloatStateOf(AppConfig.uiCornerScale)
     private var layoutAlphaState by mutableIntStateOf(AppConfig.uiLayoutAlpha)
@@ -260,15 +266,30 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         if (uris.isNullOrEmpty()) return@registerForActivityResult
         lifecycleScope.launch {
             runCatching {
-                uris.mapNotNull { uri ->
-                    val ext = resolveAssetExtension(uri, fallback = "jpg")
-                    PackageManageUiDelegate.stageImportUriToTempFile(
-                        context = this@AppearanceKitActivity,
-                        uri = uri,
-                        dirName = "uiPackageImport",
-                        filePrefix = "cover_asset",
-                        extension = ext
-                    ).takeIf { it.isFile && it.length() > 0L }?.absolutePath
+                withContext(Dispatchers.IO) {
+                    val batchDir = externalFiles.getFile(
+                        "uiPackageImport",
+                        "covers_${System.currentTimeMillis()}"
+                    ).apply { mkdirs() }
+                    uris.mapNotNull { uri ->
+                        val fallbackExt = resolveAssetExtension(uri, fallback = "jpg")
+                        val displayName = queryOpenableDisplayName(uri)
+                        val (stem, ext) = if (displayName != null) {
+                            sanitizePickedCoverFileName(displayName, fallbackExt)
+                        } else {
+                            "cover_asset_${System.currentTimeMillis()}" to fallbackExt
+                        }
+                        var target = File(batchDir, "$stem.$ext")
+                        var suffix = 1
+                        while (target.exists()) {
+                            target = File(batchDir, "${stem}_$suffix.$ext")
+                            suffix++
+                        }
+                        contentResolver.openInputStream(uri)?.use { input ->
+                            target.outputStream().use { output -> input.copyTo(output) }
+                        } ?: throw IllegalArgumentException(getString(R.string.theme_zip_read_failed))
+                        target.takeIf { it.isFile && it.length() > 0L }?.absolutePath
+                    }
                 }
             }.onSuccess { paths ->
                 if (paths.isNotEmpty()) callback(paths)
@@ -276,6 +297,43 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
             }
         }
+    }
+
+    private fun queryOpenableDisplayName(uri: Uri): String? {
+        return runCatching {
+            contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+                val col = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (col >= 0 && cursor.moveToFirst()) {
+                    cursor.getString(col)?.trim()?.takeIf { it.isNotBlank() }
+                } else {
+                    null
+                }
+            }
+        }.getOrNull()
+    }
+
+    private fun sanitizePickedCoverFileName(rawName: String, fallbackExt: String): Pair<String, String> {
+        val leaf = rawName
+            .substringAfterLast('/')
+            .substringAfterLast('\\')
+            .trim()
+        val lastDot = leaf.lastIndexOf('.')
+        val rawStem = if (lastDot > 0) leaf.substring(0, lastDot) else leaf
+        val rawExt = if (lastDot > 0 && lastDot < leaf.length - 1) {
+            leaf.substring(lastDot + 1).lowercase(Locale.ROOT)
+        } else {
+            ""
+        }
+        val cleanStem = rawStem
+            .normalizeFileName()
+            .trim('.', ' ')
+            .takeIf { it.isNotBlank() && it != "." && it != ".." }
+            ?: "cover_asset_${System.currentTimeMillis()}"
+        val cleanExt = rawExt
+            .filter { it in 'a'..'z' || it in '0'..'9' }
+            .takeIf { it.length in 1..6 }
+            ?: fallbackExt
+        return cleanStem to cleanExt
     }
 
     private fun resolveAssetExtension(uri: Uri, fallback: String): String {
@@ -416,7 +474,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         activeDayCoverSlotId = activeDayCoverSlotIdState,
                         activeNightCoverSlotId = activeNightCoverSlotIdState,
                         coverSlotLocked = coverSlotLockedState,
-                        scrollToCoverSlotSignal = scrollToCoverSlotSignal,
                         cornerScale = cornerScaleState,
                         layoutAlpha = layoutAlphaState,
                         glassMode = glassModeState,
@@ -426,7 +483,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         useLegacyPackageManager = useLegacyPackageManagerState,
                         topMenuActions = ::topBarMenuActions,
                         onBack = ::supportFinishAfterTransition,
-                        onToggleEInkMode = ::toggleEInkMode,
                         onSelectArtSlotNight = { artSlotNightState = it },
                         onSelectParamSlotNight = { paramSlotNightState = it },
                         onSelectCoverSlotNight = { coverSlotNightState = it },
@@ -586,10 +642,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                                     allowExtensions = arrayOf("ttf", "otf", "ttc")
                                 }
                             },
-                            onNavigateToCoverSlotConfig = {
-                                editingArtEntryState = null
-                                scrollToCoverSlotSignal++
-                            },
                             onDismiss = { editingArtEntryState = null },
                             onSave = { newName, updatedArt ->
                                 editingArtEntryState = null
@@ -614,6 +666,11 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         CoverSlotPackageEditorDialog(
                             entry = entry,
                             existingNames = coverSlotPackagesState.map { it.manifest.name },
+                            showTargetHintBanner = !coverSlotTargetHintDismissedState,
+                            onDismissTargetHint = {
+                                coverSlotTargetHintDismissedState = true
+                                putPrefBoolean(PreferKey.coverSlotTargetHintDismissed, true)
+                            },
                             onPickSingleImage = { _, onPicked ->
                                 pendingAssetFileCallback = onPicked
                                 pickAssetFileLauncher.launch {
@@ -656,6 +713,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         glassLevelState = GlassMaterialPreset.levelFor(resolvedGlassMode, frosted, liquid).coerceIn(0, 100)
         useLegacyTokenPipelineState = getPrefBoolean(PreferKey.useLegacyTokenPipeline, false)
         useLegacyPackageManagerState = getPrefBoolean(PreferKey.useLegacyPackageManager, false)
+        coverSlotTargetHintDismissedState = getPrefBoolean(PreferKey.coverSlotTargetHintDismissed, false)
 
         lifecycleScope.launch {
             LegacyPackageMigrator.migrateLocalPackagesIfNeeded(this@AppearanceKitActivity)
@@ -682,23 +740,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             PackageKind.PARAM -> paramPackagesState.map { it.manifest.name }
             PackageKind.COVER_SLOT -> coverSlotPackagesState.map { it.manifest.name }
             else -> emptyList()
-        }
-    }
-
-    private fun toggleEInkMode(enabled: Boolean) {
-        val prevNight = isNightState
-        AppConfig.setEInkModeEnabled(enabled)
-        val nextNight = AppConfig.isNightTheme
-        isNightState = nextNight
-        if (nextNight != prevNight) {
-            artSlotNightState = nextNight
-            paramSlotNightState = nextNight
-            coverSlotNightState = nextNight
-        }
-        isEInkState = AppConfig.isEInkMode
-        recomputeThemeUiSignatureAfterBatch()
-        window.decorView.post {
-            ThemeConfig.applyDayNight(this@AppearanceKitActivity)
         }
     }
 
@@ -831,10 +872,13 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         created
                     }
                     PackageKind.COVER_SLOT -> {
+                        val rememberedTarget = getPrefString(PreferKey.lastCoverSlotApplyTarget)
+                            ?.takeIf { it.isNotBlank() }
                         val created = UnifiedPackageRepository.createEmptyPackage(
                             kind = PackageKind.COVER_SLOT,
                             name = newName,
-                            enforceUniqueName = true
+                            enforceUniqueName = true,
+                            initialCoverSlotApplyTarget = rememberedTarget
                         )
                         UnifiedPackageRepository.mountCoverSlotPackage(
                             context = this@AppearanceKitActivity,
@@ -936,6 +980,15 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                     updatedCoverSlot = updatedCoverSlot
                 )
             }.onSuccess {
+                val normalizedTarget = CoverSlotApplyTarget.normalize(
+                    updatedCoverSlot.applyTarget,
+                    defaultValue = CoverSlotApplyTarget.GROUPS
+                )
+                putPrefString(PreferKey.lastCoverSlotApplyTarget, normalizedTarget)
+                if (normalizedTarget != CoverSlotApplyTarget.GROUPS && !coverSlotTargetHintDismissedState) {
+                    coverSlotTargetHintDismissedState = true
+                    putPrefBoolean(PreferKey.coverSlotTargetHintDismissed, true)
+                }
                 refreshStudioState()
                 toastOnUi(R.string.success)
             }.onFailure {
@@ -1388,10 +1441,10 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 ownerConfigTag = "",
                 key = "activity_appearance_kit_param",
                 title = "参数设置包与外观微调",
-                summary = "调整全局及顶栏/底栏/卡片/弹窗四区域材质（实底/透明/磨砂/液态玻璃）、圆角、阴影、密度与墨水屏开关",
+                summary = "调整全局及顶栏/底栏/卡片/弹窗四区域材质（实底/透明/磨砂/液态玻璃）、圆角、阴影与密度",
                 aliases = listOf(
                     "参数包", "参数设置包", "外观中心", "顶栏包", "底栏包", "发现玻璃", "液态玻璃",
-                    "毛玻璃", "实底", "透明", "圆角", "阴影", "密度", "墨水屏", "eink", "glass", "topbar", "navbar"
+                    "毛玻璃", "实底", "透明", "圆角", "阴影", "密度", "glass", "topbar", "navbar"
                 ),
                 destination = SearchDestination.Activity(AppearanceKitActivity::class.java.name)
             ),
@@ -1426,7 +1479,6 @@ private fun AppearanceStudioScreen(
     activeDayCoverSlotId: String,
     activeNightCoverSlotId: String,
     coverSlotLocked: Boolean,
-    scrollToCoverSlotSignal: Int,
     cornerScale: Float,
     layoutAlpha: Int,
     glassMode: String,
@@ -1436,7 +1488,6 @@ private fun AppearanceStudioScreen(
     useLegacyPackageManager: Boolean,
     topMenuActions: () -> List<AppManagementMenuAction>,
     onBack: () -> Unit,
-    onToggleEInkMode: (Boolean) -> Unit,
     onSelectArtSlotNight: (Boolean) -> Unit,
     onSelectParamSlotNight: (Boolean) -> Unit,
     onSelectCoverSlotNight: (Boolean) -> Unit,
@@ -1468,12 +1519,6 @@ private fun AppearanceStudioScreen(
     val glassSignature = rememberGlassConfigSignature()
     val effectiveGlassSig = glassSignature.takeIf { wallpaperVisible }
     val listState = rememberLazyListState()
-
-    LaunchedEffect(scrollToCoverSlotSignal) {
-        if (scrollToCoverSlotSignal > 0) {
-            listState.animateScrollToItem(4)
-        }
-    }
 
     Column(
         modifier = Modifier
@@ -1507,15 +1552,7 @@ private fun AppearanceStudioScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(AppLayoutTokens.SectionGap)
         ) {
-            // 1. 独立正交墨水屏开关
-            item("1_eink_mode") {
-                StudioEInkSwitchSection(
-                    isEInkMode = isEInkMode,
-                    palette = palette,
-                    onToggleEInkMode = onToggleEInkMode
-                )
-            }
-            // 2. 实时预览卡（内嵌可折叠「快速微调」抽屉）
+            // 1. 实时预览卡（内嵌可折叠「快速微调」抽屉）
             item("2_live_preview") {
                 StudioLivePreviewCard(
                     palette = palette,
@@ -1626,56 +1663,6 @@ private fun AppearanceStudioScreen(
 }
 
 @Composable
-private fun StudioEInkSwitchSection(
-    isEInkMode: Boolean,
-    palette: AppManagementPalette,
-    onToggleEInkMode: (Boolean) -> Unit
-) {
-    val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        AppSettingSectionTitle(
-            title = "显示模式",
-            palette = palette.settings,
-            inCard = false
-        )
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(panelShape)
-                .appSettingPanelBackground(
-                    normalColor = palette.settings.row,
-                    borderColor = palette.settings.border,
-                    panelImage = null,
-                    radiusPx = palette.settings.panelRadiusPx
-                )
-                .clickable { onToggleEInkMode(!isEInkMode) }
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "墨水屏渲染降级（E-Ink 独立开关）",
-                    color = palette.settings.primaryText,
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = "与日/夜模式正交；开启后强制高对比实底、零模糊与 0ms 直切",
-                    color = palette.settings.secondaryText,
-                    fontSize = 11.sp
-                )
-            }
-            Spacer(modifier = Modifier.width(10.dp))
-            LegadoMiuixSwitch(
-                checked = isEInkMode,
-                onCheckedChange = onToggleEInkMode,
-                palette = palette.miuix
-            )
-        }
-    }
-}
-
-@Composable
 private fun StudioLivePreviewCard(
     palette: AppManagementPalette,
     glassSignature: String?,
@@ -1716,6 +1703,39 @@ private fun StudioLivePreviewCard(
     val cardColor = Color(tokens?.colors?.cardArgb ?: palette.settings.row)
     val bottomColor = Color(tokens?.colors?.bottomBarArgb ?: palette.settings.bottomBar)
     val accentColor = palette.settings.accent
+
+    val paletteSig = tokens?.paletteSignature
+    val themeSig = palette.settings.themeSignature
+    val uiFontPath = remember(paletteSig, themeSig) { AppConfig.uiFontPath }
+    val titleFontPath = remember(paletteSig, themeSig) { AppConfig.titleFontPath }
+    val uiFontState by rememberPinnedPreviewTypeface(uiFontPath)
+    val titleFontState by rememberPinnedPreviewTypeface(titleFontPath)
+    val bodyFamily = remember(uiFontState.typeface, palette.settings.bodyFontFamily) {
+        uiFontState.typeface?.let { FontFamily(it) } ?: palette.settings.bodyFontFamily
+    }
+    val titleFamily = remember(titleFontState.typeface, palette.settings.titleFontFamily) {
+        titleFontState.typeface?.let { FontFamily(it) } ?: palette.settings.titleFontFamily
+    }
+    val uiFontLabel = remember(uiFontPath, uiFontState) {
+        resolveStudioFontLabel(uiFontPath, uiFontState)
+    }
+    val titleFontLabel = remember(titleFontPath, titleFontState) {
+        resolveStudioFontLabel(titleFontPath, titleFontState)
+    }
+
+    val topBarEffectiveAlpha = (0.85f * alphaFactor).coerceIn(0.12f, 1f)
+    val effectiveTopBarColor = Color(
+        ColorUtils.blendARGB(bgColor.toArgb(), primaryColor.toArgb(), topBarEffectiveAlpha)
+    )
+    val topBarTitleColor = if (isEInkMode) {
+        if (ColorUtils.calculateLuminance(effectiveTopBarColor.toArgb()) > 0.5) Color.Black else Color.White
+    } else {
+        if (ColorUtils.calculateLuminance(effectiveTopBarColor.toArgb()) > 0.55) {
+            palette.settings.primaryText
+        } else {
+            Color.White.copy(alpha = 0.94f)
+        }
+    }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -1758,18 +1778,22 @@ private fun StudioLivePreviewCard(
                         .fillMaxWidth()
                         .height(26.dp)
                         .clip(slotShape)
-                        .background(primaryColor.copy(alpha = (0.85f * alphaFactor).coerceIn(0.12f, 1f)))
+                        .background(primaryColor.copy(alpha = topBarEffectiveAlpha))
                         .padding(horizontal = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .width(56.dp)
-                            .height(8.dp)
-                            .clip(pillShape)
-                            .background(Color.White.copy(alpha = 0.85f))
+                    Text(
+                        text = "我的书架",
+                        color = topBarTitleColor,
+                        fontFamily = titleFamily,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     Box(
                         modifier = Modifier
                             .size(10.dp)
@@ -1794,22 +1818,25 @@ private fun StudioLivePreviewCard(
                             .heightIn(min = 46.dp)
                             .clip(slotShape)
                             .background(cardColor.copy(alpha = (0.88f * alphaFactor).coerceIn(0.12f, 1f)))
-                            .padding(8.dp),
+                            .padding(horizontal = 10.dp, vertical = 7.dp),
                         verticalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.65f)
-                                .height(8.dp)
-                                .clip(pillShape)
-                                .background(palette.settings.primaryText.copy(alpha = 0.72f))
+                        Text(
+                            text = "书海漫游 · 第一章",
+                            color = palette.settings.primaryText,
+                            fontFamily = titleFamily,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth(0.9f)
-                                .height(6.dp)
-                                .clip(pillShape)
-                                .background(palette.settings.secondaryText.copy(alpha = 0.45f))
+                        Text(
+                            text = "正文字体效果预览 AaBb 123",
+                            color = palette.settings.secondaryText,
+                            fontFamily = bodyFamily,
+                            fontSize = 10.5.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -1820,6 +1847,52 @@ private fun StudioLivePreviewCard(
                         .clip(pillShape)
                         .background(bottomColor.copy(alpha = (0.90f * alphaFactor).coerceIn(0.12f, 1f)))
                 )
+                val fontStripBg = if (isEInkMode) {
+                    Color(palette.settings.row)
+                } else {
+                    cardColor.copy(alpha = (0.68f * alphaFactor).coerceIn(0.24f, 0.92f))
+                }
+                val fontStripBorder = if (isEInkMode) {
+                    palette.settings.primaryText.copy(alpha = 0.45f)
+                } else {
+                    palette.settings.divider.copy(alpha = 0.7f)
+                }
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(slotShape)
+                        .background(fontStripBg)
+                        .border(0.6.dp, fontStripBorder, slotShape)
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "标题：$titleFontLabel",
+                        color = palette.settings.primaryText,
+                        fontFamily = titleFamily,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .height(11.dp)
+                            .background(fontStripBorder)
+                    )
+                    Text(
+                        text = "正文：$uiFontLabel",
+                        color = palette.settings.primaryText,
+                        fontFamily = bodyFamily,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
                 AnimatedVisibility(visible = quickDrawerExpanded) {
                     val cornerStep = cornerScaleToSliderStep(previewCornerScale)
                     val glassSliderEnabled = isStudioGlassSliderEnabled(isEInkMode, glassMode)
@@ -1896,6 +1969,15 @@ private fun StudioLivePreviewCard(
             ) { body() }
         }
     }
+}
+
+private fun resolveStudioFontLabel(path: String, state: FontPreviewLoadState): String {
+    if (path.isBlank() || state.sourceKind == ArtFontSourceKind.DEFAULT) {
+        return "系统默认"
+    }
+    return state.familyName?.trim()?.takeIf { it.isNotBlank() }
+        ?: state.displayName.trim().takeIf { it.isNotBlank() }
+        ?: "系统默认"
 }
 
 @Composable
@@ -2289,6 +2371,13 @@ private fun buildPackageMetaSummary(entry: UnifiedPackageRepository.StoredEntry)
             if (entry.manifest.id == UnifiedPackageRepository.BUILTIN_DEFAULT_COVER_SLOT_ID) {
                 return "系统原生默认封面 · 无自定义图集"
             }
+            val targetText = when (
+                CoverSlotApplyTarget.normalize(slot?.applyTarget, defaultValue = CoverSlotApplyTarget.BOOKS)
+            ) {
+                CoverSlotApplyTarget.GROUPS -> "分组封面"
+                CoverSlotApplyTarget.BOTH -> "分组+书籍"
+                else -> "书籍封面"
+            }
             val modeText = when (CoverSlotApplyMode.normalize(slot?.applyMode)) {
                 CoverSlotApplyMode.SEQUENCE -> "顺序"
                 CoverSlotApplyMode.MIXED -> "混合"
@@ -2302,7 +2391,7 @@ private fun buildPackageMetaSummary(entry: UnifiedPackageRepository.StoredEntry)
                 slot?.groupCoverPath?.takeIf { it.isNotBlank() }?.let { "分组默认" }
             )
             buildString {
-                append("模式: $modeText · 图集 ${coverCount} 张")
+                append("目标: $targetText · 模式: $modeText · 图集 ${coverCount} 张")
                 if (fallbacks.isNotEmpty()) {
                     append(" · ${fallbacks.joinToString("/")}")
                 }

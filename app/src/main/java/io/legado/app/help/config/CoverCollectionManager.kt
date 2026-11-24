@@ -8,6 +8,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.help.config.pkg.CoverSlotApplyTarget
 import io.legado.app.help.config.pkg.PackageIoKernel
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
@@ -25,6 +26,11 @@ import splitties.init.appCtx
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledExecutorService
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 
 object CoverCollectionManager {
 
@@ -32,6 +38,9 @@ object CoverCollectionManager {
     const val MODE_SEQUENCE = "sequence"
     const val MODE_MIXED = "mixed"
     const val MODE_FALLBACK_ONLY = "fallback_only"
+    const val TARGET_GROUPS = CoverSlotApplyTarget.GROUPS
+    const val TARGET_BOOKS = CoverSlotApplyTarget.BOOKS
+    const val TARGET_BOTH = CoverSlotApplyTarget.BOTH
     private const val indexFileName = "collections.json"
     private const val packageFileName = "collection.json"
     private val imageExtensions = setOf("jpg", "jpeg", "png", "webp", "bmp")
@@ -39,9 +48,16 @@ object CoverCollectionManager {
     private var dayCache: List<Collection>? = null
     @Volatile
     private var nightCache: List<Collection>? = null
-    @Volatile
-    private var revisionCounter: Long = 0L
+    private val revisionCounter = AtomicLong(0L)
     private val assignmentCache = hashMapOf<String, MutableList<Assignment>>()
+    private val assignmentIoExecutor: ScheduledExecutorService =
+        Executors.newSingleThreadScheduledExecutor { runnable ->
+            Thread(runnable, "cover-assignment-io").apply { isDaemon = true }
+        }
+    private val assignmentGenerations = hashMapOf<String, Long>()
+    private val pendingAssignmentWrites = hashMapOf<String, ScheduledFuture<*>>()
+    private val pendingAssignmentSnapshots = hashMapOf<String, Pair<Long, List<Assignment>>>()
+    private const val ASSIGNMENT_SAVE_DEBOUNCE_MS = 200L
 
     val rootDir: File
         get() = appCtx.externalFiles.getFile("coverCollections")
@@ -53,15 +69,32 @@ object CoverCollectionManager {
         get() = rootDir.getFile("remote_cache").apply { mkdirs() }
 
     fun isMixedMode(): Boolean {
-        val isNight = AppConfig.isNightTheme
-        return appCtx.getPrefString(
+        return getMode(AppConfig.isNightTheme) == MODE_MIXED
+    }
+
+    fun getMode(isNight: Boolean = AppConfig.isNightTheme): String {
+        val raw = appCtx.getPrefString(
             if (isNight) PreferKey.coverCollectionModeNight else PreferKey.coverCollectionModeDay,
             MODE_RANDOM
-        ) == MODE_MIXED
+        )
+        return when (raw?.trim()?.lowercase()) {
+            MODE_SEQUENCE -> MODE_SEQUENCE
+            MODE_MIXED -> MODE_MIXED
+            MODE_FALLBACK_ONLY, "fallback" -> MODE_FALLBACK_ONLY
+            else -> MODE_RANDOM
+        }
+    }
+
+    fun getTarget(isNight: Boolean = AppConfig.isNightTheme): String {
+        val raw = appCtx.getPrefString(
+            if (isNight) PreferKey.coverCollectionTargetNight else PreferKey.coverCollectionTargetDay,
+            TARGET_BOOKS
+        )
+        return CoverSlotApplyTarget.normalize(raw, defaultValue = TARGET_BOOKS)
     }
 
     fun bumpRevision() {
-        revisionCounter++
+        revisionCounter.incrementAndGet()
     }
 
     @Synchronized
@@ -69,7 +102,13 @@ object CoverCollectionManager {
         dayCache = null
         nightCache = null
         assignmentCache.clear()
-        revisionCounter++
+        pendingAssignmentWrites.values.forEach { it.cancel(false) }
+        pendingAssignmentWrites.clear()
+        pendingAssignmentSnapshots.clear()
+        assignmentGenerations.keys.forEach { id ->
+            assignmentGenerations[id] = (assignmentGenerations[id] ?: 0L) + 1L
+        }
+        revisionCounter.incrementAndGet()
     }
 
     fun selectionKey(): String {
@@ -77,17 +116,15 @@ object CoverCollectionManager {
         val collectionId = appCtx.getPrefString(
             if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay
         ).orEmpty()
-        val mode = appCtx.getPrefString(
-            if (isNight) PreferKey.coverCollectionModeNight else PreferKey.coverCollectionModeDay,
-            MODE_RANDOM
-        ).orEmpty()
+        val mode = getMode(isNight)
+        val target = getTarget(isNight)
         val defaultCover = appCtx.getPrefString(
             if (isNight) PreferKey.defaultCoverDark else PreferKey.defaultCover
         ).orEmpty()
         val groupCover = appCtx.getPrefString(
             if (isNight) PreferKey.defaultGroupCoverDark else PreferKey.defaultGroupCover
         ).orEmpty()
-        return "$isNight:$collectionId:$mode:$defaultCover:$groupCover:$revisionCounter"
+        return "$isNight:$collectionId:$mode:$target:$defaultCover:$groupCover:${revisionCounter.get()}"
     }
 
     suspend fun load(isNight: Boolean): List<Collection> = withContext(IO) {
@@ -317,11 +354,55 @@ object CoverCollectionManager {
         )
     }
 
-    fun selectedCollectionCover(bookKey: String, coverPath: String?): String? {
+    fun selectedCollectionCover(bookKey: String, coverPath: String? = null): String? {
         return selectedCollectionCover(
             bookKey = bookKey,
             hasOriginalCover = coverPath.isRealCoverPath()
         )
+    }
+
+    fun selectedGroupCollectionCover(
+        groupId: Long,
+        groupName: String,
+        hasOriginalCover: String? = null
+    ): String? {
+        val isNight = AppConfig.isNightTheme
+        val target = getTarget(isNight)
+        if (target != TARGET_GROUPS && target != TARGET_BOTH) {
+            return null
+        }
+        val collectionId = appCtx.getPrefString(
+            if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay
+        ) ?: return null
+        val collection = loadIndex(isNight).firstOrNull { it.id == collectionId } ?: return null
+        if (collection.images.isEmpty()) return null
+        val mode = getMode(isNight)
+        if (mode == MODE_FALLBACK_ONLY) {
+            return null
+        }
+        if (mode == MODE_MIXED && hasOriginalCover.isRealCoverPath()) {
+            return null
+        }
+        matchGroupCoverByName(collection.images, groupName)?.let { return it }
+        val assignmentKey = "group:$groupId"
+        val path = when (mode) {
+            MODE_SEQUENCE -> assignSequential(collection, assignmentKey)
+            else -> collection.images[stableImageIndex(assignmentKey, collection.images.size)]
+        }
+        return path.takeIf { File(it).exists() }
+    }
+
+    internal fun matchGroupCoverByName(images: List<String>, groupName: String): String? {
+        val trimmedGroupName = groupName.trim()
+        if (trimmedGroupName.isEmpty()) return null
+        return images.firstOrNull { imagePath ->
+            val stem = imagePath
+                .substringAfterLast('/')
+                .substringAfterLast('\\')
+                .substringBeforeLast('.')
+                .trim()
+            stem.equals(trimmedGroupName, ignoreCase = true)
+        }
     }
 
     fun String?.isRealCoverPath(): Boolean {
@@ -346,15 +427,16 @@ object CoverCollectionManager {
 
     private fun selectedCollectionCover(bookKey: String, hasOriginalCover: Boolean): String? {
         val isNight = AppConfig.isNightTheme
+        val target = getTarget(isNight)
+        if (target != TARGET_BOOKS && target != TARGET_BOTH) {
+            return null
+        }
         val collectionId = appCtx.getPrefString(
             if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay
         ) ?: return null
         val collection = loadIndex(isNight).firstOrNull { it.id == collectionId } ?: return null
         if (collection.images.isEmpty()) return null
-        val mode = appCtx.getPrefString(
-            if (isNight) PreferKey.coverCollectionModeNight else PreferKey.coverCollectionModeDay,
-            MODE_RANDOM
-        ) ?: MODE_RANDOM
+        val mode = getMode(isNight)
         if (mode == MODE_FALLBACK_ONLY) {
             return null
         }
@@ -676,7 +758,7 @@ object CoverCollectionManager {
         }
         val index = assignments.size % collection.images.size
         assignments.add(Assignment(bookUrl, index))
-        saveAssignments(collection.id, assignments)
+        scheduleSaveAssignmentsLocked(collection.id, assignments.toList())
         return collection.images[index]
     }
 
@@ -687,14 +769,99 @@ object CoverCollectionManager {
         ).getOrDefault(emptyList())
     }
 
-    private fun saveAssignments(collectionId: String, assignments: List<Assignment>) {
-        assignmentsFile(collectionId).writeText(GSON.toJson(assignments))
+    private fun scheduleSaveAssignmentsLocked(collectionId: String, snapshot: List<Assignment>) {
+        pendingAssignmentWrites.remove(collectionId)?.cancel(false)
+        val generation = assignmentGenerations[collectionId] ?: 0L
+        pendingAssignmentSnapshots[collectionId] = generation to snapshot
+        val future = assignmentIoExecutor.schedule({
+            writeAssignmentsIfGenerationMatches(collectionId, generation, snapshot)
+        }, ASSIGNMENT_SAVE_DEBOUNCE_MS, TimeUnit.MILLISECONDS)
+        pendingAssignmentWrites[collectionId] = future
+    }
+
+    private fun writeAssignmentsIfGenerationMatches(
+        collectionId: String,
+        expectedGeneration: Long,
+        snapshot: List<Assignment>
+    ) {
+        val shouldWrite = synchronized(this) {
+            val currentGen = assignmentGenerations[collectionId] ?: 0L
+            if (currentGen != expectedGeneration) {
+                false
+            } else {
+                if (pendingAssignmentSnapshots[collectionId]?.first == expectedGeneration) {
+                    pendingAssignmentWrites.remove(collectionId)
+                    pendingAssignmentSnapshots.remove(collectionId)
+                }
+                true
+            }
+        }
+        if (!shouldWrite) return
+        val target = assignmentsFile(collectionId)
+        val tmp = File(target.parentFile, ".${target.name}.${UUID.randomUUID()}.tmp")
+        runCatching {
+            tmp.writeText(GSON.toJson(snapshot))
+            val stillValid = synchronized(this) {
+                (assignmentGenerations[collectionId] ?: 0L) == expectedGeneration
+            }
+            if (!stillValid) {
+                tmp.delete()
+                return
+            }
+            if (!tmp.renameTo(target)) {
+                val validBeforeFallback = synchronized(this) {
+                    (assignmentGenerations[collectionId] ?: 0L) == expectedGeneration
+                }
+                if (validBeforeFallback) {
+                    if (target.exists()) {
+                        target.delete()
+                    }
+                    if (!tmp.renameTo(target)) {
+                        target.writeText(tmp.readText())
+                    }
+                }
+                tmp.delete()
+            }
+        }.onFailure {
+            tmp.delete()
+        }
     }
 
     @Synchronized
     private fun clearAssignments(collectionId: String) {
+        val nextGen = (assignmentGenerations[collectionId] ?: 0L) + 1L
+        assignmentGenerations[collectionId] = nextGen
+        pendingAssignmentWrites.remove(collectionId)?.cancel(false)
+        pendingAssignmentSnapshots.remove(collectionId)
         assignmentCache.remove(collectionId)
-        assignmentsFile(collectionId).delete()
+        val file = assignmentsFile(collectionId)
+        file.delete()
+        assignmentIoExecutor.submit {
+            val shouldDelete = synchronized(this) {
+                (assignmentGenerations[collectionId] ?: 0L) == nextGen &&
+                    !assignmentCache.containsKey(collectionId)
+            }
+            if (shouldDelete) {
+                file.delete()
+            }
+        }
+    }
+
+    internal fun flushPendingAssignmentWritesForTest() {
+        val toFlush = synchronized(this) {
+            pendingAssignmentWrites.values.forEach { it.cancel(false) }
+            pendingAssignmentWrites.clear()
+            val items = pendingAssignmentSnapshots.entries.map { (id, pair) ->
+                Triple(id, pair.first, pair.second)
+            }
+            pendingAssignmentSnapshots.clear()
+            items
+        }
+        assignmentIoExecutor.submit {
+            toFlush.forEach { (id, gen, snap) ->
+                writeAssignmentsIfGenerationMatches(id, gen, snap)
+            }
+        }.get()
     }
 
     private fun resolveExtension(context: Context, uri: Uri): String {

@@ -539,7 +539,8 @@ object UnifiedPackageRepository {
     suspend fun createEmptyPackage(
         kind: PackageKind,
         name: String,
-        enforceUniqueName: Boolean = true
+        enforceUniqueName: Boolean = true,
+        initialCoverSlotApplyTarget: String? = null
     ): StoredEntry = withContext(IO) {
         val rawName = name.trim().ifBlank {
             when (kind) {
@@ -585,7 +586,11 @@ object UnifiedPackageRepository {
                     updatedAt = System.currentTimeMillis(),
                     coverSlot = CoverSlotPackagePayload(
                         covers = emptyList(),
-                        applyMode = CoverSlotApplyMode.RANDOM
+                        applyMode = CoverSlotApplyMode.RANDOM,
+                        applyTarget = CoverSlotApplyTarget.normalize(
+                            initialCoverSlotApplyTarget,
+                            defaultValue = CoverSlotApplyTarget.GROUPS
+                        )
                     )
                 )
                 else -> throw IllegalArgumentException("Unsupported package kind: ${kind.id}")
@@ -1071,7 +1076,7 @@ object UnifiedPackageRepository {
                 wallpapers?.let { applyWallpapers(context, entry.dir, baseDir, isNight = forNight, it) }
                 typography?.let { applyTypography(context, entry.dir, baseDir, isNight = forNight, it) }
                 if (allowArtCover) {
-                    applyDefaultCover(context, entry.dir, baseDir, isNight = forNight, art.defaultCoverPath)
+                    applyDefaultCover(context, entry.dir, baseDir, isNight = forNight, null)
                     if (applyMounts) {
                         applyArtRecommendedCoverSlotLocked(context, forNight, coverId, mountedCoverSlotMap)
                     }
@@ -1131,13 +1136,13 @@ object UnifiedPackageRepository {
                 art.dayTypography?.let { applyTypography(context, entry.dir, baseDir, isNight = false, it) }
                 art.nightTypography?.let { applyTypography(context, entry.dir, baseDir, isNight = true, it) }
                 if (allowDayCover) {
-                    applyDefaultCover(context, entry.dir, baseDir, isNight = false, art.defaultCoverPath)
+                    applyDefaultCover(context, entry.dir, baseDir, isNight = false, null)
                     if (applyMounts) {
                         applyArtRecommendedCoverSlotLocked(context, false, art.mounts.dayCoverSlotId, coverSlotMap)
                     }
                 }
                 if (allowNightCover) {
-                    applyDefaultCover(context, entry.dir, baseDir, isNight = true, art.defaultCoverPath)
+                    applyDefaultCover(context, entry.dir, baseDir, isNight = true, null)
                     if (applyMounts) {
                         applyArtRecommendedCoverSlotLocked(context, true, art.mounts.nightCoverSlotId, coverSlotMap)
                     }
@@ -1229,7 +1234,7 @@ object UnifiedPackageRepository {
                         if (artEntry != null) {
                             val art = artEntry.manifest.art
                             val artBase = resolveBaseDir(artEntry, arts)
-                            applyDefaultCover(context, artEntry.dir, artBase, night, art?.defaultCoverPath)
+                            applyDefaultCover(context, artEntry.dir, artBase, night, null)
                             val recId = if (night) {
                                 art?.mounts?.nightCoverSlotId ?: art?.mounts?.dayCoverSlotId
                             } else {
@@ -1414,7 +1419,7 @@ object UnifiedPackageRepository {
                 wallpapers?.let { applyWallpapers(context, artEntry.dir, baseDir, isNight = isNight, it) }
                 typography?.let { applyTypography(context, artEntry.dir, baseDir, isNight = isNight, it) }
                 if (allowArtCover) {
-                    applyDefaultCover(context, artEntry.dir, baseDir, isNight = isNight, art?.defaultCoverPath)
+                    applyDefaultCover(context, artEntry.dir, baseDir, isNight = isNight, null)
                     val recCoverId = if (isNight) {
                         art?.mounts?.nightCoverSlotId ?: art?.mounts?.dayCoverSlotId
                     } else {
@@ -2100,7 +2105,7 @@ object UnifiedPackageRepository {
         baseDir: File?
     ): CoverSlotPackagePayload {
         val assetsDir = File(packageDir, "assets").apply { mkdirs() }
-        fun copySlotFile(path: String?, prefix: String): String? {
+        fun copySlotFile(path: String?, prefix: String, preserveOriginalName: Boolean = false): String? {
             val trimmed = path?.trim()?.takeIf { it.isNotBlank() } ?: return null
             if (trimmed.startsWith("http", ignoreCase = true)) return trimmed
             if (!File(trimmed).isAbsolute) {
@@ -2124,21 +2129,35 @@ object UnifiedPackageRepository {
                 return src.relativeTo(baseDir).path.replace('\\', '/')
             }
             val ext = src.extension.lowercase(Locale.ROOT).ifBlank { "jpg" }
-            var dst = File(assetsDir, "$prefix.$ext")
+            val baseName = if (preserveOriginalName) {
+                src.nameWithoutExtension
+                    .substringAfterLast('/')
+                    .substringAfterLast('\\')
+                    .normalizeFileName()
+                    .trim('.', ' ')
+                    .takeIf { it.isNotBlank() && it != "." && it != ".." }
+                    ?: prefix
+            } else {
+                prefix
+            }
+            var dst = File(assetsDir, "$baseName.$ext")
             var suffix = 1
             while (dst.exists()) {
-                dst = File(assetsDir, "${prefix}_$suffix.$ext")
+                dst = File(assetsDir, "${baseName}_$suffix.$ext")
                 suffix++
             }
             src.copyTo(dst, overwrite = true)
             return "assets/${dst.name}"
         }
         val copiedCovers = slot.covers.mapIndexedNotNull { index, raw ->
-            copySlotFile(raw, "cover_${index + 1}")
+            copySlotFile(raw, "cover_${index + 1}", preserveOriginalName = true)
         }.distinct()
         return slot.copy(
             covers = copiedCovers,
             applyMode = CoverSlotApplyMode.normalize(slot.applyMode),
+            applyTarget = slot.applyTarget?.trim()?.takeIf { it.isNotBlank() }?.let {
+                CoverSlotApplyTarget.normalize(it, defaultValue = CoverSlotApplyTarget.BOOKS)
+            },
             dayDefaultCoverPath = copySlotFile(slot.dayDefaultCoverPath, "day_default_cover"),
             nightDefaultCoverPath = copySlotFile(slot.nightDefaultCoverPath, "night_default_cover"),
             groupCoverPath = copySlotFile(slot.groupCoverPath, "group_default_cover")
@@ -2164,6 +2183,10 @@ object UnifiedPackageRepository {
         val resolvedDefault = resolvePackageAssetPath(entry.dir, baseDir, rawDefault)
         val resolvedGroupCover = resolvePackageAssetPath(entry.dir, baseDir, slot.groupCoverPath)
         val collectionMode = toCollectionManagerMode(slot.applyMode)
+        val collectionTarget = CoverSlotApplyTarget.normalize(
+            slot.applyTarget,
+            defaultValue = CoverSlotApplyTarget.BOOKS
+        )
 
         putOrRemovePref(
             context,
@@ -2178,6 +2201,10 @@ object UnifiedPackageRepository {
         context.putPrefString(
             if (forNight) PreferKey.coverCollectionModeNight else PreferKey.coverCollectionModeDay,
             collectionMode
+        )
+        context.putPrefString(
+            if (forNight) PreferKey.coverCollectionTargetNight else PreferKey.coverCollectionTargetDay,
+            collectionTarget
         )
         if (resolvedCovers.isNotEmpty()) {
             CoverCollectionManager.upsertBridgeCollectionSync(
@@ -2214,8 +2241,17 @@ object UnifiedPackageRepository {
         if (targetId == null) {
             putOrRemovePref(
                 context,
+                if (forNight) PreferKey.defaultCoverDark else PreferKey.defaultCover,
+                null
+            )
+            putOrRemovePref(
+                context,
                 if (forNight) PreferKey.defaultGroupCoverDark else PreferKey.defaultGroupCover,
                 null
+            )
+            context.putPrefString(
+                if (forNight) PreferKey.coverCollectionTargetNight else PreferKey.coverCollectionTargetDay,
+                CoverSlotApplyTarget.BOOKS
             )
             CoverCollectionManager.setSelected(forNight, "")
             return
@@ -2231,8 +2267,23 @@ object UnifiedPackageRepository {
             val resolvedCovers = slot.covers.mapNotNull { rel ->
                 resolvePackageAssetPath(matched.dir, baseDir, rel)
             }.filter { File(it).isFile }
+            val rawDefault = if (forNight) {
+                slot.nightDefaultCoverPath?.takeIf { it.isNotBlank() } ?: slot.dayDefaultCoverPath
+            } else {
+                slot.dayDefaultCoverPath?.takeIf { it.isNotBlank() } ?: slot.nightDefaultCoverPath
+            }
+            val resolvedDefault = resolvePackageAssetPath(matched.dir, baseDir, rawDefault)
             val resolvedGroup = resolvePackageAssetPath(matched.dir, baseDir, slot.groupCoverPath)
             val mode = toCollectionManagerMode(slot.applyMode)
+            val target = CoverSlotApplyTarget.normalize(
+                slot.applyTarget,
+                defaultValue = CoverSlotApplyTarget.BOOKS
+            )
+            putOrRemovePref(
+                context,
+                if (forNight) PreferKey.defaultCoverDark else PreferKey.defaultCover,
+                resolvedDefault
+            )
             putOrRemovePref(
                 context,
                 if (forNight) PreferKey.defaultGroupCoverDark else PreferKey.defaultGroupCover,
@@ -2241,6 +2292,10 @@ object UnifiedPackageRepository {
             context.putPrefString(
                 if (forNight) PreferKey.coverCollectionModeNight else PreferKey.coverCollectionModeDay,
                 mode
+            )
+            context.putPrefString(
+                if (forNight) PreferKey.coverCollectionTargetNight else PreferKey.coverCollectionTargetDay,
+                target
             )
             if (resolvedCovers.isNotEmpty()) {
                 CoverCollectionManager.upsertBridgeCollectionSync(

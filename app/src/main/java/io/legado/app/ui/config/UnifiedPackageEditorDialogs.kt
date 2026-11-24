@@ -1,6 +1,7 @@
 package io.legado.app.ui.config
 
 import android.graphics.BitmapFactory
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -23,6 +24,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,6 +51,7 @@ import io.legado.app.help.config.pkg.ArtPaletteSpec
 import io.legado.app.help.config.pkg.ArtTypographySpec
 import io.legado.app.help.config.pkg.ArtWallpapersSpec
 import io.legado.app.help.config.pkg.CoverSlotApplyMode
+import io.legado.app.help.config.pkg.CoverSlotApplyTarget
 import io.legado.app.help.config.pkg.CoverSlotPackagePayload
 import io.legado.app.help.config.pkg.LayoutParams
 import io.legado.app.help.config.pkg.ParamPackagePayload
@@ -177,7 +180,7 @@ internal fun DeletePackageConfirmDialog(
 }
 
 /**
- * 二级《美术资源包编辑器》：内聚包名（唯一校验）、12 项色板、7 处壁纸与启动图、字体与默认封面。
+ * 二级《美术资源包编辑器》：内聚包名（唯一校验）、12 项色板、7 处壁纸与启动图、字体。
  */
 @Composable
 internal fun ArtPackageEditorDialog(
@@ -187,7 +190,6 @@ internal fun ArtPackageEditorDialog(
     baseDir: File? = null,
     onPickAssetFile: ((currentPath: String?, onPicked: (String) -> Unit) -> Unit)? = null,
     onPickFontFile: ((onPicked: (String) -> Unit) -> Unit)? = null,
-    onNavigateToCoverSlotConfig: (() -> Unit)? = null,
     onDismiss: () -> Unit,
     onSave: (newName: String, updatedArt: ArtPackagePayload) -> Unit
 ) {
@@ -228,11 +230,10 @@ internal fun ArtPackageEditorDialog(
     var panelWallpaper by remember { mutableStateOf(baseWallpapers.panel.orEmpty()) }
     var welcomeWallpaper by remember { mutableStateOf(baseWallpapers.welcome.orEmpty()) }
 
-    // Fonts & Cover
+    // Fonts
     var uiFontPath by remember { mutableStateOf(baseTypography.uiFontPath.orEmpty()) }
     var titleFontPath by remember { mutableStateOf(baseTypography.titleFontPath.orEmpty()) }
     var pickingFontSlot by remember { mutableStateOf<String?>(null) }
-    var defaultCoverPath by remember { mutableStateOf(initialArt.defaultCoverPath.orEmpty()) }
     val resolvedBaseDir = remember(entry.manifest.id, entry.manifest.basePackageId, baseDir) {
         baseDir ?: entry.manifest.basePackageId?.takeIf { it.isNotBlank() }?.let { baseId ->
             entry.dir.parentFile?.listFiles()?.firstOrNull { dir ->
@@ -258,7 +259,7 @@ internal fun ArtPackageEditorDialog(
         listOf(
             SegmentedOption(0, "配色(12项)"),
             SegmentedOption(1, "壁纸与启动图"),
-            SegmentedOption(2, "字体与封面")
+            SegmentedOption(2, "字体")
         )
     }
 
@@ -434,65 +435,8 @@ internal fun ArtPackageEditorDialog(
                                     baseDir = resolvedBaseDir,
                                     previewColors = previewColors
                                 )
-                                HorizontalDivider(color = style.stroke)
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .background(style.fieldSurface)
-                                        .border(0.75.dp, style.stroke, RoundedCornerShape(8.dp))
-                                        .padding(10.dp),
-                                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Text(
-                                        text = "已迁移至书架封面包统一配置",
-                                        color = style.primaryText,
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    Text(
-                                        text = "默认书架封面、图集轮播、应用模式与分组封面已拆分为独立的「书架封面包」正交轨，避免与美术包双向覆写打架。",
-                                        color = style.secondaryText,
-                                        fontSize = 11.sp
-                                    )
-                                    val legacySummary = listOfNotNull(
-                                        defaultCoverPath.takeIf { it.isNotBlank() }?.let { "旧默认封面: ${File(it).name}" },
-                                        initialArt.mounts.dayCoverSlotId?.takeIf { it.isNotBlank() }?.let { "旧日间挂载: $it" },
-                                        initialArt.mounts.nightCoverSlotId?.takeIf { it.isNotBlank() }?.let { "旧夜间挂载: $it" }
-                                    )
-                                    if (legacySummary.isNotEmpty()) {
-                                        Text(
-                                            text = "兼容旧包字段（仅未锁定书架封面包时生效）：${legacySummary.joinToString(" · ")}",
-                                            color = style.secondaryText,
-                                            fontSize = 11.sp
-                                        )
-                                    }
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        if (onNavigateToCoverSlotConfig != null) {
-                                            LegadoMiuixActionButton(
-                                                text = "去配置书架封面包",
-                                                palette = dialogPalette,
-                                                primary = true,
-                                                minHeight = 34.dp,
-                                                onClick = onNavigateToCoverSlotConfig
-                                            )
-                                        }
-                                        if (defaultCoverPath.isNotBlank()) {
-                                            LegadoMiuixActionButton(
-                                                text = "清除旧默认图",
-                                                palette = dialogPalette,
-                                                minHeight = 34.dp,
-                                                onClick = { defaultCoverPath = "" }
-                                            )
-                                        }
-                                    }
-                                }
                                 Text(
-                                    text = "包内已含底栏图标 ${initialArt.icons.size} 项、历史封面集 ${initialArt.covers.size} 项。",
+                                    text = "包内已含底栏图标 ${initialArt.icons.size} 项。",
                                     color = style.secondaryText,
                                     fontSize = 11.sp
                                 )
@@ -547,7 +491,7 @@ internal fun ArtPackageEditorDialog(
                                 updatedPalette = updatedPalette,
                                 updatedWallpapers = updatedWallpapers,
                                 updatedTypography = updatedTypography,
-                                defaultCoverPath = defaultCoverPath,
+                                defaultCoverPath = initialArt.defaultCoverPath,
                                 syncBothSlots = syncBothSlots
                             )
                             onSave(trimmedName, newArt)
@@ -1290,6 +1234,8 @@ private fun EditorSliderRow(
 internal fun CoverSlotPackageEditorDialog(
     entry: UnifiedPackageRepository.StoredEntry,
     existingNames: List<String>,
+    showTargetHintBanner: Boolean = false,
+    onDismissTargetHint: (() -> Unit)? = null,
     onPickSingleImage: ((currentPath: String?, onPicked: (String) -> Unit) -> Unit)? = null,
     onPickMultipleImages: ((onPicked: (List<String>) -> Unit) -> Unit)? = null,
     onDismiss: () -> Unit,
@@ -1297,7 +1243,7 @@ internal fun CoverSlotPackageEditorDialog(
 ) {
     val style = rememberAppDialogStyle()
     val dialogPalette = style.toMiuixPalette()
-    val initialSlot = entry.manifest.coverSlot ?: CoverSlotPackagePayload()
+    val initialSlot = entry.manifest.coverSlot ?: CoverSlotPackagePayload(applyTarget = CoverSlotApplyTarget.GROUPS)
     val baseDir = remember(entry.manifest.id, entry.manifest.basePackageId) {
         entry.manifest.basePackageId?.takeIf { it.isNotBlank() }?.let { baseId ->
             entry.dir.parentFile?.listFiles()?.firstOrNull { dir ->
@@ -1309,6 +1255,14 @@ internal fun CoverSlotPackageEditorDialog(
     }
 
     var nameDraft by remember(entry.manifest.id) { mutableStateOf(entry.manifest.name) }
+    var applyTargetDraft by remember(entry.manifest.id) {
+        mutableStateOf(
+            CoverSlotApplyTarget.normalize(
+                initialSlot.applyTarget,
+                defaultValue = CoverSlotApplyTarget.BOOKS
+            )
+        )
+    }
     var applyMode by remember(entry.manifest.id) {
         mutableStateOf(CoverSlotApplyMode.normalize(initialSlot.applyMode))
     }
@@ -1336,6 +1290,13 @@ internal fun CoverSlotPackageEditorDialog(
         !UnifiedPackageRepository.isPackageNameUnique(otherNames, trimmedName)
     val canSave = trimmedName.isNotBlank() && !isDuplicateName
 
+    val targetOptions = remember {
+        listOf(
+            SegmentedOption(CoverSlotApplyTarget.GROUPS, "分组封面"),
+            SegmentedOption(CoverSlotApplyTarget.BOOKS, "书籍封面"),
+            SegmentedOption(CoverSlotApplyTarget.BOTH, "分组+书籍")
+        )
+    }
     val modeOptions = remember {
         listOf(
             SegmentedOption(CoverSlotApplyMode.RANDOM, "随机"),
@@ -1383,6 +1344,37 @@ internal fun CoverSlotPackageEditorDialog(
                                 fontSize = 12.sp
                             )
                         }
+
+                        Text(
+                            text = "封面应用目标",
+                            color = style.primaryText,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                        if (showTargetHintBanner) {
+                            CoverSlotTargetHintBanner(
+                                style = style,
+                                palette = dialogPalette,
+                                onDismiss = { onDismissTargetHint?.invoke() }
+                            )
+                        }
+                        LegadoSegmentedControl(
+                            options = targetOptions,
+                            selectedValue = applyTargetDraft,
+                            palette = dialogPalette,
+                            onSelected = { applyTargetDraft = it },
+                            tone = SegmentedControlTone.AccentThumb,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = when (applyTargetDraft) {
+                                CoverSlotApplyTarget.GROUPS -> "图集自动匹配到书架分组/文件夹封面（同名图片优先，其余按应用模式分配），不影响书籍封面"
+                                CoverSlotApplyTarget.BOOKS -> "图集自动匹配到书架中书籍的封面（保留原书籍封面包效果）"
+                                else -> "图集同时自动匹配书架分组/文件夹封面与书籍封面"
+                            },
+                            color = style.secondaryText,
+                            fontSize = 11.sp
+                        )
 
                         Text(
                             text = "封面应用模式",
@@ -1537,6 +1529,10 @@ internal fun CoverSlotPackageEditorDialog(
                             val updated = initialSlot.copy(
                                 covers = covers.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
                                 applyMode = CoverSlotApplyMode.normalize(applyMode),
+                                applyTarget = CoverSlotApplyTarget.normalize(
+                                    applyTargetDraft,
+                                    defaultValue = CoverSlotApplyTarget.GROUPS
+                                ),
                                 dayDefaultCoverPath = dayDefaultCoverPath.trim().ifBlank { null },
                                 nightDefaultCoverPath = nightDefaultCoverPath.trim().ifBlank { null },
                                 groupCoverPath = groupCoverPath.trim().ifBlank { null }
@@ -1545,6 +1541,46 @@ internal fun CoverSlotPackageEditorDialog(
                         }
                     )
                 }
+            )
+        }
+    }
+}
+
+@Composable
+private fun CoverSlotTargetHintBanner(
+    style: AppDialogStyle,
+    palette: LegadoMiuixPalette,
+    onDismiss: () -> Unit
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Surface(
+        shape = shape,
+        color = style.fieldSurface,
+        border = BorderStroke(0.75.dp, style.stroke),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 10.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Text(
+                text = "新建封面包现默认作用于「书架分组/文件夹封面」。如需匹配书架书籍封面，可在此切换为「书籍封面」或「分组+书籍」，保存后将自动沿用你的偏好。",
+                color = style.primaryText,
+                fontSize = 11.sp,
+                lineHeight = 16.sp,
+                modifier = Modifier.weight(1f)
+            )
+            LegadoMiuixActionButton(
+                text = "知道了",
+                palette = palette,
+                cornerRadius = style.actionRadius,
+                minWidth = 60.dp,
+                minHeight = 32.dp,
+                insidePadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                onClick = onDismiss
             )
         }
     }

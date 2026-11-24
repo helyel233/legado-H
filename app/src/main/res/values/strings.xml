@@ -646,6 +646,8 @@
 
     <string name="e_ink_mode">E-Ink mode</string>
     <string name="e_ink_mode_detail">Remove animations and optimize the experience of using E-paper books</string>
+    <string name="e_ink_render_degrade">E-Ink Render Degradation</string>
+    <string name="e_ink_render_degrade_summary">Orthogonal to day/night mode; forces high-contrast solid surfaces, zero blur, and 0ms transitions</string>
     <string name="web_menu">Web service</string>
     <string name="web_port_title">Web port</string>
     <string name="web_port_summary">Current port %s</string>
