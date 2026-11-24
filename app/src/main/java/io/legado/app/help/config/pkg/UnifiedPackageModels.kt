@@ -210,6 +210,8 @@ data class CoverSlotPackagePayload(
     val applyTarget: String? = null,
     val dayDefaultCoverPath: String? = null,
     val nightDefaultCoverPath: String? = null,
+    val dayGroupCoverPath: String? = null,
+    val nightGroupCoverPath: String? = null,
     val groupCoverPath: String? = null,
     val unknownFields: Map<String, JsonElement> = emptyMap()
 )

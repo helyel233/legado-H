@@ -3,21 +3,27 @@ package io.legado.app.help.config.pkg
 import android.app.Application
 import android.content.Context
 import android.os.Looper
+import com.google.gson.JsonArray
+import com.google.gson.JsonObject
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.CoverCollectionManager
+import io.legado.app.help.storage.BackupConfig
+import io.legado.app.help.storage.UiPackageBackup
 import io.legado.app.ui.main.bookshelf.compose.resolveMountedGroupDefaultCover
 import io.legado.app.ui.main.bookshelf.compose.toCoverRequest
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
+import io.legado.app.utils.putPrefLong
 import io.legado.app.utils.putPrefString
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -59,7 +65,7 @@ class CoverSlotRepositoryTest {
         UnifiedPackageRepository.invalidateCache()
         CoverCollectionManager.invalidateCache()
         context.defaultSharedPreferences.edit().clear().commit()
-        AppConfig.isNightTheme = false
+        setNightTheme(false)
         FileUtils.delete(UnifiedPackageRepository.rootDir, deleteRootDir = true)
         FileUtils.delete(CoverCollectionManager.rootDir, deleteRootDir = true)
         UnifiedPackageRepository.invalidateCache()
@@ -526,5 +532,564 @@ class CoverSlotRepositoryTest {
             initialCoverSlotApplyTarget = CoverSlotApplyTarget.BOOKS
         )
         assertEquals(CoverSlotApplyTarget.BOOKS, booksCreated.manifest.coverSlot?.applyTarget)
+    }
+
+    private fun setNightTheme(isNight: Boolean) {
+        val mode = if (isNight) "2" else "1"
+        context.putPrefString(PreferKey.themeMode, mode)
+        AppConfig.themeMode = mode
+    }
+
+    private fun createTempImages(prefix: String, count: Int): List<String> {
+        return (1..count).map { idx ->
+            tempFolder.newFile("${prefix}_%02d.jpg".format(idx)).apply {
+                writeBytes(byteArrayOf(idx.toByte(), (idx * 3).toByte(), (idx * 7).toByte()))
+            }.absolutePath
+        }
+    }
+
+    private fun createBitmaskGroups(count: Int, namePrefix: String = "分组"): List<BookGroup> {
+        return (0 until count).map { idx ->
+            BookGroup(groupId = 1L shl idx, groupName = "${namePrefix}_${idx + 1}")
+        }
+    }
+
+    @Test
+    fun symmetricDayNightGroupCoverFallback_resolvesDayNightAndLegacyCompat() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        // 1. Only dayGroupCoverPath configured -> both day and night fall back to it
+        val dayOnlyBytes = byteArrayOf(11, 22, 33, 44)
+        val dayOnlyImg = tempFolder.newFile("only_day_group.png").apply { writeBytes(dayOnlyBytes) }
+        val dayOnlySlot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "仅日间分组兜底")
+        val dayOnlySaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = dayOnlySlot.manifest.id,
+            newName = "仅日间分组兜底",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                applyMode = CoverSlotApplyMode.FALLBACK_ONLY,
+                applyTarget = CoverSlotApplyTarget.GROUPS,
+                dayGroupCoverPath = dayOnlyImg.absolutePath
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, dayOnlySaved, forNight = false)
+        UnifiedPackageRepository.mountCoverSlotPackage(context, dayOnlySaved, forNight = true)
+
+        setNightTheme(false)
+        val dayOnlyDayResolved = resolveMountedGroupDefaultCover()
+        assertNotNull(dayOnlyDayResolved)
+        assertTrue(File(dayOnlyDayResolved!!).isFile)
+        assertTrue(File(dayOnlyDayResolved).readBytes().contentEquals(dayOnlyBytes))
+        assertEquals(dayOnlyDayResolved, BookGroup(1L, "武侠").toCoverRequest().path)
+
+        setNightTheme(true)
+        val dayOnlyNightResolved = resolveMountedGroupDefaultCover()
+        assertNotNull(dayOnlyNightResolved)
+        assertEquals(dayOnlyDayResolved, dayOnlyNightResolved)
+        assertTrue(File(dayOnlyNightResolved!!).readBytes().contentEquals(dayOnlyBytes))
+        assertEquals(dayOnlyNightResolved, BookGroup(1L, "武侠").toCoverRequest().path)
+
+        // 2. Both dayGroupCoverPath and nightGroupCoverPath configured -> day uses day, night uses night
+        val bothDayBytes = byteArrayOf(51, 52, 53, 54)
+        val bothNightBytes = byteArrayOf(61, 62, 63, 64)
+        val bothDayImg = tempFolder.newFile("both_day_group.png").apply { writeBytes(bothDayBytes) }
+        val bothNightImg = tempFolder.newFile("both_night_group.png").apply { writeBytes(bothNightBytes) }
+        val bothSlot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "日夜独立分组兜底")
+        val bothSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = bothSlot.manifest.id,
+            newName = "日夜独立分组兜底",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                applyMode = CoverSlotApplyMode.FALLBACK_ONLY,
+                applyTarget = CoverSlotApplyTarget.GROUPS,
+                dayGroupCoverPath = bothDayImg.absolutePath,
+                nightGroupCoverPath = bothNightImg.absolutePath
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, bothSaved, forNight = false)
+        UnifiedPackageRepository.mountCoverSlotPackage(context, bothSaved, forNight = true)
+
+        setNightTheme(false)
+        val resolvedDay = resolveMountedGroupDefaultCover()
+        assertNotNull(resolvedDay)
+        assertTrue(File(resolvedDay!!).readBytes().contentEquals(bothDayBytes))
+        assertEquals(resolvedDay, BookGroup(2L, "科幻").toCoverRequest().path)
+
+        setNightTheme(true)
+        val resolvedNight = resolveMountedGroupDefaultCover()
+        assertNotNull(resolvedNight)
+        assertNotEquals(resolvedDay, resolvedNight)
+        assertTrue(File(resolvedNight!!).readBytes().contentEquals(bothNightBytes))
+        assertEquals(resolvedNight, BookGroup(2L, "科幻").toCoverRequest().path)
+
+        // 3. Legacy package with only groupCoverPath -> both day and night fall back to groupCoverPath
+        val legacyBytes = byteArrayOf(71, 72, 73, 74)
+        val legacyImg = tempFolder.newFile("legacy_group_only.png").apply { writeBytes(legacyBytes) }
+        val legacySlot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "旧版单分组兜底")
+        val legacySaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = legacySlot.manifest.id,
+            newName = "旧版单分组兜底",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                applyMode = CoverSlotApplyMode.FALLBACK_ONLY,
+                applyTarget = CoverSlotApplyTarget.GROUPS,
+                groupCoverPath = legacyImg.absolutePath
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, legacySaved, forNight = false)
+        UnifiedPackageRepository.mountCoverSlotPackage(context, legacySaved, forNight = true)
+
+        setNightTheme(false)
+        val legacyDayResolved = resolveMountedGroupDefaultCover()
+        assertNotNull(legacyDayResolved)
+        assertTrue(File(legacyDayResolved!!).readBytes().contentEquals(legacyBytes))
+        assertEquals(legacyDayResolved, BookGroup(3L, "历史").toCoverRequest().path)
+
+        setNightTheme(true)
+        val legacyNightResolved = resolveMountedGroupDefaultCover()
+        assertNotNull(legacyNightResolved)
+        assertEquals(legacyDayResolved, legacyNightResolved)
+        assertTrue(File(legacyNightResolved!!).readBytes().contentEquals(legacyBytes))
+        assertEquals(legacyNightResolved, BookGroup(3L, "历史").toCoverRequest().path)
+    }
+
+    @Test
+    fun shuffleBagGroupAssignment_zeroDuplicatesFor12BitmaskGroupsAndBalancedFor25Groups() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val images20 = createTempImages("bag_cover", 20)
+        val groups12 = createBitmaskGroups(12)
+
+        // MODE_RANDOM: 12 real bitmask groups -> 12 distinct covers
+        val randomSlot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "洗牌随机包")
+        val randomSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = randomSlot.manifest.id,
+            newName = "洗牌随机包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = images20,
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, randomSaved, forNight = false)
+
+        val randomPaths = groups12.map { it.toCoverRequest().path }
+        assertTrue(randomPaths.all { !it.isNullOrBlank() && File(it).isFile })
+        assertEquals(12, randomPaths.distinct().size)
+        // Sticky on repeated reads
+        assertEquals(randomPaths, groups12.map { it.toCoverRequest().path })
+
+        // MODE_MIXED: 12 real bitmask groups without custom covers -> 12 distinct covers
+        val mixedSlot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "洗牌混合包")
+        val mixedSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = mixedSlot.manifest.id,
+            newName = "洗牌混合包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = images20,
+                applyMode = CoverSlotApplyMode.MIXED,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, mixedSaved, forNight = false)
+
+        val mixedPaths = groups12.map { it.toCoverRequest().path }
+        assertTrue(mixedPaths.all { !it.isNullOrBlank() && File(it).isFile })
+        assertEquals(12, mixedPaths.distinct().size)
+
+        // 25 groups with 20 images: first 20 exhaust all 20 images, max usage across 25 is 2
+        val overflowSlot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "超额轮次包")
+        val overflowSaved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = overflowSlot.manifest.id,
+            newName = "超额轮次包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = images20,
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, overflowSaved, forNight = false)
+
+        val groups25 = createBitmaskGroups(25, namePrefix = "超额分组")
+        val paths25 = groups25.map { it.toCoverRequest().path!! }
+        assertEquals(20, paths25.take(20).distinct().size)
+        val counts = paths25.groupingBy { it }.eachCount()
+        assertEquals(20, counts.size)
+        assertTrue((counts.values.maxOrNull() ?: 0) <= 2)
+    }
+
+    @Test
+    fun preAssignGroupNameMatches_guaranteesOrderIndependentNameHitAndZeroDuplicates() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val xuanhuanImg = tempFolder.newFile("玄幻.jpg").apply { writeBytes(byteArrayOf(1, 1, 1)) }.absolutePath
+        val scifiImg = tempFolder.newFile("科幻.png").apply { writeBytes(byteArrayOf(2, 2, 2)) }.absolutePath
+        val normalImgs = createTempImages("normal", 10)
+
+        val slot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "同名预占包")
+        val saved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "同名预占包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = listOf(xuanhuanImg, scifiImg) + normalImgs,
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, saved, forNight = false)
+
+        // Intentionally put "都市" (which has no name-matched image) BEFORE "玄幻" and "科幻"
+        val groups = listOf(
+            BookGroup(groupId = 1L, groupName = "都市"),
+            BookGroup(groupId = 2L, groupName = "玄幻"),
+            BookGroup(groupId = 4L, groupName = "科幻"),
+            BookGroup(groupId = 8L, groupName = "历史"),
+            BookGroup(groupId = 16L, groupName = "武侠"),
+            BookGroup(groupId = 32L, groupName = "仙侠")
+        )
+
+        CoverCollectionManager.preAssignGroupNameMatches(groups)
+
+        val assignedByGroup = groups.associate { group ->
+            group.groupName to group.toCoverRequest().path!!
+        }
+        assertEquals("玄幻.jpg", File(assignedByGroup.getValue("玄幻")).name)
+        assertEquals("科幻.png", File(assignedByGroup.getValue("科幻")).name)
+
+        val allAssignedPaths = assignedByGroup.values.toList()
+        assertEquals(groups.size, allAssignedPaths.distinct().size)
+
+        val nonNameMatchedNames = listOf("都市", "历史", "武侠", "仙侠").map { name ->
+            File(assignedByGroup.getValue(name)).name
+        }
+        assertFalse("玄幻.jpg" in nonNameMatchedNames)
+        assertFalse("科幻.png" in nonNameMatchedNames)
+    }
+
+    @Test
+    fun shuffleBagBothTarget_isolatesBookAndGroupNamespaces() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val images20 = createTempImages("both_ns", 20)
+        val slot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "双端隔离包")
+        val saved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "双端隔离包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = images20,
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.BOTH
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, saved, forNight = false)
+
+        val bookCovers = (1..30).map { idx ->
+            CoverCollectionManager.selectedCollectionCover("https://book.example/$idx")
+        }
+        assertTrue(bookCovers.all { !it.isNullOrBlank() && File(it).isFile })
+        assertEquals(20, bookCovers.take(20).distinct().size)
+
+        val groups12 = createBitmaskGroups(12, namePrefix = "双端分组")
+        val groupCovers = groups12.map { it.toCoverRequest().path }
+        assertTrue(groupCovers.all { !it.isNullOrBlank() && File(it).isFile })
+        assertEquals(12, groupCovers.distinct().size)
+    }
+
+    @Test
+    fun reshuffle_incrementsSeedClearsAssignmentsAndProducesNewZeroDupOrder() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val images20 = createTempImages("reshuffle_cover", 20)
+        val slot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "重新洗牌包")
+        val saved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "重新洗牌包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = images20,
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, saved, forNight = false)
+
+        val collectionId = saved.manifest.id
+        val seedBefore = CoverCollectionManager.getShuffleSeed(collectionId)
+        val groups12 = createBitmaskGroups(12, namePrefix = "洗牌分组")
+        val beforePaths = groups12.map { it.toCoverRequest().path!! }
+        assertEquals(12, beforePaths.distinct().size)
+
+        CoverCollectionManager.flushPendingAssignmentWritesForTest()
+        val assignmentFile = File(CoverCollectionManager.rootDir, "assignments/$collectionId.json")
+        assertTrue(assignmentFile.isFile)
+
+        val seedAfter = CoverCollectionManager.reshuffle(collectionId)
+        assertEquals(seedBefore + 1L, seedAfter)
+        assertEquals(seedAfter, CoverCollectionManager.getShuffleSeed(collectionId))
+        assertFalse(assignmentFile.exists())
+
+        val afterPaths = groups12.map { it.toCoverRequest().path!! }
+        assertEquals(12, afterPaths.distinct().size)
+        assertNotEquals(beforePaths, afterPaths)
+    }
+
+    @Test
+    fun mainThreadColdStart_doesNotBlockDiskReadAndMergesAsyncLoad() {
+        val images20 = createTempImages("cold_start", 20)
+        val saved = runWithMainPump {
+            UnifiedPackageRepository.ensureInitialized(context)
+            val slot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "冷启动测试包")
+            val edited = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+                context = context,
+                entryId = slot.manifest.id,
+                newName = "冷启动测试包",
+                updatedCoverSlot = CoverSlotPackagePayload(
+                    covers = images20,
+                    applyMode = CoverSlotApplyMode.RANDOM,
+                    applyTarget = CoverSlotApplyTarget.GROUPS
+                )
+            )
+            UnifiedPackageRepository.mountCoverSlotPackage(context, edited, forNight = false)
+            CoverCollectionManager.awaitAssignmentIoForTest()
+            edited
+        }
+        val collectionId = saved.manifest.id
+        val activeImages = runWithMainPump {
+            CoverCollectionManager.get(false, collectionId)!!.images
+        }
+        assertEquals(20, activeImages.size)
+
+        val assignmentsDir = File(CoverCollectionManager.rootDir, "assignments").apply { mkdirs() }
+        val json = JsonArray().apply {
+            add(JsonObject().apply {
+                addProperty("bookUrl", "group:1")
+                addProperty("imagePath", activeImages[5])
+            })
+            add(JsonObject().apply {
+                addProperty("bookUrl", "group:2")
+                addProperty("imagePath", activeImages[6])
+            })
+        }
+        File(assignmentsDir, "$collectionId.json").writeText(json.toString())
+
+        // Reset in-memory assignment cache and warm only collection index
+        CoverCollectionManager.invalidateCache()
+        runWithMainPump {
+            CoverCollectionManager.get(false, collectionId)
+        }
+
+        // Execute on Android main thread: must return immediately without synchronous disk read,
+        // then merge disk baseline once awaitAssignmentIoForTest() finishes.
+        assertEquals(Looper.getMainLooper(), Looper.myLooper())
+        val revBefore = CoverCollectionManager.selectionKey()
+        val tentativeGroup1 = CoverCollectionManager.selectedGroupCollectionCover(1L, "组1")
+        val tentativeGroup3 = CoverCollectionManager.selectedGroupCollectionCover(3L, "新分组")
+        assertNotNull(tentativeGroup1)
+        assertNotNull(tentativeGroup3)
+
+        CoverCollectionManager.awaitAssignmentIoForTest()
+
+        val mergedGroup1 = CoverCollectionManager.selectedGroupCollectionCover(1L, "组1")
+        val mergedGroup2 = CoverCollectionManager.selectedGroupCollectionCover(2L, "组2")
+        val mergedGroup3 = CoverCollectionManager.selectedGroupCollectionCover(3L, "新分组")
+        assertEquals(activeImages[5], mergedGroup1)
+        assertEquals(activeImages[6], mergedGroup2)
+        assertNotNull(mergedGroup3)
+        assertEquals(3, listOf(mergedGroup1, mergedGroup2, mergedGroup3).distinct().size)
+        if (tentativeGroup1 != activeImages[5]) {
+            assertNotEquals(revBefore, CoverCollectionManager.selectionKey())
+        }
+    }
+
+    @Test
+    fun assignFromDeck_2500BooksAcross20ImagesIsFastBalancedAndWritesSingleJson() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val images20 = createTempImages("perf_2500", 20)
+        val slot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "性能均衡包")
+        val saved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "性能均衡包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = images20,
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.BOOKS
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, saved, forNight = false)
+        CoverCollectionManager.awaitAssignmentIoForTest()
+
+        val startNs = System.nanoTime()
+        val assigned = (1..2500).map { idx ->
+            CoverCollectionManager.selectedCollectionCover("https://book.example/perf/$idx")!!
+        }
+        val elapsedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startNs)
+        assertTrue("2500 assignments took too long: ${elapsedMs}ms", elapsedMs < 3000L)
+        assertEquals(2500, assigned.size)
+
+        val counts = assigned.groupingBy { it }.eachCount()
+        assertEquals(20, counts.size)
+        val maxCount = counts.values.maxOrNull()!!
+        val minCount = counts.values.minOrNull()!!
+        assertTrue("Expected balanced distribution (max=$maxCount, min=$minCount)", maxCount - minCount <= 1)
+
+        CoverCollectionManager.flushPendingAssignmentWritesForTest()
+        val assignmentsDir = File(CoverCollectionManager.rootDir, "assignments")
+        val files = assignmentsDir.listFiles()?.toList().orEmpty()
+        assertEquals(1, files.size)
+        val assignmentFile = files.single()
+        assertEquals("${saved.manifest.id}.json", assignmentFile.name)
+        val jsonText = assignmentFile.readText()
+        // P3 #3: no dead "index" field serialized
+        assertFalse(jsonText.contains("\"index\""))
+    }
+
+    @Test
+    fun legacyIndexMigrationAndAvoidableDuplicates_autoHealOnLoadWithoutReshuffle() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val images10 = createTempImages("heal_cover", 10)
+        val slot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "自愈测试包")
+        val saved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "自愈测试包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = images10,
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, saved, forNight = false)
+        CoverCollectionManager.awaitAssignmentIoForTest()
+
+        val collectionId = saved.manifest.id
+        val activeImages = CoverCollectionManager.get(false, collectionId)!!.images
+        val assignmentsDir = File(CoverCollectionManager.rootDir, "assignments").apply { mkdirs() }
+        val legacyJson = JsonArray().apply {
+            add(JsonObject().apply {
+                addProperty("bookUrl", "group:1")
+                addProperty("imagePath", "")
+                addProperty("index", 0)
+            })
+            add(JsonObject().apply {
+                addProperty("bookUrl", "group:2")
+                addProperty("imagePath", activeImages[0])
+            })
+            add(JsonObject().apply {
+                addProperty("bookUrl", "group:3")
+                addProperty("imagePath", activeImages[1])
+            })
+            add(JsonObject().apply {
+                addProperty("bookUrl", "group:4")
+                addProperty("imagePath", "/nonexistent/deleted_cover.jpg")
+            })
+        }
+        File(assignmentsDir, "$collectionId.json").writeText(legacyJson.toString())
+
+        CoverCollectionManager.invalidateCache()
+        CoverCollectionManager.preloadAssignmentsAsync(collectionId)
+        CoverCollectionManager.awaitAssignmentIoForTest()
+
+        val group1Path = CoverCollectionManager.selectedGroupCollectionCover(1L, "组1")
+        val group2Path = CoverCollectionManager.selectedGroupCollectionCover(2L, "组2")
+        val group3Path = CoverCollectionManager.selectedGroupCollectionCover(3L, "组3")
+        val group4Path = CoverCollectionManager.selectedGroupCollectionCover(4L, "组4")
+
+        assertEquals(activeImages[0], group1Path)
+        assertEquals(activeImages[1], group3Path)
+        val allPaths = listOf(group1Path, group2Path, group3Path, group4Path)
+        assertTrue(allPaths.all { !it.isNullOrBlank() && File(it).isFile })
+        assertEquals(4, allPaths.distinct().size)
+
+        CoverCollectionManager.flushPendingAssignmentWritesForTest()
+        val healedText = File(assignmentsDir, "$collectionId.json").readText()
+        assertFalse(healedText.contains("\"index\""))
+    }
+
+    @Test
+    fun groupRenameExactMatch_evictsPreviousRandomHolderAndReassignsWithoutDuplicates() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val xuanhuanImg = tempFolder.newFile("玄幻.jpg").apply { writeBytes(byteArrayOf(7, 7, 7)) }.absolutePath
+        val normalImgs = createTempImages("rename_pool", 9)
+        val slot = UnifiedPackageRepository.createEmptyPackage(PackageKind.COVER_SLOT, "改名驱逐包")
+        val saved = UnifiedPackageRepository.saveEditedCoverSlotPackage(
+            context = context,
+            entryId = slot.manifest.id,
+            newName = "改名驱逐包",
+            updatedCoverSlot = CoverSlotPackagePayload(
+                covers = listOf(xuanhuanImg) + normalImgs,
+                applyMode = CoverSlotApplyMode.RANDOM,
+                applyTarget = CoverSlotApplyTarget.GROUPS
+            )
+        )
+        UnifiedPackageRepository.mountCoverSlotPackage(context, saved, forNight = false)
+        CoverCollectionManager.awaitAssignmentIoForTest()
+
+        val initialGroups = (0 until 10).map { idx ->
+            BookGroup(groupId = (1L shl idx), groupName = "普通分组$idx")
+        }
+        val initialAssignments = initialGroups.associate { group ->
+            group.groupId to CoverCollectionManager.selectedGroupCollectionCover(group.groupId, group.groupName)!!
+        }
+        assertEquals(10, initialAssignments.values.distinct().size)
+
+        val victimGroup = initialGroups.first { File(initialAssignments.getValue(it.groupId)).name == "玄幻.jpg" }
+        val renamedTarget = initialGroups.first { it.groupId != victimGroup.groupId }
+        val updatedGroups = initialGroups.map { group ->
+            if (group.groupId == renamedTarget.groupId) group.copy(groupName = "玄幻") else group
+        }
+
+        val revBefore = CoverCollectionManager.selectionKey()
+        CoverCollectionManager.preAssignGroupNameMatches(updatedGroups)
+        assertNotEquals(revBefore, CoverCollectionManager.selectionKey())
+
+        val finalAssignments = updatedGroups.associate { group ->
+            group.groupId to CoverCollectionManager.selectedGroupCollectionCover(group.groupId, group.groupName)!!
+        }
+        assertEquals("玄幻.jpg", File(finalAssignments.getValue(renamedTarget.groupId)).name)
+        assertNotEquals("玄幻.jpg", File(finalAssignments.getValue(victimGroup.groupId)).name)
+        assertEquals(10, finalAssignments.values.distinct().size)
+    }
+
+    @Test
+    fun shuffleSeeds_inBackupWhitelistAndPersistAcrossCacheInvalidationAndLegacyMigration() = runWithMainPump {
+        UnifiedPackageRepository.ensureInitialized(context)
+
+        val prevIgnoreCover = BackupConfig.ignoreConfig["coverConfig"]
+        try {
+            BackupConfig.ignoreConfig["coverConfig"] = false
+            assertTrue(BackupConfig.keyIsNotIgnore(PreferKey.coverCollectionShuffleSeeds))
+            BackupConfig.ignoreConfig["coverConfig"] = true
+            assertFalse(BackupConfig.keyIsNotIgnore(PreferKey.coverCollectionShuffleSeeds))
+        } finally {
+            if (prevIgnoreCover == null) {
+                BackupConfig.ignoreConfig.remove("coverConfig")
+            } else {
+                BackupConfig.ignoreConfig["coverConfig"] = prevIgnoreCover
+            }
+        }
+        assertTrue(PreferKey.coverCollectionShuffleSeeds in UiPackageBackup.unifiedActivePrefKeys)
+
+        val collectionId = "seed_persist_col"
+        context.putPrefLong("coverCollectionShuffleSeed_$collectionId", 4L)
+        CoverCollectionManager.invalidateCache()
+        assertEquals(4L, CoverCollectionManager.getShuffleSeed(collectionId))
+
+        val nextSeed = CoverCollectionManager.reshuffle(collectionId)
+        assertEquals(5L, nextSeed)
+        assertFalse(context.defaultSharedPreferences.contains("coverCollectionShuffleSeed_$collectionId"))
+        val rawSeeds = context.getPrefString(PreferKey.coverCollectionShuffleSeeds)
+        assertNotNull(rawSeeds)
+        assertTrue(rawSeeds!!.contains(collectionId))
+
+        CoverCollectionManager.invalidateCache()
+        assertEquals(5L, CoverCollectionManager.getShuffleSeed(collectionId))
     }
 }

@@ -178,7 +178,8 @@ object BackupConfig {
         PreferKey.coverCollectionModeDay,
         PreferKey.coverCollectionModeNight,
         PreferKey.coverCollectionTargetDay,
-        PreferKey.coverCollectionTargetNight
+        PreferKey.coverCollectionTargetNight,
+        PreferKey.coverCollectionShuffleSeeds
     )
 
     fun keyIsNotIgnore(key: String): Boolean {

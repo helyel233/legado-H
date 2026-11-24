@@ -364,6 +364,7 @@ object UnifiedPackageRepository {
 
     suspend fun ensureInitialized(context: Context = appCtx) {
         ensureDefaultPackagesExist(context)
+        CoverCollectionManager.preloadSelectedAssignmentsAsync()
     }
 
     suspend fun ensureDefaultPackagesExist(context: Context = appCtx) {
@@ -2160,8 +2161,25 @@ object UnifiedPackageRepository {
             },
             dayDefaultCoverPath = copySlotFile(slot.dayDefaultCoverPath, "day_default_cover"),
             nightDefaultCoverPath = copySlotFile(slot.nightDefaultCoverPath, "night_default_cover"),
+            dayGroupCoverPath = copySlotFile(slot.dayGroupCoverPath, "group_day_default"),
+            nightGroupCoverPath = copySlotFile(slot.nightGroupCoverPath, "group_night_default"),
             groupCoverPath = copySlotFile(slot.groupCoverPath, "group_default_cover")
         )
+    }
+
+    private fun resolveSymmetricGroupCoverPath(
+        slot: CoverSlotPackagePayload,
+        forNight: Boolean
+    ): String? {
+        return if (forNight) {
+            slot.nightGroupCoverPath?.takeIf { it.isNotBlank() }
+                ?: slot.dayGroupCoverPath?.takeIf { it.isNotBlank() }
+                ?: slot.groupCoverPath?.takeIf { it.isNotBlank() }
+        } else {
+            slot.dayGroupCoverPath?.takeIf { it.isNotBlank() }
+                ?: slot.nightGroupCoverPath?.takeIf { it.isNotBlank() }
+                ?: slot.groupCoverPath?.takeIf { it.isNotBlank() }
+        }
     }
 
     private fun applyCoverSlotRuntimeSyncLocked(
@@ -2181,7 +2199,8 @@ object UnifiedPackageRepository {
             slot.dayDefaultCoverPath?.takeIf { it.isNotBlank() } ?: slot.nightDefaultCoverPath
         }
         val resolvedDefault = resolvePackageAssetPath(entry.dir, baseDir, rawDefault)
-        val resolvedGroupCover = resolvePackageAssetPath(entry.dir, baseDir, slot.groupCoverPath)
+        val rawGroup = resolveSymmetricGroupCoverPath(slot, forNight)
+        val resolvedGroupCover = resolvePackageAssetPath(entry.dir, baseDir, rawGroup)
         val collectionMode = toCollectionManagerMode(slot.applyMode)
         val collectionTarget = CoverSlotApplyTarget.normalize(
             slot.applyTarget,
@@ -2217,6 +2236,7 @@ object UnifiedPackageRepository {
                 updatedAt = entry.manifest.updatedAt
             )
             CoverCollectionManager.setSelected(forNight, entry.manifest.id)
+            CoverCollectionManager.preloadAssignmentsAsync(entry.manifest.id)
         } else {
             CoverCollectionManager.setSelected(forNight, "")
         }
@@ -2273,7 +2293,8 @@ object UnifiedPackageRepository {
                 slot.dayDefaultCoverPath?.takeIf { it.isNotBlank() } ?: slot.nightDefaultCoverPath
             }
             val resolvedDefault = resolvePackageAssetPath(matched.dir, baseDir, rawDefault)
-            val resolvedGroup = resolvePackageAssetPath(matched.dir, baseDir, slot.groupCoverPath)
+            val rawGroup = resolveSymmetricGroupCoverPath(slot, forNight)
+            val resolvedGroup = resolvePackageAssetPath(matched.dir, baseDir, rawGroup)
             val mode = toCollectionManagerMode(slot.applyMode)
             val target = CoverSlotApplyTarget.normalize(
                 slot.applyTarget,
@@ -2313,6 +2334,7 @@ object UnifiedPackageRepository {
             }
         } else {
             CoverCollectionManager.setSelected(forNight, targetId)
+            CoverCollectionManager.preloadAssignmentsAsync(targetId)
         }
     }
 

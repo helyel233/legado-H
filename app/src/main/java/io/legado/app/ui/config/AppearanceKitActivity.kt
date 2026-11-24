@@ -64,6 +64,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.AppearanceKitManager
+import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.config.pkg.ArtPackagePayload
 import io.legado.app.help.config.pkg.CoverSlotApplyMode
@@ -95,7 +96,6 @@ import io.legado.app.ui.widget.compose.AppLayoutTokens
 import io.legado.app.ui.widget.compose.AppManagementAction
 import io.legado.app.ui.widget.compose.AppManagementMenuAction
 import io.legado.app.ui.widget.compose.AppManagementPalette
-import io.legado.app.ui.widget.compose.AppSettingSectionTitle
 import io.legado.app.ui.widget.compose.AppThemedStepperSlider
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
@@ -496,6 +496,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         onEditArtPackage = { editingArtEntryState = it },
                         onEditParamPackage = { editingParamEntryState = it },
                         onEditCoverSlotPackage = ::openEditCoverSlot,
+                        onReshuffleCoverSlotPackage = ::executeReshuffleCoverSlot,
                         onExportPackage = ::exportPackageEntry,
                         onUploadPackage = ::uploadPackageEntry,
                         onDeletePackage = ::promptDeletePackage,
@@ -671,6 +672,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                                 coverSlotTargetHintDismissedState = true
                                 putPrefBoolean(PreferKey.coverSlotTargetHintDismissed, true)
                             },
+                            onReshuffle = { executeReshuffleCoverSlot(entry) },
                             onPickSingleImage = { _, onPicked ->
                                 pendingAssetFileCallback = onPicked
                                 pickAssetFileLauncher.launch {
@@ -995,6 +997,13 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 toastOnUi(it.localizedMessage ?: getString(R.string.error))
             }
         }
+    }
+
+    private fun executeReshuffleCoverSlot(entry: UnifiedPackageRepository.StoredEntry) {
+        CoverCollectionManager.reshuffle(entry.manifest.id)
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
+        postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, isNightState)
+        toastOnUi("已重新洗牌封面分配")
     }
 
     private fun promptDeletePackage(kind: PackageKind, entry: UnifiedPackageRepository.StoredEntry) {
@@ -1501,6 +1510,7 @@ private fun AppearanceStudioScreen(
     onEditArtPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onEditParamPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onEditCoverSlotPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onReshuffleCoverSlotPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onExportPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onUploadPackage: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onDeletePackage: (PackageKind, UnifiedPackageRepository.StoredEntry) -> Unit,
@@ -1637,12 +1647,20 @@ private fun AppearanceStudioScreen(
                     canDeleteEntry = { entry ->
                         entry.manifest.id != UnifiedPackageRepository.BUILTIN_DEFAULT_COVER_SLOT_ID
                     },
+                    canReshuffleEntry = { entry ->
+                        val slot = entry.manifest.coverSlot
+                        val mode = CoverSlotApplyMode.normalize(slot?.applyMode)
+                        entry.manifest.id != UnifiedPackageRepository.BUILTIN_DEFAULT_COVER_SLOT_ID &&
+                            !slot?.covers.isNullOrEmpty() &&
+                            (mode == CoverSlotApplyMode.RANDOM || mode == CoverSlotApplyMode.MIXED)
+                    },
                     onSelectSlotNight = onSelectCoverSlotNight,
                     onSelectEntry = onMountCoverSlotPackage,
                     onCreateNew = { onCreatePackage(PackageKind.COVER_SLOT) },
                     onImport = onImportPackage,
                     onCloneEntry = { onClonePackage(PackageKind.COVER_SLOT, it) },
                     onEditEntry = onEditCoverSlotPackage,
+                    onReshuffleEntry = onReshuffleCoverSlotPackage,
                     onExportEntry = onExportPackage,
                     onUploadEntry = onUploadPackage,
                     onDeleteEntry = { onDeletePackage(PackageKind.COVER_SLOT, it) }
@@ -1654,6 +1672,7 @@ private fun AppearanceStudioScreen(
                     useLegacyTokenPipeline = useLegacyTokenPipeline,
                     useLegacyPackageManager = useLegacyPackageManager,
                     palette = palette,
+                    glassSignature = effectiveGlassSig,
                     onToggleLegacyTokenPipeline = onToggleLegacyTokenPipeline,
                     onToggleLegacyPackageManager = onToggleLegacyPackageManager
                 )
@@ -1737,52 +1756,55 @@ private fun StudioLivePreviewCard(
         }
     }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
+    val previewTitleColor = if (isEInkMode) palette.settings.primaryText else palette.settings.accent
+    val body: @Composable () -> Unit = {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .background(
+                    bgColor.copy(
+                        alpha = if (glassSignature != null) 0.35f * alphaFactor else alphaFactor
+                    )
+                )
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            AppSettingSectionTitle(
-                title = stringResource(R.string.appearance_studio_preview_title),
-                palette = palette.settings,
-                inCard = true
-            )
-            Text(
-                text = if (quickDrawerExpanded) "收起快速微调 ▴" else "快速微调 ▾",
-                color = palette.settings.accent,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable { quickDrawerExpanded = !quickDrawerExpanded }
-                    .padding(horizontal = 8.dp, vertical = 4.dp)
-            )
-        }
-        val body: @Composable () -> Unit = {
-            Column(
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = stringResource(R.string.appearance_studio_preview_title),
+                    color = previewTitleColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    fontFamily = palette.settings.titleFontFamily,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Text(
+                    text = if (quickDrawerExpanded) "收起快速微调 ▴" else "快速微调 ▾",
+                    color = previewTitleColor,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable { quickDrawerExpanded = !quickDrawerExpanded }
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .background(
-                        bgColor.copy(
-                            alpha = if (glassSignature != null) 0.35f * alphaFactor else alphaFactor
-                        )
-                    )
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .height(26.dp)
+                    .clip(slotShape)
+                    .background(primaryColor.copy(alpha = topBarEffectiveAlpha))
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(26.dp)
-                        .clip(slotShape)
-                        .background(primaryColor.copy(alpha = topBarEffectiveAlpha))
-                        .padding(horizontal = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
                     Text(
                         text = "我的书架",
                         color = topBarTitleColor,
@@ -1947,27 +1969,33 @@ private fun StudioLivePreviewCard(
                 }
             }
         }
-        if (glassSignature != null) {
-            GlassPanel(
-                domain = GlassSamplingDomain.WALLPAPER,
-                cornerRadiusPx = panelRadiusPx,
-                configSignature = glassSignature,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(panelShape)
-            ) { body() }
-        } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .appSettingPanelBackground(
-                        normalColor = palette.settings.row,
-                        borderColor = palette.settings.border,
-                        panelImage = null,
-                        radiusPx = panelRadiusPx
-                    )
-            ) { body() }
-        }
+    if (glassSignature != null) {
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = panelRadiusPx,
+            configSignature = glassSignature,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(panelShape),
+            fallback = Modifier.appSettingPanelBackground(
+                normalColor = palette.settings.row,
+                borderColor = palette.settings.border,
+                panelImage = null,
+                radiusPx = panelRadiusPx
+            ),
+            requireWallpaperHost = true
+        ) { body() }
+    } else {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .appSettingPanelBackground(
+                    normalColor = palette.settings.row,
+                    borderColor = palette.settings.border,
+                    panelImage = null,
+                    radiusPx = panelRadiusPx
+                )
+        ) { body() }
     }
 }
 
@@ -2035,12 +2063,14 @@ private fun StudioDualSlotPackageSection(
     glassSignature: String?,
     headerExtra: (@Composable () -> Unit)? = null,
     canDeleteEntry: (UnifiedPackageRepository.StoredEntry) -> Boolean = { true },
+    canReshuffleEntry: (UnifiedPackageRepository.StoredEntry) -> Boolean = { false },
     onSelectSlotNight: (Boolean) -> Unit,
     onSelectEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onCreateNew: () -> Unit,
     onImport: () -> Unit,
     onCloneEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onEditEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
+    onReshuffleEntry: ((UnifiedPackageRepository.StoredEntry) -> Unit)? = null,
     onExportEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onUploadEntry: (UnifiedPackageRepository.StoredEntry) -> Unit,
     onDeleteEntry: (UnifiedPackageRepository.StoredEntry) -> Unit
@@ -2055,104 +2085,127 @@ private fun StudioDualSlotPackageSection(
     }
     val currentMountedId = if (isNightSlot) nightMountedId else dayMountedId
     val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
+    val sectionTitleColor = if (AppConfig.isEInkMode) palette.settings.primaryText else palette.settings.accent
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
+    val body: @Composable () -> Unit = {
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            AppSettingSectionTitle(
-                title = title,
-                palette = palette.settings,
-                inCard = true
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    text = "+ 新建",
-                    color = palette.settings.accent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(onClick = onCreateNew)
-                )
-                Text(
-                    text = "导入",
-                    color = palette.settings.accent,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.clickable(onClick = onImport)
-                )
-            }
-        }
-        Text(
-            text = subtitle,
-            color = palette.settings.secondaryText,
-            fontSize = 11.sp,
-            modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
-        )
-        Spacer(modifier = Modifier.height(4.dp))
-
-        val body: @Composable () -> Unit = {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
-                headerExtra?.invoke()
-                LegadoSegmentedControl(
-                    options = slotOptions,
-                    selectedValue = isNightSlot,
-                    palette = palette.miuix,
-                    onSelected = onSelectSlotNight,
-                    tone = SegmentedControlTone.AccentThumb,
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = title,
+                        color = sectionTitleColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = palette.settings.titleFontFamily,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "+ 新建",
+                            color = sectionTitleColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable(onClick = onCreateNew)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                        Text(
+                            text = "导入",
+                            color = sectionTitleColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable(onClick = onImport)
+                                .padding(horizontal = 6.dp, vertical = 2.dp)
+                        )
+                    }
+                }
+                Text(
+                    text = subtitle,
+                    color = palette.settings.secondaryText,
                     fontSize = 11.sp
                 )
-                entries.forEach { entry ->
-                    val isSelected = entry.manifest.id == currentMountedId
-                    val isAlsoOtherSlot = entry.manifest.id == (if (isNightSlot) dayMountedId else nightMountedId)
-                    PackageEntryCard(
-                        entry = entry,
-                        isNightSlot = isNightSlot,
-                        isSelected = isSelected,
-                        isAlsoOtherSlot = isAlsoOtherSlot,
-                        otherSlotLabel = if (isNightSlot) "日间也在用" else "夜间也在用",
-                        canDelete = canDeleteEntry(entry),
-                        palette = palette,
-                        onSelect = { onSelectEntry(entry) },
-                        onEdit = { onEditEntry(entry) },
-                        onClone = { onCloneEntry(entry) },
-                        onExport = { onExportEntry(entry) },
-                        onUpload = { onUploadEntry(entry) },
-                        onDelete = { onDeleteEntry(entry) }
-                    )
-                }
+            }
+            headerExtra?.invoke()
+            LegadoSegmentedControl(
+                options = slotOptions,
+                selectedValue = isNightSlot,
+                palette = palette.miuix,
+                onSelected = onSelectSlotNight,
+                tone = SegmentedControlTone.AccentThumb,
+                fontSize = 11.sp
+            )
+            entries.forEach { entry ->
+                val isSelected = entry.manifest.id == currentMountedId
+                val isAlsoOtherSlot = entry.manifest.id == (if (isNightSlot) dayMountedId else nightMountedId)
+                val reshuffleAction = onReshuffleEntry
+                val showReshuffle = reshuffleAction != null && canReshuffleEntry(entry)
+                PackageEntryCard(
+                    entry = entry,
+                    isNightSlot = isNightSlot,
+                    isSelected = isSelected,
+                    isAlsoOtherSlot = isAlsoOtherSlot,
+                    otherSlotLabel = if (isNightSlot) "日间也在用" else "夜间也在用",
+                    canDelete = canDeleteEntry(entry),
+                    palette = palette,
+                    onSelect = { onSelectEntry(entry) },
+                    onEdit = { onEditEntry(entry) },
+                    onReshuffle = if (showReshuffle) { { reshuffleAction(entry) } } else null,
+                    onClone = { onCloneEntry(entry) },
+                    onExport = { onExportEntry(entry) },
+                    onUpload = { onUploadEntry(entry) },
+                    onDelete = { onDeleteEntry(entry) }
+                )
             }
         }
+    }
 
-        if (glassSignature != null) {
-            GlassPanel(
-                domain = GlassSamplingDomain.WALLPAPER,
-                cornerRadiusPx = palette.settings.panelRadiusPx,
-                configSignature = glassSignature,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(panelShape)
-            ) { body() }
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .appSettingPanelBackground(
-                        normalColor = palette.settings.row,
-                        borderColor = palette.settings.border,
-                        panelImage = null,
-                        radiusPx = palette.settings.panelRadiusPx
-                    )
-            ) { body() }
-        }
+    if (glassSignature != null) {
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = palette.settings.panelRadiusPx,
+            configSignature = glassSignature,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(panelShape),
+            fallback = Modifier.appSettingPanelBackground(
+                normalColor = palette.settings.row,
+                borderColor = palette.settings.border,
+                panelImage = null,
+                radiusPx = palette.settings.panelRadiusPx
+            ),
+            requireWallpaperHost = true
+        ) { body() }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .appSettingPanelBackground(
+                    normalColor = palette.settings.row,
+                    borderColor = palette.settings.border,
+                    panelImage = null,
+                    radiusPx = palette.settings.panelRadiusPx
+                )
+        ) { body() }
     }
 }
 
@@ -2169,6 +2222,7 @@ private fun PackageEntryCard(
     palette: AppManagementPalette,
     onSelect: () -> Unit,
     onEdit: () -> Unit,
+    onReshuffle: (() -> Unit)? = null,
     onClone: () -> Unit,
     onExport: () -> Unit,
     onUpload: () -> Unit,
@@ -2254,18 +2308,17 @@ private fun PackageEntryCard(
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                if (onReshuffle != null) {
+                    SmallPackageActionText("重新洗牌", palette.settings.accent, onReshuffle)
+                }
                 SmallPackageActionText("编辑", palette.settings.accent, onEdit)
-                Spacer(modifier = Modifier.width(10.dp))
                 SmallPackageActionText("复制", palette.settings.primaryText, onClone)
-                Spacer(modifier = Modifier.width(10.dp))
                 SmallPackageActionText("上传", palette.settings.primaryText, onUpload)
-                Spacer(modifier = Modifier.width(10.dp))
                 SmallPackageActionText("导出", palette.settings.primaryText, onExport)
                 if (canDelete) {
-                    Spacer(modifier = Modifier.width(10.dp))
                     SmallPackageActionText("删除", palette.settings.danger, onDelete)
                 }
             }
@@ -2423,51 +2476,88 @@ private fun StudioRollbackSwitchesSection(
     useLegacyTokenPipeline: Boolean,
     useLegacyPackageManager: Boolean,
     palette: AppManagementPalette,
+    glassSignature: String?,
     onToggleLegacyTokenPipeline: (Boolean) -> Unit,
     onToggleLegacyPackageManager: (Boolean) -> Unit
 ) {
     var expanded by remember { mutableStateOf(useLegacyTokenPipeline || useLegacyPackageManager) }
     val panelShape = RoundedCornerShape(palette.miuix.panelRadius ?: 10.dp)
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = if (expanded) "收起兼容回滚开关 ▴" else "高级兼容回滚开关（保留 1 个版本）▾",
-            color = palette.settings.secondaryText,
-            fontSize = 12.sp,
+    val body: @Composable () -> Unit = {
+        Column(
             modifier = Modifier
-                .clickable { expanded = !expanded }
-                .padding(horizontal = 4.dp, vertical = 4.dp)
-        )
-        AnimatedVisibility(visible = expanded) {
-            Column(
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(panelShape)
-                    .appSettingPanelBackground(
-                        normalColor = palette.settings.row,
-                        borderColor = palette.settings.border,
-                        panelImage = null,
-                        radiusPx = palette.settings.panelRadiusPx
-                    )
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { expanded = !expanded }
+                    .padding(vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                StudioSwitchRow(
-                    title = "回退旧版 Token 管线（停用级联覆写）",
-                    subtitle = "开启后忽略 4 区域级联覆写并沿用全局默认值",
-                    checked = useLegacyTokenPipeline,
-                    onCheckedChange = onToggleLegacyTokenPipeline,
-                    palette = palette
-                )
-                HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
-                StudioSwitchRow(
-                    title = "回退旧版分体包读写（Kill Switch）",
-                    subtitle = "开启后暂停日夜双包重投影，保留旧版兼容行为",
-                    checked = useLegacyPackageManager,
-                    onCheckedChange = onToggleLegacyPackageManager,
-                    palette = palette
+                Text(
+                    text = if (expanded) "收起兼容回滚开关 ▴" else "高级兼容回滚开关（保留 1 个版本）▾",
+                    color = palette.settings.secondaryText,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium
                 )
             }
+            AnimatedVisibility(visible = expanded) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
+                    StudioSwitchRow(
+                        title = "回退旧版 Token 管线（停用级联覆写）",
+                        subtitle = "开启后忽略 4 区域级联覆写并沿用全局默认值",
+                        checked = useLegacyTokenPipeline,
+                        onCheckedChange = onToggleLegacyTokenPipeline,
+                        palette = palette
+                    )
+                    HorizontalDivider(color = palette.settings.divider, thickness = 0.5.dp)
+                    StudioSwitchRow(
+                        title = "回退旧版分体包读写（Kill Switch）",
+                        subtitle = "开启后暂停日夜双包重投影，保留旧版兼容行为",
+                        checked = useLegacyPackageManager,
+                        onCheckedChange = onToggleLegacyPackageManager,
+                        palette = palette
+                    )
+                }
+            }
         }
+    }
+
+    if (glassSignature != null) {
+        GlassPanel(
+            domain = GlassSamplingDomain.WALLPAPER,
+            cornerRadiusPx = palette.settings.panelRadiusPx,
+            configSignature = glassSignature,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(panelShape),
+            fallback = Modifier.appSettingPanelBackground(
+                normalColor = palette.settings.row,
+                borderColor = palette.settings.border,
+                panelImage = null,
+                radiusPx = palette.settings.panelRadiusPx
+            ),
+            requireWallpaperHost = true
+        ) { body() }
+    } else {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .appSettingPanelBackground(
+                    normalColor = palette.settings.row,
+                    borderColor = palette.settings.border,
+                    panelImage = null,
+                    radiusPx = palette.settings.panelRadiusPx
+                )
+        ) { body() }
     }
 }
 

@@ -48,7 +48,8 @@ internal object UiPackageBackup {
         PreferKey.currentCoverSlotPackageId,
         PreferKey.activeDayCoverSlotPackageId,
         PreferKey.activeNightCoverSlotPackageId,
-        PreferKey.coverSlotLocked
+        PreferKey.coverSlotLocked,
+        PreferKey.coverCollectionShuffleSeeds
     )
 
     val unifiedBooleanPrefKeys = setOf(PreferKey.coverSlotLocked)

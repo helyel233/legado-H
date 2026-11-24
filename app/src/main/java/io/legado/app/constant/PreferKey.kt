@@ -375,6 +375,7 @@ object PreferKey {
     const val coverCollectionModeNight = "coverCollectionModeNight"
     const val coverCollectionTargetDay = "coverCollectionTargetDay"
     const val coverCollectionTargetNight = "coverCollectionTargetNight"
+    const val coverCollectionShuffleSeeds = "coverCollectionShuffleSeeds"
     const val replaceEnableDefault = "replaceEnableDefault"
     const val showBrightnessView = "showBrightnessView"
     const val autoClearExpired = "autoClearExpired"

@@ -453,4 +453,125 @@ class UnifiedPackageCodecTest {
         )
         assertTrue(UnifiedPackageCodec.validateCoverSlotPackage(decodedLegacy).isEmpty())
     }
+
+    @Test
+    fun coverSlotDayNightGroupCoverPaths_roundTripKnownKeysCollectHashAndValidation() {
+        val json = """
+            {
+              "schemaVersion": 1,
+              "kind": "cover_slot",
+              "id": "cover_group_day_night",
+              "name": "日夜分组兜底测试",
+              "updatedAt": 5000,
+              "coverSlot": {
+                "covers": ["assets/cover_01.jpg"],
+                "applyMode": "RANDOM",
+                "applyTarget": "groups",
+                "dayGroupCoverPath": "assets/group_day.png",
+                "nightGroupCoverPath": "assets/group_night.png"
+              }
+            }
+        """.trimIndent()
+
+        val decoded = UnifiedPackageCodec.decode(json)
+        val slot = decoded.coverSlot!!
+        assertEquals("assets/group_day.png", slot.dayGroupCoverPath)
+        assertEquals("assets/group_night.png", slot.nightGroupCoverPath)
+        assertNull(slot.groupCoverPath)
+        assertFalse(slot.unknownFields.containsKey("dayGroupCoverPath"))
+        assertFalse(slot.unknownFields.containsKey("nightGroupCoverPath"))
+        assertTrue(slot.unknownFields.isEmpty())
+
+        val reDecoded = UnifiedPackageCodec.decode(UnifiedPackageCodec.encode(decoded))
+        assertEquals(decoded, reDecoded)
+
+        val collected = UnifiedPackageCodec.collectAssetPaths(decoded)
+        assertEquals(
+            listOf(
+                "assets/cover_01.jpg",
+                "assets/group_day.png",
+                "assets/group_night.png"
+            ),
+            collected
+        )
+
+        val dirA = tempFolder.newFolder("group_hash_a")
+        val dirB = tempFolder.newFolder("group_hash_b")
+        fun writeAsset(root: File, rel: String, bytes: ByteArray) {
+            File(root, rel).apply {
+                parentFile?.mkdirs()
+                writeBytes(bytes)
+            }
+        }
+        writeAsset(dirA, "assets/cover_01.jpg", byteArrayOf(1, 2, 3))
+        writeAsset(dirA, "assets/group_day.png", byteArrayOf(10, 20, 30))
+        writeAsset(dirA, "assets/group_night.png", byteArrayOf(40, 50, 60))
+        writeAsset(dirA, "assets/group_day_alt.png", byteArrayOf(10, 20, 30))
+
+        writeAsset(dirB, "assets/cover_01.jpg", byteArrayOf(1, 2, 3))
+        writeAsset(dirB, "assets/group_day.png", byteArrayOf(99, 88, 77))
+        writeAsset(dirB, "assets/group_night.png", byteArrayOf(40, 50, 60))
+
+        val hashA = UnifiedPackageCodec.computeContentHash(decoded, dirA)
+        val hashNightChanged = UnifiedPackageCodec.computeContentHash(
+            decoded.copy(coverSlot = slot.copy(nightGroupCoverPath = null)),
+            dirA
+        )
+        val hashDayPathChanged = UnifiedPackageCodec.computeContentHash(
+            decoded.copy(coverSlot = slot.copy(dayGroupCoverPath = "assets/group_day_alt.png")),
+            dirA
+        )
+        val hashDayBytesChanged = UnifiedPackageCodec.computeContentHash(decoded, dirB)
+
+        assertNotEquals(hashA, hashNightChanged)
+        assertNotEquals(hashA, hashDayPathChanged)
+        assertNotEquals(hashA, hashDayBytesChanged)
+
+        assertTrue(UnifiedPackageCodec.validateCoverSlotPackage(decoded, dirA).isEmpty())
+
+        val escapeDay = decoded.copy(
+            coverSlot = slot.copy(dayGroupCoverPath = "../escape.png")
+        )
+        val escapeDayErrors = UnifiedPackageCodec.validateCoverSlotPackage(escapeDay, dirA)
+        assertTrue(escapeDayErrors.any { it.contains("Unsafe asset path") && it.contains("../escape.png") })
+
+        val escapeNight = decoded.copy(
+            coverSlot = slot.copy(nightGroupCoverPath = "../escape.png")
+        )
+        val escapeNightErrors = UnifiedPackageCodec.validateCoverSlotPackage(escapeNight, dirA)
+        assertTrue(escapeNightErrors.any { it.contains("Unsafe asset path") && it.contains("../escape.png") })
+    }
+
+    @Test
+    fun coverSlotLegacyGroupCoverPathOnly_decodesLosslessly() {
+        val legacyJson = """
+            {
+              "schemaVersion": 1,
+              "kind": "cover_slot",
+              "id": "cover_legacy_group_only",
+              "name": "旧版分组兜底包",
+              "updatedAt": 6000,
+              "coverSlot": {
+                "covers": ["assets/cover_01.jpg"],
+                "applyMode": "FALLBACK_ONLY",
+                "groupCoverPath": "assets/legacy_group.png"
+              }
+            }
+        """.trimIndent()
+
+        val decoded = UnifiedPackageCodec.decode(legacyJson)
+        val slot = decoded.coverSlot!!
+        assertNull(slot.dayGroupCoverPath)
+        assertNull(slot.nightGroupCoverPath)
+        assertEquals("assets/legacy_group.png", slot.groupCoverPath)
+        assertTrue(slot.unknownFields.isEmpty())
+
+        val roundTripped = UnifiedPackageCodec.decode(UnifiedPackageCodec.encode(decoded))
+        assertEquals(decoded, roundTripped)
+        assertEquals(
+            listOf("assets/cover_01.jpg", "assets/legacy_group.png"),
+            UnifiedPackageCodec.collectAssetPaths(decoded)
+        )
+        assertTrue(UnifiedPackageCodec.validateCoverSlotPackage(decoded).isEmpty())
+    }
 }

@@ -49,6 +49,7 @@ import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookGroup
 import io.legado.app.databinding.FragmentBookshelf2Binding
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.CoverCollectionManager
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.CoverWarmup
 import splitties.init.appCtx
@@ -506,7 +507,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
                         .mapTo(hashSetOf()) { it.display.bookUrl }
                     books = list.map { it.toMinimalBook() }
                     collectionItems = items.filterIsInstance<BookshelfCollectionItemUi>()
-                    composeItems = items
+                    applyComposeItems(items)
                     warmUpShelfCovers(list)
                     composeDataVersion++
                     itemCount = getItemCount()
@@ -605,15 +606,25 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
 
     private fun updateComposeItems(list: List<BookShelfDisplay>) {
         val collectionUiItems = if (groupId == BookGroup.IdRoot) collectionItems else emptyList()
-        composeItems = collectionUiItems + buildBookshelfItems(
-            groups = bookGroups,
-            books = list,
-            isRootGroup = groupId == BookGroup.IdRoot,
-            groupId = groupId,
-            isUpdating = ::isUpdate,
-            localChangedUrls = localChangedUrls
+        applyComposeItems(
+            collectionUiItems + buildBookshelfItems(
+                groups = bookGroups,
+                books = list,
+                isRootGroup = groupId == BookGroup.IdRoot,
+                groupId = groupId,
+                isUpdating = ::isUpdate,
+                localChangedUrls = localChangedUrls
+            )
         )
         composeDataVersion++
+    }
+
+    private fun applyComposeItems(items: List<BookshelfItemUi>) {
+        val folderGroups = items.mapNotNull { (it as? BookshelfFolderItemUi)?.group }
+        if (folderGroups.isNotEmpty()) {
+            CoverCollectionManager.preAssignGroupNameMatches(folderGroups)
+        }
+        composeItems = items
     }
 
     private fun currentComposeSnapshotKey(): String {
@@ -649,7 +660,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
         if (currentComposeSnapshotKey() != snapshotKey || items.isEmpty()) {
             return
         }
-        composeItems = items
+        applyComposeItems(items)
         shelfDisplays = items.mapNotNull { (it as? BookshelfBookItemUi)?.display }
         books = shelfDisplays.map { it.toMinimalBook() }
         composeDataVersion++

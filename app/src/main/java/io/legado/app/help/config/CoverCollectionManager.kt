@@ -2,10 +2,14 @@ package io.legado.app.help.config
 
 import android.content.Context
 import android.net.Uri
+import android.os.Looper
+import com.google.gson.JsonObject
+import com.google.gson.JsonParser
 import io.legado.app.R
 import androidx.annotation.Keep
 import io.legado.app.constant.PreferKey
 import io.legado.app.data.entities.Book
+import io.legado.app.data.entities.BookGroup
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.AppCloudStorage
 import io.legado.app.help.config.pkg.CoverSlotApplyTarget
@@ -13,10 +17,12 @@ import io.legado.app.help.config.pkg.PackageIoKernel
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.compress.ZipUtils
+import io.legado.app.utils.defaultSharedPreferences
 import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonArray
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getFile
+import io.legado.app.utils.getPrefLong
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.normalizeFileName
 import io.legado.app.utils.putPrefString
@@ -43,20 +49,23 @@ object CoverCollectionManager {
     const val TARGET_BOTH = CoverSlotApplyTarget.BOTH
     private const val indexFileName = "collections.json"
     private const val packageFileName = "collection.json"
+    private const val LEGACY_SHUFFLE_SEED_PREFIX = "coverCollectionShuffleSeed_"
     private val imageExtensions = setOf("jpg", "jpeg", "png", "webp", "bmp")
     @Volatile
     private var dayCache: List<Collection>? = null
     @Volatile
     private var nightCache: List<Collection>? = null
+    private var shuffleSeedsCache: HashMap<String, Long>? = null
     private val revisionCounter = AtomicLong(0L)
-    private val assignmentCache = hashMapOf<String, MutableList<Assignment>>()
+    private val assignmentCache = hashMapOf<String, AssignmentState>()
+    private val validImagesCache = hashMapOf<String, Pair<List<String>, HashSet<String>>>()
+    private val deckCache = hashMapOf<DeckCacheKey, List<String>>()
     private val assignmentIoExecutor: ScheduledExecutorService =
         Executors.newSingleThreadScheduledExecutor { runnable ->
             Thread(runnable, "cover-assignment-io").apply { isDaemon = true }
         }
     private val assignmentGenerations = hashMapOf<String, Long>()
     private val pendingAssignmentWrites = hashMapOf<String, ScheduledFuture<*>>()
-    private val pendingAssignmentSnapshots = hashMapOf<String, Pair<Long, List<Assignment>>>()
     private const val ASSIGNMENT_SAVE_DEBOUNCE_MS = 200L
 
     val rootDir: File
@@ -97,14 +106,136 @@ object CoverCollectionManager {
         revisionCounter.incrementAndGet()
     }
 
+    private fun shuffleSeedKey(collectionId: String): String =
+        "$LEGACY_SHUFFLE_SEED_PREFIX$collectionId"
+
+    private fun parseShuffleSeeds(raw: String?): HashMap<String, Long> {
+        val result = hashMapOf<String, Long>()
+        val text = raw?.trim().orEmpty()
+        if (text.isEmpty()) return result
+        runCatching {
+            val obj = JsonParser.parseString(text).asJsonObject
+            for ((key, element) in obj.entrySet()) {
+                if (key.isNotBlank() && element.isJsonPrimitive && element.asJsonPrimitive.isNumber) {
+                    result[key] = element.asLong
+                }
+            }
+        }
+        return result
+    }
+
+    private fun serializeShuffleSeeds(seeds: Map<String, Long>): String {
+        val obj = JsonObject()
+        seeds.forEach { (id, seed) ->
+            if (id.isNotBlank()) {
+                obj.addProperty(id, seed)
+            }
+        }
+        return obj.toString()
+    }
+
+    private fun loadShuffleSeedsLocked(): HashMap<String, Long> {
+        shuffleSeedsCache?.let { return it }
+        val loaded = parseShuffleSeeds(appCtx.getPrefString(PreferKey.coverCollectionShuffleSeeds))
+        shuffleSeedsCache = loaded
+        return loaded
+    }
+
+    @Synchronized
+    fun getShuffleSeed(collectionId: String): Long {
+        if (collectionId.isBlank()) return 0L
+        val seeds = loadShuffleSeedsLocked()
+        seeds[collectionId]?.let { return it }
+        val legacySeed = appCtx.getPrefLong(shuffleSeedKey(collectionId), 0L)
+        if (legacySeed != 0L) {
+            seeds[collectionId] = legacySeed
+        }
+        return legacySeed
+    }
+
+    @Synchronized
+    fun reshuffle(collectionId: String): Long {
+        val nextSeed = getShuffleSeed(collectionId) + 1L
+        val seeds = loadShuffleSeedsLocked()
+        seeds[collectionId] = nextSeed
+        val prefs = appCtx.defaultSharedPreferences
+        val editor = prefs.edit()
+        val legacyKeys = prefs.all.entries.mapNotNull { (key, value) ->
+            if (!key.startsWith(LEGACY_SHUFFLE_SEED_PREFIX)) return@mapNotNull null
+            val legacyId = key.removePrefix(LEGACY_SHUFFLE_SEED_PREFIX)
+            val legacyValue = (value as? Number)?.toLong() ?: 0L
+            if (legacyId.isNotBlank() && legacyId != collectionId && legacyValue != 0L && legacyId !in seeds) {
+                seeds[legacyId] = legacyValue
+            }
+            key
+        }
+        editor.putString(PreferKey.coverCollectionShuffleSeeds, serializeShuffleSeeds(seeds))
+        legacyKeys.forEach { editor.remove(it) }
+        editor.commit()
+        clearAssignments(collectionId)
+        bumpRevision()
+        return nextSeed
+    }
+
+    internal fun buildShuffledDeck(
+        images: List<String>,
+        collectionId: String,
+        shuffleSeed: Long,
+        round: Int
+    ): List<String> {
+        if (images.size <= 1) return images.toList()
+        var hash = -3750763034362895579L // 0xcbf29ce484222325 (64-bit FNV-1a offset basis)
+        val prime = 1099511628211L       // 0x100000001b3 (64-bit FNV-1a prime)
+        for (ch in collectionId) {
+            hash = (hash xor (ch.code.toLong() and 0xFFFFL)) * prime
+        }
+        hash = (hash xor 0xFFL) * prime
+        for (shift in 0 until 64 step 8) {
+            hash = (hash xor ((shuffleSeed ushr shift) and 0xFFL)) * prime
+        }
+        hash = (hash xor 0xFEL) * prime
+        for (shift in 0 until 32 step 8) {
+            hash = (hash xor ((round.toLong() ushr shift) and 0xFFL)) * prime
+        }
+
+        // SplitMix64 PRNG + Fisher-Yates shuffle
+        var state = hash
+        fun nextLong(): Long {
+            state += -7046029254386353131L // 0x9e3779b97f4a7c15
+            var z = state
+            z = (z xor (z ushr 30)) * -4658895280553007687L // 0xbf58476d1ce4e5b9
+            z = (z xor (z ushr 27)) * -7723592293110705685L // 0x94d049bb133111eb
+            return z xor (z ushr 31)
+        }
+
+        val deck = images.toMutableList()
+        for (i in deck.lastIndex downTo 1) {
+            val bound = i + 1
+            val limit = Long.MAX_VALUE - (Long.MAX_VALUE % bound)
+            var r: Long
+            do {
+                r = nextLong() ushr 1
+            } while (r >= limit)
+            val j = (r % bound).toInt()
+            if (j != i) {
+                val tmp = deck[i]
+                deck[i] = deck[j]
+                deck[j] = tmp
+            }
+        }
+        return deck
+    }
+
     @Synchronized
     fun invalidateCache() {
         dayCache = null
         nightCache = null
+        shuffleSeedsCache = null
         assignmentCache.clear()
+        validImagesCache.clear()
+        deckCache.clear()
         pendingAssignmentWrites.values.forEach { it.cancel(false) }
         pendingAssignmentWrites.clear()
-        pendingAssignmentSnapshots.clear()
         assignmentGenerations.keys.forEach { id ->
             assignmentGenerations[id] = (assignmentGenerations[id] ?: 0L) + 1L
         }
@@ -278,6 +409,10 @@ object CoverCollectionManager {
             list.add(collection)
         }
         saveIndex(collection.isNight, list)
+        synchronized(this) {
+            validImagesCache.remove(collection.id)
+            clearDeckCacheForCollectionLocked(collection.id)
+        }
         collection
     }
 
@@ -361,35 +496,60 @@ object CoverCollectionManager {
         )
     }
 
+    @Synchronized
+    fun preAssignGroupNameMatches(groups: List<BookGroup>) {
+        if (groups.isEmpty()) return
+        val (collection, mode) = activeCollectionForTarget(TARGET_GROUPS) ?: return
+        val state = getOrLoadAssignmentStateLocked(collection)
+        val exactMatches = LinkedHashMap<String, String>(groups.size)
+        for (group in groups) {
+            if (mode == MODE_MIXED && group.cover.isRealCoverPath()) continue
+            val matchedPath = matchGroupCoverByName(collection.images, group.groupName) ?: continue
+            exactMatches["group:${group.groupId}"] = matchedPath
+        }
+        if (exactMatches.isEmpty()) return
+        val protectedKeys = exactMatches.keys
+        var changed = false
+        var evictedAny = false
+        for ((assignmentKey, matchedPath) in exactMatches) {
+            val result = recordExactAssignmentLocked(
+                collection = collection,
+                state = state,
+                assignmentKey = assignmentKey,
+                matchedPath = matchedPath,
+                protectedKeys = protectedKeys
+            )
+            if (result.changed) changed = true
+            if (result.evictedOther) evictedAny = true
+        }
+        if (changed) {
+            scheduleSaveAssignmentsLocked(collection.id, state)
+        }
+        if (evictedAny) {
+            bumpRevision()
+        }
+    }
+
     fun selectedGroupCollectionCover(
         groupId: Long,
         groupName: String,
         hasOriginalCover: String? = null
     ): String? {
-        val isNight = AppConfig.isNightTheme
-        val target = getTarget(isNight)
-        if (target != TARGET_GROUPS && target != TARGET_BOTH) {
-            return null
-        }
-        val collectionId = appCtx.getPrefString(
-            if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay
-        ) ?: return null
-        val collection = loadIndex(isNight).firstOrNull { it.id == collectionId } ?: return null
-        if (collection.images.isEmpty()) return null
-        val mode = getMode(isNight)
-        if (mode == MODE_FALLBACK_ONLY) {
-            return null
-        }
+        val (collection, mode) = activeCollectionForTarget(TARGET_GROUPS) ?: return null
         if (mode == MODE_MIXED && hasOriginalCover.isRealCoverPath()) {
             return null
         }
-        matchGroupCoverByName(collection.images, groupName)?.let { return it }
         val assignmentKey = "group:$groupId"
-        val path = when (mode) {
-            MODE_SEQUENCE -> assignSequential(collection, assignmentKey)
-            else -> collection.images[stableImageIndex(assignmentKey, collection.images.size)]
+        matchGroupCoverByName(collection.images, groupName)?.let { matchedPath ->
+            val recorded = recordExactAssignment(collection, assignmentKey, matchedPath)
+            return recorded.takeIf { File(it).exists() }
         }
-        return path.takeIf { File(it).exists() }
+        val path = assignFromDeck(
+            collection = collection,
+            assignmentKey = assignmentKey,
+            sequential = (mode == MODE_SEQUENCE)
+        )
+        return path?.takeIf { File(it).exists() }
     }
 
     internal fun matchGroupCoverByName(images: List<String>, groupName: String): String? {
@@ -425,10 +585,10 @@ object CoverCollectionManager {
         }
     }
 
-    private fun selectedCollectionCover(bookKey: String, hasOriginalCover: Boolean): String? {
+    private fun activeCollectionForTarget(expectedTarget: String): Pair<Collection, String>? {
         val isNight = AppConfig.isNightTheme
         val target = getTarget(isNight)
-        if (target != TARGET_BOOKS && target != TARGET_BOTH) {
+        if (target != expectedTarget && target != TARGET_BOTH) {
             return null
         }
         val collectionId = appCtx.getPrefString(
@@ -440,19 +600,28 @@ object CoverCollectionManager {
         if (mode == MODE_FALLBACK_ONLY) {
             return null
         }
+        return collection to mode
+    }
+
+    private fun selectedCollectionCover(bookKey: String, hasOriginalCover: Boolean): String? {
+        val (collection, mode) = activeCollectionForTarget(TARGET_BOOKS) ?: return null
         if (mode == MODE_MIXED && hasOriginalCover) {
             return null
         }
-        val path = when (mode) {
-            MODE_SEQUENCE -> assignSequential(collection, bookKey)
-            else -> collection.images[stableImageIndex(bookKey, collection.images.size)]
-        }
-        return path.takeIf { File(it).exists() }
+        val path = assignFromDeck(
+            collection = collection,
+            assignmentKey = bookKey,
+            sequential = (mode == MODE_SEQUENCE)
+        )
+        return path?.takeIf { File(it).exists() }
     }
 
     fun setSelected(isNight: Boolean, collectionId: String?) {
         val key = if (isNight) PreferKey.coverCollectionNight else PreferKey.coverCollectionDay
         appCtx.putPrefString(key, collectionId.orEmpty())
+        if (!collectionId.isNullOrBlank()) {
+            preloadAssignmentsAsync(collectionId)
+        }
         bumpRevision()
     }
 
@@ -484,10 +653,15 @@ object CoverCollectionManager {
         } else {
             list.add(updated)
         }
+        validImagesCache.remove(collectionId)
+        clearDeckCacheForCollectionLocked(collectionId)
         if (existing != null && existing.images != cleanImages) {
             clearAssignments(collectionId)
         }
         saveIndex(isNight, list)
+        if (cleanImages.isNotEmpty()) {
+            enqueueAsyncAssignmentLoadLocked(collectionId, updated)
+        }
         bumpRevision()
     }
 
@@ -744,22 +918,414 @@ object CoverCollectionManager {
         return rootDir.getFile("assignments").apply { mkdirs() }.getFile("$collectionId.json")
     }
 
-    private fun stableImageIndex(bookKey: String, imageCount: Int): Int {
-        return (bookKey.hashCode() and Int.MAX_VALUE) % imageCount
+    private fun isGroupKey(key: String): Boolean = key.startsWith("group:")
+
+    private fun isMainThread(): Boolean {
+        return runCatching {
+            val mainLooper = Looper.getMainLooper()
+            mainLooper != null && Looper.myLooper() == mainLooper
+        }.getOrDefault(false)
+    }
+
+    private fun validImagesFor(collection: Collection): HashSet<String> {
+        val cached = validImagesCache[collection.id]
+        if (cached != null && (cached.first === collection.images || cached.first == collection.images)) {
+            return cached.second
+        }
+        val set = HashSet<String>((collection.images.size * 2).coerceAtLeast(8))
+        set.addAll(collection.images)
+        validImagesCache[collection.id] = collection.images to set
+        return set
+    }
+
+    private fun clearDeckCacheForCollectionLocked(collectionId: String) {
+        val iterator = deckCache.keys.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next().collectionId == collectionId) {
+                iterator.remove()
+            }
+        }
+    }
+
+    private fun usageMapForKey(state: AssignmentState, assignmentKey: String): HashMap<String, Int> {
+        return if (isGroupKey(assignmentKey)) state.groupImageUsage else state.bookImageUsage
+    }
+
+    private fun incrementUsage(usageMap: HashMap<String, Int>, imagePath: String) {
+        usageMap[imagePath] = (usageMap[imagePath] ?: 0) + 1
+    }
+
+    private fun decrementUsage(usageMap: HashMap<String, Int>, imagePath: String) {
+        val current = usageMap[imagePath] ?: return
+        if (current <= 1) {
+            usageMap.remove(imagePath)
+        } else {
+            usageMap[imagePath] = current - 1
+        }
+    }
+
+    private fun setAssignmentInStateLocked(
+        state: AssignmentState,
+        assignmentKey: String,
+        newImagePath: String,
+        validImages: Set<String>? = null
+    ): Boolean {
+        val previous = state.keyToImage.put(assignmentKey, newImagePath)
+        if (previous == newImagePath) return false
+        val usageMap = usageMapForKey(state, assignmentKey)
+        if (previous != null && (validImages == null || previous in validImages)) {
+            decrementUsage(usageMap, previous)
+        }
+        if (validImages == null || newImagePath in validImages) {
+            incrementUsage(usageMap, newImagePath)
+        }
+        return true
+    }
+
+    private fun rebuildUsageMapsLocked(state: AssignmentState, validImages: Set<String>?) {
+        state.groupImageUsage.clear()
+        state.bookImageUsage.clear()
+        for ((key, imagePath) in state.keyToImage) {
+            if (validImages != null && imagePath !in validImages) continue
+            incrementUsage(usageMapForKey(state, key), imagePath)
+        }
+    }
+
+    fun preloadAssignmentsAsync(collectionId: String) {
+        if (collectionId.isBlank()) return
+        synchronized(this) {
+            enqueueAsyncAssignmentLoadLocked(collectionId, null)
+        }
+    }
+
+    fun preloadSelectedAssignmentsAsync() {
+        val dayId = appCtx.getPrefString(PreferKey.coverCollectionDay)?.takeIf { it.isNotBlank() }
+        val nightId = appCtx.getPrefString(PreferKey.coverCollectionNight)?.takeIf { it.isNotBlank() }
+        if (dayId != null) {
+            preloadAssignmentsAsync(dayId)
+        }
+        if (nightId != null && nightId != dayId) {
+            preloadAssignmentsAsync(nightId)
+        }
+    }
+
+    private fun findCollectionById(collectionId: String): Collection? {
+        dayCache?.firstOrNull { it.id == collectionId }?.let { return it }
+        nightCache?.firstOrNull { it.id == collectionId }?.let { return it }
+        loadIndex(false).firstOrNull { it.id == collectionId }?.let { return it }
+        return loadIndex(true).firstOrNull { it.id == collectionId }
+    }
+
+    private fun enqueueAsyncAssignmentLoadLocked(collectionId: String, collection: Collection?) {
+        val state = assignmentCache.getOrPut(collectionId) { AssignmentState() }
+        if (state.loadedFromDisk || state.loadingFromDisk) return
+        state.loadingFromDisk = true
+        val expectedGeneration = assignmentGenerations.getOrPut(collectionId) { 0L }
+        assignmentIoExecutor.submit {
+            try {
+                val stillCurrentBeforeRead = synchronized(this) {
+                    (assignmentGenerations[collectionId] ?: 0L) == expectedGeneration
+                }
+                if (!stillCurrentBeforeRead) return@submit
+
+                val diskAssignments = readAssignments(collectionId)
+                val targetCollection = collection ?: findCollectionById(collectionId)
+
+                synchronized(this) {
+                    if ((assignmentGenerations[collectionId] ?: 0L) != expectedGeneration) {
+                        return@synchronized
+                    }
+                    val currentState = assignmentCache.getOrPut(collectionId) { AssignmentState() }
+                    if (currentState.loadedFromDisk) {
+                        currentState.loadingFromDisk = false
+                        return@synchronized
+                    }
+                    if (targetCollection == null && diskAssignments.any { it.imagePath.isBlank() && it.index != null }) {
+                        currentState.loadingFromDisk = false
+                        return@synchronized
+                    }
+                    mergeDiskAssignmentsLocked(collectionId, currentState, diskAssignments, targetCollection)
+                }
+            } finally {
+                synchronized(this) {
+                    if ((assignmentGenerations[collectionId] ?: 0L) == expectedGeneration) {
+                        assignmentCache[collectionId]?.loadingFromDisk = false
+                    }
+                }
+            }
+        }
+    }
+
+    private fun getOrLoadAssignmentStateLocked(collection: Collection): AssignmentState {
+        val state = assignmentCache.getOrPut(collection.id) { AssignmentState() }
+        if (state.loadedFromDisk) {
+            if (state.reconciledWithImages !== collection.images && state.reconciledWithImages != collection.images) {
+                val repaired = reconcileLoadedAssignmentsLocked(collection, state)
+                state.reconciledWithImages = collection.images
+                if (repaired) {
+                    scheduleSaveAssignmentsLocked(collection.id, state)
+                }
+            }
+            return state
+        }
+        if (isMainThread()) {
+            enqueueAsyncAssignmentLoadLocked(collection.id, collection)
+            return state
+        }
+        val diskAssignments = readAssignments(collection.id)
+        mergeDiskAssignmentsLocked(collection.id, state, diskAssignments, collection)
+        return state
+    }
+
+    private fun mergeDiskAssignmentsLocked(
+        collectionId: String,
+        state: AssignmentState,
+        diskAssignments: List<Assignment>,
+        collection: Collection?
+    ) {
+        val preExistingInMemory = HashMap(state.keyToImage)
+        val validImages = collection?.let { validImagesFor(it) }
+        val diskMap = LinkedHashMap<String, String>(diskAssignments.size.coerceAtLeast(16))
+        var diskRepaired = false
+
+        for (item in diskAssignments) {
+            val key = item.bookUrl
+            if (key.isBlank()) {
+                diskRepaired = true
+                continue
+            }
+            val resolvedPath = when {
+                item.imagePath.isNotBlank() -> item.imagePath
+                collection != null && item.index != null && item.index in collection.images.indices -> {
+                    diskRepaired = true
+                    collection.images[item.index]
+                }
+                else -> {
+                    diskRepaired = true
+                    continue
+                }
+            }
+            if (validImages != null && resolvedPath !in validImages) {
+                diskRepaired = true
+                continue
+            }
+            if (diskMap.put(key, resolvedPath) != null) {
+                diskRepaired = true
+            }
+        }
+
+        val merged = LinkedHashMap<String, String>(diskMap.size + preExistingInMemory.size)
+        merged.putAll(diskMap)
+        var addedFromMemory = false
+        for ((key, memPath) in preExistingInMemory) {
+            if (key !in merged && (validImages == null || memPath in validImages)) {
+                merged[key] = memPath
+                addedFromMemory = true
+            }
+        }
+
+        state.keyToImage.clear()
+        state.keyToImage.putAll(merged)
+
+        val healedDuplicates = if (collection != null) {
+            val changed = reconcileLoadedAssignmentsLocked(collection, state)
+            state.reconciledWithImages = collection.images
+            changed
+        } else {
+            rebuildUsageMapsLocked(state, null)
+            state.reconciledWithImages = null
+            false
+        }
+
+        state.loadedFromDisk = true
+        state.loadingFromDisk = false
+
+        val existingKeyChanged = preExistingInMemory.any { (key, oldPath) ->
+            state.keyToImage[key] != oldPath
+        }
+        if (diskRepaired || healedDuplicates || addedFromMemory) {
+            scheduleSaveAssignmentsLocked(collectionId, state)
+        }
+        if (existingKeyChanged) {
+            bumpRevision()
+        }
+    }
+
+    private fun reconcileLoadedAssignmentsLocked(
+        collection: Collection,
+        state: AssignmentState
+    ): Boolean {
+        val validImages = validImagesFor(collection)
+        var changed = false
+        val iterator = state.keyToImage.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            if (entry.key.isBlank() || entry.value !in validImages) {
+                iterator.remove()
+                changed = true
+            }
+        }
+        rebuildUsageMapsLocked(state, validImages)
+        if (healAvoidableDuplicatesInNamespaceLocked(collection, state, isGroup = true, validImages = validImages)) {
+            changed = true
+        }
+        if (healAvoidableDuplicatesInNamespaceLocked(collection, state, isGroup = false, validImages = validImages)) {
+            changed = true
+        }
+        if (changed) {
+            state.dirty = true
+        }
+        return changed
+    }
+
+    private fun healAvoidableDuplicatesInNamespaceLocked(
+        collection: Collection,
+        state: AssignmentState,
+        isGroup: Boolean,
+        validImages: Set<String>
+    ): Boolean {
+        if (collection.images.isEmpty()) return false
+        val usageMap = if (isGroup) state.groupImageUsage else state.bookImageUsage
+        var unusedCount = 0
+        for (img in collection.images) {
+            if ((usageMap[img] ?: 0) == 0) {
+                unusedCount++
+            }
+        }
+        if (unusedCount == 0) return false
+
+        val seenImages = HashSet<String>(collection.images.size)
+        var changed = false
+        val iterator = state.keyToImage.entries.iterator()
+        while (iterator.hasNext() && unusedCount > 0) {
+            val entry = iterator.next()
+            if (isGroupKey(entry.key) != isGroup) continue
+            val imagePath = entry.value
+            if (imagePath !in validImages) {
+                iterator.remove()
+                changed = true
+                continue
+            }
+            if (!seenImages.add(imagePath)) {
+                iterator.remove()
+                decrementUsage(usageMap, imagePath)
+                unusedCount--
+                changed = true
+            }
+        }
+        return changed
+    }
+
+    private data class ExactAssignmentResult(
+        val changed: Boolean,
+        val evictedOther: Boolean
+    )
+
+    private fun recordExactAssignmentLocked(
+        collection: Collection,
+        state: AssignmentState,
+        assignmentKey: String,
+        matchedPath: String,
+        protectedKeys: Set<String>
+    ): ExactAssignmentResult {
+        val validImages = validImagesFor(collection)
+        val updatedSelf = setAssignmentInStateLocked(state, assignmentKey, matchedPath, validImages)
+        var evictedOther = false
+        val iterator = state.keyToImage.entries.iterator()
+        while (iterator.hasNext()) {
+            val entry = iterator.next()
+            val otherKey = entry.key
+            if (otherKey != assignmentKey &&
+                otherKey !in protectedKeys &&
+                isGroupKey(otherKey) &&
+                entry.value == matchedPath
+            ) {
+                iterator.remove()
+                if (matchedPath in validImages) {
+                    decrementUsage(state.groupImageUsage, matchedPath)
+                }
+                evictedOther = true
+            }
+        }
+        val changed = updatedSelf || evictedOther
+        if (changed) {
+            state.dirty = true
+        }
+        return ExactAssignmentResult(changed = changed, evictedOther = evictedOther)
     }
 
     @Synchronized
-    private fun assignSequential(collection: Collection, bookUrl: String): String {
-        val assignments = assignmentCache.getOrPut(collection.id) {
-            readAssignments(collection.id).toMutableList()
+    private fun recordExactAssignment(
+        collection: Collection,
+        assignmentKey: String,
+        imagePath: String
+    ): String {
+        val state = getOrLoadAssignmentStateLocked(collection)
+        val result = recordExactAssignmentLocked(
+            collection = collection,
+            state = state,
+            assignmentKey = assignmentKey,
+            matchedPath = imagePath,
+            protectedKeys = emptySet()
+        )
+        if (result.changed) {
+            scheduleSaveAssignmentsLocked(collection.id, state)
         }
-        assignments.firstOrNull { it.bookUrl == bookUrl }?.let {
-            return collection.images.getOrNull(it.index % collection.images.size) ?: collection.images.first()
+        if (result.evictedOther) {
+            bumpRevision()
         }
-        val index = assignments.size % collection.images.size
-        assignments.add(Assignment(bookUrl, index))
-        scheduleSaveAssignmentsLocked(collection.id, assignments.toList())
-        return collection.images[index]
+        return imagePath
+    }
+
+    @Synchronized
+    private fun assignFromDeck(
+        collection: Collection,
+        assignmentKey: String,
+        sequential: Boolean
+    ): String? {
+        if (collection.images.isEmpty()) return null
+        val state = getOrLoadAssignmentStateLocked(collection)
+        val validImages = validImagesFor(collection)
+        val existingPath = state.keyToImage[assignmentKey]
+        if (existingPath != null && existingPath in validImages) {
+            return existingPath
+        }
+
+        val targetIsGroup = isGroupKey(assignmentKey)
+        val usageMap = if (targetIsGroup) state.groupImageUsage else state.bookImageUsage
+        var minUsage = Int.MAX_VALUE
+        for (img in collection.images) {
+            val count = usageMap[img] ?: 0
+            if (count < minUsage) {
+                minUsage = count
+                if (minUsage == 0) break
+            }
+        }
+        val candidates = if (sequential) {
+            collection.images
+        } else {
+            val shuffleSeed = getShuffleSeed(collection.id)
+            val cacheKey = DeckCacheKey(collection.id, shuffleSeed, minUsage, collection.images.size)
+            deckCache[cacheKey] ?: buildShuffledDeck(
+                images = collection.images,
+                collectionId = collection.id,
+                shuffleSeed = shuffleSeed,
+                round = minUsage
+            ).also { deckCache[cacheKey] = it }
+        }
+        var chosen: String? = null
+        for (candidate in candidates) {
+            if ((usageMap[candidate] ?: 0) == minUsage) {
+                chosen = candidate
+                break
+            }
+        }
+        val finalChosen = chosen ?: candidates.first()
+
+        if (setAssignmentInStateLocked(state, assignmentKey, finalChosen, validImages)) {
+            scheduleSaveAssignmentsLocked(collection.id, state)
+        }
+        return finalChosen
     }
 
     private fun readAssignments(collectionId: String): List<Assignment> {
@@ -769,34 +1335,48 @@ object CoverCollectionManager {
         ).getOrDefault(emptyList())
     }
 
-    private fun scheduleSaveAssignmentsLocked(collectionId: String, snapshot: List<Assignment>) {
+    private fun scheduleSaveAssignmentsLocked(collectionId: String, state: AssignmentState) {
+        state.dirty = true
         pendingAssignmentWrites.remove(collectionId)?.cancel(false)
-        val generation = assignmentGenerations[collectionId] ?: 0L
-        pendingAssignmentSnapshots[collectionId] = generation to snapshot
+        val generation = assignmentGenerations.getOrPut(collectionId) { 0L }
         val future = assignmentIoExecutor.schedule({
-            writeAssignmentsIfGenerationMatches(collectionId, generation, snapshot)
+            flushCollectionAssignmentsIfNeeded(collectionId, generation)
         }, ASSIGNMENT_SAVE_DEBOUNCE_MS, TimeUnit.MILLISECONDS)
         pendingAssignmentWrites[collectionId] = future
     }
 
-    private fun writeAssignmentsIfGenerationMatches(
+    private fun flushCollectionAssignmentsIfNeeded(collectionId: String, expectedGeneration: Long) {
+        val snapshot: List<Assignment>? = synchronized(this) {
+            val currentGen = assignmentGenerations[collectionId] ?: 0L
+            if (currentGen != expectedGeneration) {
+                null
+            } else {
+                pendingAssignmentWrites.remove(collectionId)
+                val state = assignmentCache[collectionId]
+                if (state == null || !state.dirty) {
+                    null
+                } else {
+                    state.dirty = false
+                    state.keyToImage.entries.map { (key, path) ->
+                        Assignment(bookUrl = key, imagePath = path, index = null)
+                    }
+                }
+            }
+        }
+        if (snapshot != null) {
+            writeAssignmentsSnapshot(collectionId, expectedGeneration, snapshot)
+        }
+    }
+
+    private fun writeAssignmentsSnapshot(
         collectionId: String,
         expectedGeneration: Long,
         snapshot: List<Assignment>
     ) {
-        val shouldWrite = synchronized(this) {
-            val currentGen = assignmentGenerations[collectionId] ?: 0L
-            if (currentGen != expectedGeneration) {
-                false
-            } else {
-                if (pendingAssignmentSnapshots[collectionId]?.first == expectedGeneration) {
-                    pendingAssignmentWrites.remove(collectionId)
-                    pendingAssignmentSnapshots.remove(collectionId)
-                }
-                true
-            }
+        val stillCurrentBeforeWrite = synchronized(this) {
+            (assignmentGenerations[collectionId] ?: 0L) == expectedGeneration
         }
-        if (!shouldWrite) return
+        if (!stillCurrentBeforeWrite) return
         val target = assignmentsFile(collectionId)
         val tmp = File(target.parentFile, ".${target.name}.${UUID.randomUUID()}.tmp")
         runCatching {
@@ -832,9 +1412,10 @@ object CoverCollectionManager {
         val nextGen = (assignmentGenerations[collectionId] ?: 0L) + 1L
         assignmentGenerations[collectionId] = nextGen
         pendingAssignmentWrites.remove(collectionId)?.cancel(false)
-        pendingAssignmentSnapshots.remove(collectionId)
         assignmentCache.remove(collectionId)
-        val file = assignmentsFile(collectionId)
+        validImagesCache.remove(collectionId)
+        clearDeckCacheForCollectionLocked(collectionId)
+        val file = File(rootDir, "assignments/$collectionId.json")
         file.delete()
         assignmentIoExecutor.submit {
             val shouldDelete = synchronized(this) {
@@ -847,21 +1428,32 @@ object CoverCollectionManager {
         }
     }
 
+    internal fun awaitAssignmentIoForTest() {
+        assignmentIoExecutor.submit {}.get()
+    }
+
     internal fun flushPendingAssignmentWritesForTest() {
+        awaitAssignmentIoForTest()
         val toFlush = synchronized(this) {
             pendingAssignmentWrites.values.forEach { it.cancel(false) }
             pendingAssignmentWrites.clear()
-            val items = pendingAssignmentSnapshots.entries.map { (id, pair) ->
-                Triple(id, pair.first, pair.second)
+            assignmentCache.entries.mapNotNull { (id, state) ->
+                if (!state.dirty) return@mapNotNull null
+                state.dirty = false
+                val gen = assignmentGenerations[id] ?: 0L
+                val snap = state.keyToImage.entries.map { (key, path) ->
+                    Assignment(bookUrl = key, imagePath = path, index = null)
+                }
+                Triple(id, gen, snap)
             }
-            pendingAssignmentSnapshots.clear()
-            items
         }
-        assignmentIoExecutor.submit {
-            toFlush.forEach { (id, gen, snap) ->
-                writeAssignmentsIfGenerationMatches(id, gen, snap)
-            }
-        }.get()
+        if (toFlush.isNotEmpty()) {
+            assignmentIoExecutor.submit {
+                toFlush.forEach { (id, gen, snap) ->
+                    writeAssignmentsSnapshot(id, gen, snap)
+                }
+            }.get()
+        }
     }
 
     private fun resolveExtension(context: Context, uri: Uri): String {
@@ -913,6 +1505,24 @@ object CoverCollectionManager {
     @Keep
     private data class Assignment(
         val bookUrl: String = "",
-        val index: Int = 0
+        val imagePath: String = "",
+        val index: Int? = null
+    )
+
+    private data class DeckCacheKey(
+        val collectionId: String,
+        val shuffleSeed: Long,
+        val round: Int,
+        val imageCount: Int
+    )
+
+    private class AssignmentState(
+        val keyToImage: LinkedHashMap<String, String> = LinkedHashMap(),
+        val groupImageUsage: HashMap<String, Int> = HashMap(),
+        val bookImageUsage: HashMap<String, Int> = HashMap(),
+        var loadedFromDisk: Boolean = false,
+        var loadingFromDisk: Boolean = false,
+        var dirty: Boolean = false,
+        var reconciledWithImages: List<String>? = null
     )
 }

@@ -159,6 +159,8 @@ object UnifiedPackageCodec {
             coverSlot.covers.sorted().forEachIndexed { idx, v -> refs["coverSlot.cover.$idx"] = v }
             refs["coverSlot.dayDefaultCoverPath"] = coverSlot.dayDefaultCoverPath
             refs["coverSlot.nightDefaultCoverPath"] = coverSlot.nightDefaultCoverPath
+            refs["coverSlot.dayGroupCoverPath"] = coverSlot.dayGroupCoverPath
+            refs["coverSlot.nightGroupCoverPath"] = coverSlot.nightGroupCoverPath
             refs["coverSlot.groupCoverPath"] = coverSlot.groupCoverPath
             hashAssetRefs(refs)
         }
@@ -235,6 +237,8 @@ object UnifiedPackageCodec {
             slot.covers.forEach(::addLocal)
             addLocal(slot.dayDefaultCoverPath)
             addLocal(slot.nightDefaultCoverPath)
+            addLocal(slot.dayGroupCoverPath)
+            addLocal(slot.nightGroupCoverPath)
             addLocal(slot.groupCoverPath)
         }
         return paths.toList()
@@ -692,6 +696,8 @@ object UnifiedPackageCodec {
         putStr("applyTarget", slot.applyTarget)
         putStr("dayDefaultCoverPath", slot.dayDefaultCoverPath)
         putStr("nightDefaultCoverPath", slot.nightDefaultCoverPath)
+        putStr("dayGroupCoverPath", slot.dayGroupCoverPath)
+        putStr("nightGroupCoverPath", slot.nightGroupCoverPath)
         putStr("groupCoverPath", slot.groupCoverPath)
         appendUnknownFields(this, slot.unknownFields)
     }
@@ -712,6 +718,8 @@ object UnifiedPackageCodec {
             "applyTarget",
             "dayDefaultCoverPath",
             "nightDefaultCoverPath",
+            "dayGroupCoverPath",
+            "nightGroupCoverPath",
             "groupCoverPath"
         )
         return CoverSlotPackagePayload(
@@ -720,6 +728,8 @@ object UnifiedPackageCodec {
             applyTarget = obj.stringOrNull("applyTarget")?.takeIf { it.isNotBlank() },
             dayDefaultCoverPath = obj.stringOrNull("dayDefaultCoverPath")?.takeIf { it.isNotBlank() },
             nightDefaultCoverPath = obj.stringOrNull("nightDefaultCoverPath")?.takeIf { it.isNotBlank() },
+            dayGroupCoverPath = obj.stringOrNull("dayGroupCoverPath")?.takeIf { it.isNotBlank() },
+            nightGroupCoverPath = obj.stringOrNull("nightGroupCoverPath")?.takeIf { it.isNotBlank() },
             groupCoverPath = obj.stringOrNull("groupCoverPath")?.takeIf { it.isNotBlank() },
             unknownFields = collectUnknownFields(obj, known)
         )

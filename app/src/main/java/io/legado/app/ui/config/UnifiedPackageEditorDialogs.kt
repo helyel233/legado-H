@@ -1236,6 +1236,7 @@ internal fun CoverSlotPackageEditorDialog(
     existingNames: List<String>,
     showTargetHintBanner: Boolean = false,
     onDismissTargetHint: (() -> Unit)? = null,
+    onReshuffle: (() -> Unit)? = null,
     onPickSingleImage: ((currentPath: String?, onPicked: (String) -> Unit) -> Unit)? = null,
     onPickMultipleImages: ((onPicked: (List<String>) -> Unit) -> Unit)? = null,
     onDismiss: () -> Unit,
@@ -1263,17 +1264,20 @@ internal fun CoverSlotPackageEditorDialog(
             )
         )
     }
-    var applyMode by remember(entry.manifest.id) {
+    var applyModeDraft by remember(entry.manifest.id) {
         mutableStateOf(CoverSlotApplyMode.normalize(initialSlot.applyMode))
     }
-    var dayDefaultCoverPath by remember(entry.manifest.id) {
+    var dayDefaultCoverDraft by remember(entry.manifest.id) {
         mutableStateOf(initialSlot.dayDefaultCoverPath.orEmpty())
     }
-    var nightDefaultCoverPath by remember(entry.manifest.id) {
+    var nightDefaultCoverDraft by remember(entry.manifest.id) {
         mutableStateOf(initialSlot.nightDefaultCoverPath.orEmpty())
     }
-    var groupCoverPath by remember(entry.manifest.id) {
-        mutableStateOf(initialSlot.groupCoverPath.orEmpty())
+    var dayGroupCoverDraft by remember(entry.manifest.id) {
+        mutableStateOf(initialSlot.dayGroupCoverPath ?: initialSlot.groupCoverPath.orEmpty())
+    }
+    var nightGroupCoverDraft by remember(entry.manifest.id) {
+        mutableStateOf(initialSlot.nightGroupCoverPath.orEmpty())
     }
     var covers by remember(entry.manifest.id) {
         mutableStateOf(initialSlot.covers)
@@ -1384,14 +1388,14 @@ internal fun CoverSlotPackageEditorDialog(
                         )
                         LegadoSegmentedControl(
                             options = modeOptions,
-                            selectedValue = applyMode,
+                            selectedValue = applyModeDraft,
                             palette = dialogPalette,
-                            onSelected = { applyMode = it },
+                            onSelected = { applyModeDraft = it },
                             tone = SegmentedControlTone.AccentThumb,
                             fontSize = 11.sp
                         )
                         Text(
-                            text = when (applyMode) {
+                            text = when (applyModeDraft) {
                                 CoverSlotApplyMode.RANDOM -> "随机模式：按书籍稳定哈希从图集中选取封面覆盖书架展示"
                                 CoverSlotApplyMode.SEQUENCE -> "顺序模式：按顺序逐本分配图集封面"
                                 CoverSlotApplyMode.MIXED -> "混合模式：有真实书籍封面时保留原封面，无封面时从图集补全"
@@ -1403,76 +1407,122 @@ internal fun CoverSlotPackageEditorDialog(
 
                         HorizontalDivider(color = style.stroke)
 
+                        val fallbackSectionTitle = when (applyTargetDraft) {
+                            CoverSlotApplyTarget.GROUPS -> "分组默认兜底单图（日/夜可仅填其一自动回退）"
+                            CoverSlotApplyTarget.BOOKS -> "书籍默认兜底单图（日/夜可仅填其一自动回退）"
+                            else -> "默认兜底单图（日/夜可仅填其一自动回退）"
+                        }
                         Text(
-                            text = "默认兜底单图（日/夜可仅填其一自动回退）",
+                            text = fallbackSectionTitle,
                             color = style.primaryText,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium
                         )
-                        CoverSingleSlotRow(
-                            label = "日间默认封面图",
-                            path = dayDefaultCoverPath,
-                            packageDir = entry.dir,
-                            baseDir = baseDir,
-                            style = style,
-                            palette = dialogPalette,
-                            onPickFile = onPickSingleImage,
-                            onValueChange = { dayDefaultCoverPath = it }
-                        )
-                        CoverSingleSlotRow(
-                            label = "夜间默认封面图",
-                            path = nightDefaultCoverPath,
-                            packageDir = entry.dir,
-                            baseDir = baseDir,
-                            style = style,
-                            palette = dialogPalette,
-                            onPickFile = onPickSingleImage,
-                            onValueChange = { nightDefaultCoverPath = it }
-                        )
-                        CoverSingleSlotRow(
-                            label = "书架分组/文件夹默认封面",
-                            path = groupCoverPath,
-                            packageDir = entry.dir,
-                            baseDir = baseDir,
-                            style = style,
-                            palette = dialogPalette,
-                            onPickFile = onPickSingleImage,
-                            onValueChange = { groupCoverPath = it }
-                        )
+                        if (applyTargetDraft == CoverSlotApplyTarget.BOOKS || applyTargetDraft == CoverSlotApplyTarget.BOTH) {
+                            CoverSingleSlotRow(
+                                label = "日间书籍默认封面",
+                                path = dayDefaultCoverDraft,
+                                packageDir = entry.dir,
+                                baseDir = baseDir,
+                                style = style,
+                                palette = dialogPalette,
+                                onPickFile = onPickSingleImage,
+                                onValueChange = { dayDefaultCoverDraft = it }
+                            )
+                            CoverSingleSlotRow(
+                                label = "夜间书籍默认封面",
+                                path = nightDefaultCoverDraft,
+                                packageDir = entry.dir,
+                                baseDir = baseDir,
+                                style = style,
+                                palette = dialogPalette,
+                                onPickFile = onPickSingleImage,
+                                onValueChange = { nightDefaultCoverDraft = it }
+                            )
+                        }
+                        if (applyTargetDraft == CoverSlotApplyTarget.GROUPS || applyTargetDraft == CoverSlotApplyTarget.BOTH) {
+                            CoverSingleSlotRow(
+                                label = "日间分组默认封面",
+                                path = dayGroupCoverDraft,
+                                packageDir = entry.dir,
+                                baseDir = baseDir,
+                                style = style,
+                                palette = dialogPalette,
+                                onPickFile = onPickSingleImage,
+                                onValueChange = { dayGroupCoverDraft = it }
+                            )
+                            CoverSingleSlotRow(
+                                label = "夜间分组默认封面",
+                                path = nightGroupCoverDraft,
+                                packageDir = entry.dir,
+                                baseDir = baseDir,
+                                style = style,
+                                palette = dialogPalette,
+                                onPickFile = onPickSingleImage,
+                                onValueChange = { nightGroupCoverDraft = it }
+                            )
+                        }
 
                         HorizontalDivider(color = style.stroke)
 
+                        val galleryTitle = when (applyTargetDraft) {
+                            CoverSlotApplyTarget.GROUPS -> "分组封面图集 (${covers.size} 张)"
+                            CoverSlotApplyTarget.BOOKS -> "书籍封面图集 (${covers.size} 张)"
+                            else -> "分组+书籍封面图集 (${covers.size} 张)"
+                        }
+                        val showReshuffle = onReshuffle != null &&
+                            covers.isNotEmpty() &&
+                            (applyModeDraft == CoverSlotApplyMode.RANDOM || applyModeDraft == CoverSlotApplyMode.MIXED)
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "书架封面图集 (${covers.size} 张)",
+                                text = galleryTitle,
                                 color = style.primaryText,
                                 fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f)
                             )
-                            LegadoMiuixActionButton(
-                                text = "+ 添加封面",
-                                palette = dialogPalette,
-                                primary = true,
-                                minHeight = 32.dp,
-                                onClick = {
-                                    when {
-                                        onPickMultipleImages != null -> onPickMultipleImages { picked ->
-                                            if (picked.isNotEmpty()) {
-                                                covers = (covers + picked).distinct()
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                if (showReshuffle) {
+                                    LegadoMiuixActionButton(
+                                        text = "重新洗牌",
+                                        palette = dialogPalette,
+                                        primary = false,
+                                        minWidth = 0.dp,
+                                        minHeight = 32.dp,
+                                        insidePadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                        onClick = { onReshuffle() }
+                                    )
+                                }
+                                LegadoMiuixActionButton(
+                                    text = "+ 添加封面",
+                                    palette = dialogPalette,
+                                    primary = true,
+                                    minHeight = 32.dp,
+                                    onClick = {
+                                        when {
+                                            onPickMultipleImages != null -> onPickMultipleImages { picked ->
+                                                if (picked.isNotEmpty()) {
+                                                    covers = (covers + picked).distinct()
+                                                }
                                             }
-                                        }
-                                        onPickSingleImage != null -> onPickSingleImage(null) { picked ->
-                                            if (picked.isNotBlank()) {
-                                                covers = (covers + picked).distinct()
+                                            onPickSingleImage != null -> onPickSingleImage(null) { picked ->
+                                                if (picked.isNotBlank()) {
+                                                    covers = (covers + picked).distinct()
+                                                }
                                             }
                                         }
                                     }
-                                }
-                            )
+                                )
+                            }
                         }
 
                         if (covers.isEmpty()) {
@@ -1528,14 +1578,16 @@ internal fun CoverSlotPackageEditorDialog(
                             if (!canSave) return@LegadoMiuixActionButton
                             val updated = initialSlot.copy(
                                 covers = covers.map { it.trim() }.filter { it.isNotBlank() }.distinct(),
-                                applyMode = CoverSlotApplyMode.normalize(applyMode),
+                                applyMode = CoverSlotApplyMode.normalize(applyModeDraft),
                                 applyTarget = CoverSlotApplyTarget.normalize(
                                     applyTargetDraft,
                                     defaultValue = CoverSlotApplyTarget.GROUPS
                                 ),
-                                dayDefaultCoverPath = dayDefaultCoverPath.trim().ifBlank { null },
-                                nightDefaultCoverPath = nightDefaultCoverPath.trim().ifBlank { null },
-                                groupCoverPath = groupCoverPath.trim().ifBlank { null }
+                                dayDefaultCoverPath = dayDefaultCoverDraft.trim().ifBlank { null },
+                                nightDefaultCoverPath = nightDefaultCoverDraft.trim().ifBlank { null },
+                                dayGroupCoverPath = dayGroupCoverDraft.trim().ifBlank { null },
+                                nightGroupCoverPath = nightGroupCoverDraft.trim().ifBlank { null },
+                                groupCoverPath = null
                             )
                             onSave(trimmedName, updated)
                         }
