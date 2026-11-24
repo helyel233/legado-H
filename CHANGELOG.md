@@ -1,5 +1,20 @@
 # 更新日志
 
+## 1.38.1 版（2026-11-24）
+
+封面收藏体系扩展 + eInk 开关入口迁移 + 包作用域三档：收藏封面支持按组名匹配与日夜分组封面双槽，统一包新增 day/night groupCoverPath 编解码与对称回退，eInk 渲染降级开关从外观中心迁到「我的」页独立开关。**特性 → minor+0.1、跳过 1.x.0。**
+
+### 新增
+- 封面收藏分组匹配：CoverCollectionManager 新增 matchGroupCoverByName（大小写/空格/扩展名/混合分隔符归一），mode/target/revision 收口到 getMode/getTarget 单一真相源，selectionKey 纳入 target；分配落盘改 200ms debounce + generation 防旧写覆盖
+- 日夜分组封面双槽：CoverSlot 新增 dayGroupCoverPath/nightGroupCoverPath，Codec 编解码/资源引用/哈希白名单全链路接入，Repository 用 `resolveSymmetricGroupCoverPath` 单一真相源做对称回退（本槽优先 → 对槽 → 旧 groupCoverPath），保持旧包兼容
+- 洗牌种子持久化：新增 PreferKey.coverCollectionShuffleSeeds，CoverCollectionManager 加载/落盘收口，同步纳入 BackupConfig 与 UiPackageBackup 名单，备份/恢复不丢收藏洗牌状态
+- 预加载协调：UnifiedPackage 初始化与包激活后异步预加载收藏分配（CoverCollectionManager.preloadSelectedAssignmentsAsync / preloadAssignmentsAsync），减少首屏封面空窗
+
+### 优化与修复
+- 包作用域三档：新增 CoverSlotApplyTarget(groups/books/both) + applyTarget 字段，三出口写入 targetDay/Night；美术包默认封面不再回填（与封面包正交）
+- eInk 开关迁移：从外观中心移到「我的」页独立 ServiceSwitchRow，复用 eInkMode 独立布尔键 + themeMode=="3" 升级兼容，统一经 AppConfig.setEInkModeEnabled 写入；中英文案补齐
+- 工具：check_settings_mapping special_rows 补 eInkMode（ServiceSwitchRow 独立回调特殊行）
+
 ## 1.37.1 版（2026-11-23）
 
 阅读体验与底层稳定性大批次：段评快照持久化、字体预览体系、封面槽位包三轨落地，配合阅读排版引擎收口（两端对齐纯函数化 + 特殊字符单一真相源）、章节加载单飞与翻页预热稳定性、缓存与性能批次治理。本批 173 文件 +20298/−2678，新增 60+ 纯逻辑单测类。**特性 + 优化/修复 → minor+0.1、跳过 1.x.0。**

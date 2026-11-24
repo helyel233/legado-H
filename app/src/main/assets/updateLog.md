@@ -4,6 +4,16 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.1.38.1 · 2026/11/24**
+
+- 封面收藏分组匹配：按组名匹配集合封面（大小写/空格/扩展名/混合分隔符归一），mode/target/revision 单一真相源，落盘 200ms debounce + generation 防旧写覆盖
+- 日夜分组封面双槽：CoverSlot 新增 day/nightGroupCoverPath，Codec 全链路接入，对称回退（本槽→对槽→旧 groupCoverPath）保持旧包兼容
+- 洗牌种子持久化：新增 coverCollectionShuffleSeeds 键，同步纳入备份/恢复白名单，收藏洗牌状态不丢
+- 包激活后异步预加载收藏分配，减少首屏封面空窗
+- 包作用域三档 groups/books/both（applyTarget 字段 + 三出口写入 + 兼容旧包），美术包默认封面不再回填
+- eInk 渲染降级开关从外观中心迁到「我的」页独立开关，统一 eInkMode 布尔键 + themeMode=="3" 兼容
+- 新增/扩充封面匹配与包作用域测试；五项静态门禁全通过，编译验证通过
+
 **vH.1.37.1 · 2026/11/23**
 
 - 段评快照持久化：落盘/内存LruCache/资源blob/目录索引四层收口，清书缓存联动失效，段评角标主题色+对比描边
