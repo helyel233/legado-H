@@ -31,10 +31,13 @@ import io.legado.app.help.config.appearance.BuiltinAppearanceDefaults
 import io.legado.app.help.config.appearance.GlassSlotSnapshot
 import io.legado.app.help.config.appearance.ThemeSlotSnapshot
 import io.legado.app.help.config.appearance.WelcomeSlotSnapshot
+import io.legado.app.help.config.pkg.GlassRuntimeWriter
 import io.legado.app.help.config.pkg.PackageIoKernel
+import io.legado.app.help.config.pkg.ParamStylePreset
+import io.legado.app.help.config.pkg.runtime.GlassMaterialModes
+import io.legado.app.help.config.pkg.runtime.resolveExploreGlassMode
 import io.legado.app.lib.theme.PrefBatchTransaction
 import io.legado.app.lib.theme.recomputeThemeUiSignatureAfterBatch
-import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.utils.normalizeFileName
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.currentCoroutineContext
@@ -448,9 +451,9 @@ object AppearanceKitManager {
         val navBarName = NavigationBarIconConfig.currentEntry(isNight).config.name
         val glass = currentGlassBinding(context)
         val glassModeLabel = when (glass.mode) {
-            io.legado.app.ui.main.GlassMaterialPreset.SOLID -> context.getString(R.string.appearance_glass_solid)
-            io.legado.app.ui.main.GlassMaterialPreset.CLEAR -> context.getString(R.string.appearance_glass_clear)
-            io.legado.app.ui.main.GlassMaterialPreset.FROSTED -> context.getString(R.string.appearance_glass_frosted)
+            GlassMaterialModes.SOLID -> context.getString(R.string.appearance_glass_solid)
+            GlassMaterialModes.CLEAR -> context.getString(R.string.appearance_glass_clear)
+            GlassMaterialModes.FROSTED -> context.getString(R.string.appearance_glass_frosted)
             else -> context.getString(R.string.appearance_glass_liquid)
         }
         val coverName = CoverCollectionManager.selectedEntry(isNight)?.collection?.name
@@ -466,7 +469,7 @@ object AppearanceKitManager {
             theme = themeName,
             topBar = topBarName,
             navigationBar = navBarName,
-            glass = "$glassModeLabel · ${if (glass.mode == io.legado.app.ui.main.GlassMaterialPreset.FROSTED) glass.frostedLevel else glass.liquidLevel}%",
+            glass = "$glassModeLabel · ${if (glass.mode == GlassMaterialModes.FROSTED) glass.frostedLevel else glass.liquidLevel}%",
             cover = coverName,
             welcome = welcomeSummary
         )
@@ -733,26 +736,18 @@ object AppearanceKitManager {
             AppConfig.isNightTheme = currentNight
         }
         NavigationBarIconConfig.applyCurrentBottomConfig(currentNight, preserveLayoutMode = true)
-        binding.glass?.let { applyGlassBinding(context, it) }
+        binding.glass?.let { applyGlassBinding(context, it, currentNight) }
         binding.welcome?.let { applyWelcomeBinding(context, it) }
         ThemeConfig.applyTheme(context)
         BookCover.upDefaultCover()
     }
 
-    private fun applyGlassBinding(context: Context, glass: KitGlassBinding) {
-        if (glass.mode.isNotBlank()) {
-            context.putPrefString(PreferKey.exploreGlassEffectMode, glass.mode)
-        }
-        context.putPrefInt(PreferKey.frostedGlassLevel, glass.frostedLevel)
-        context.putPrefInt(PreferKey.liquidGlassLevel, glass.liquidLevel)
-        context.putPrefInt(PreferKey.exploreGlassBlurScale, glass.blurScale)
-        context.putPrefInt(PreferKey.exploreGlassShellScale, glass.shellScale)
-        context.putPrefInt(PreferKey.exploreGlassTintScale, glass.tintScale)
-        context.putPrefInt(PreferKey.exploreGlassStrokeScale, glass.strokeScale)
-        context.putPrefString(PreferKey.glassStrokeColor, glass.strokeColor)
-        context.putPrefBoolean(PreferKey.glassPresetMatched, glass.presetMatched)
-        context.putPrefBoolean(PreferKey.exploreGlassHardwareBlur, glass.hardwareBlur)
-        context.putPrefBoolean(PreferKey.exploreGlassAnimatedSolid, glass.animatedSolid)
+    private fun applyGlassBinding(
+        context: Context,
+        glass: KitGlassBinding,
+        isNight: Boolean = AppConfig.isNightTheme
+    ) {
+        GlassRuntimeWriter.writeGlassBinding(context, glass, isNight)
     }
 
     private fun applyWelcomeBinding(context: Context, welcome: KitWelcomeBinding) {
@@ -895,11 +890,21 @@ object AppearanceKitManager {
         )
     }
 
-    private fun currentGlassBinding(context: Context): KitGlassBinding {
+    private fun currentGlassBinding(
+        context: Context,
+        isNight: Boolean = AppConfig.isNightTheme
+    ): KitGlassBinding {
         val storedMode = context.getPrefString(PreferKey.exploreGlassEffectMode, "").orEmpty()
         val legacyEnabled = context.getPrefBoolean(PreferKey.exploreGlassEnabled, true)
+        val resolvedMode = resolveExploreGlassMode(storedMode, legacyEnabled)
+        val presetMatched = ParamStylePreset.readRuntimePresetMatched(context, isNight)
+        val stylePresetId = ParamStylePreset.resolveEffectivePresetId(
+            presetMatched = presetMatched,
+            stylePresetId = ParamStylePreset.readRuntimePresetId(context, isNight),
+            materialMode = resolvedMode
+        )
         return KitGlassBinding(
-            mode = resolveExploreGlassMode(storedMode, legacyEnabled),
+            mode = resolvedMode,
             frostedLevel = context.getPrefInt(
                 PreferKey.frostedGlassLevel,
                 BuiltinAppearanceDefaults.DEFAULT_GLASS_LEVEL
@@ -925,9 +930,10 @@ object AppearanceKitManager {
                 BuiltinAppearanceDefaults.DEFAULT_GLASS_SCALE
             ),
             strokeColor = context.getPrefString(PreferKey.glassStrokeColor, "").orEmpty(),
-            presetMatched = context.getPrefBoolean(PreferKey.glassPresetMatched, true),
+            presetMatched = presetMatched,
             hardwareBlur = context.getPrefBoolean(PreferKey.exploreGlassHardwareBlur, true),
-            animatedSolid = context.getPrefBoolean(PreferKey.exploreGlassAnimatedSolid, true)
+            animatedSolid = context.getPrefBoolean(PreferKey.exploreGlassAnimatedSolid, true),
+            stylePresetId = stylePresetId
         )
     }
 
@@ -1335,7 +1341,8 @@ data class KitGlassBinding(
     val strokeColor: String = "",
     val presetMatched: Boolean = true,
     val hardwareBlur: Boolean = true,
-    val animatedSolid: Boolean = true
+    val animatedSolid: Boolean = true,
+    val stylePresetId: String? = null
 )
 
 @Keep

@@ -15,6 +15,7 @@ import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.RedAssetPackage
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.TopBarConfig
+import io.legado.app.lib.theme.NightKeyPairs
 import io.legado.app.lib.theme.PrefBatchTransaction
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.lib.theme.ThemeStore
@@ -22,9 +23,9 @@ import io.legado.app.lib.theme.UiTypefaceCache
 import io.legado.app.lib.theme.defaultThemeTextColorHex
 import io.legado.app.lib.theme.recomputeThemeUiSignatureAfterBatch
 import io.legado.app.model.BookCover
+import io.legado.app.help.config.pkg.runtime.resolveExploreGlassMode
 import io.legado.app.ui.config.FontFileValidator
 import io.legado.app.ui.config.FontProtocolResolver
-import io.legado.app.ui.main.explore.resolveExploreGlassMode
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.defaultSharedPreferences
@@ -288,12 +289,51 @@ object UnifiedPackageRepository {
         }
     }
 
-    fun isParamDirty(context: Context = appCtx): Boolean {
-        return context.getPrefBoolean(PreferKey.paramPackageDirty, false)
+    private fun paramDirtyKey(isNight: Boolean): String =
+        if (isNight) PreferKey.paramPackageDirtyN else PreferKey.paramPackageDirty
+
+    private fun paramDirtyPackageIdKey(isNight: Boolean): String =
+        if (isNight) PreferKey.paramDirtyNightPackageId else PreferKey.paramDirtyDayPackageId
+
+    fun isParamDirty(
+        context: Context = appCtx,
+        isNight: Boolean = AppConfig.isNightTheme,
+        packageId: String? = null
+    ): Boolean {
+        val dirty = context.getPrefBoolean(paramDirtyKey(isNight), false)
+        if (!dirty) return false
+        if (packageId.isNullOrBlank()) return true
+        val dirtyPkgId = context.getPrefString(paramDirtyPackageIdKey(isNight), "").orEmpty()
+            .ifEmpty { activeParamPackageId(context, isNight) }
+        return dirtyPkgId.isNotEmpty() && dirtyPkgId == packageId
     }
 
-    fun markParamDirty(context: Context = appCtx, dirty: Boolean = true) {
-        context.putPrefBoolean(PreferKey.paramPackageDirty, dirty)
+    fun paramDirtyPackageId(
+        context: Context = appCtx,
+        isNight: Boolean = AppConfig.isNightTheme
+    ): String {
+        if (!isParamDirty(context, isNight)) return ""
+        return context.getPrefString(paramDirtyPackageIdKey(isNight), "").orEmpty()
+            .ifEmpty { activeParamPackageId(context, isNight) }
+    }
+
+    fun markParamDirty(
+        context: Context = appCtx,
+        dirty: Boolean = true,
+        isNight: Boolean = AppConfig.isNightTheme,
+        packageId: String? = activeParamPackageId(context, isNight)
+    ) {
+        context.putPrefBoolean(paramDirtyKey(isNight), dirty)
+        if (dirty) {
+            val cleanId = packageId?.trim().orEmpty()
+            if (cleanId.isNotEmpty()) {
+                context.putPrefString(paramDirtyPackageIdKey(isNight), cleanId)
+            } else {
+                context.removePref(paramDirtyPackageIdKey(isNight))
+            }
+        } else {
+            context.removePref(paramDirtyPackageIdKey(isNight))
+        }
     }
 
     fun currentArtPackageId(context: Context = appCtx): String {
@@ -590,7 +630,7 @@ object UnifiedPackageRepository {
                         applyMode = CoverSlotApplyMode.RANDOM,
                         applyTarget = CoverSlotApplyTarget.normalize(
                             initialCoverSlotApplyTarget,
-                            defaultValue = CoverSlotApplyTarget.GROUPS
+                            defaultValue = CoverSlotApplyTarget.DEFAULT_NEW_PACKAGE
                         )
                     )
                 )
@@ -1036,7 +1076,7 @@ object UnifiedPackageRepository {
             )
             writeManifest(targetDir, manifest)
             context.putPrefString(PreferKey.currentParamPackageId, manifest.id)
-            context.putPrefBoolean(PreferKey.paramPackageDirty, false)
+            markParamDirty(context, dirty = false, isNight = isNight, packageId = manifest.id)
             StoredEntry(manifest, targetDir).also {
                 upsertCacheEntry(PackageKind.PARAM, it)
             }
@@ -1385,7 +1425,7 @@ object UnifiedPackageRepository {
                 if (isActiveMode) {
                     context.putPrefString(PreferKey.currentParamPackageId, entry.manifest.id)
                 }
-                context.putPrefBoolean(PreferKey.paramPackageDirty, false)
+                markParamDirty(context, dirty = false, isNight = forNight, packageId = entry.manifest.id)
             } finally {
                 PrefBatchTransaction.endBatch {
                     context.applicationContext.recomputeThemeUiSignatureAfterBatch()
@@ -1470,7 +1510,7 @@ object UnifiedPackageRepository {
                 if (isActiveMode) {
                     context.putPrefString(PreferKey.currentParamPackageId, entry.manifest.id)
                 }
-                context.putPrefBoolean(PreferKey.paramPackageDirty, false)
+                markParamDirty(context, dirty = false, isNight = forNight, packageId = entry.manifest.id)
             } finally {
                 PrefBatchTransaction.endBatch {
                     context.applicationContext.recomputeThemeUiSignatureAfterBatch()
@@ -1603,7 +1643,12 @@ object UnifiedPackageRepository {
                     if (AppConfig.isNightTheme) PreferKey.activeNightParamPackageId else PreferKey.activeDayParamPackageId,
                     entry.manifest.id
                 )
-                context.putPrefBoolean(PreferKey.paramPackageDirty, !(applySurface && applyLayout))
+                markParamDirty(
+                    context,
+                    dirty = !(applySurface && applyLayout),
+                    isNight = AppConfig.isNightTheme,
+                    packageId = entry.manifest.id
+                )
             } finally {
                 PrefBatchTransaction.endBatch {
                     context.applicationContext.recomputeThemeUiSignatureAfterBatch()
@@ -2283,7 +2328,7 @@ object UnifiedPackageRepository {
             covers = copiedCovers,
             applyMode = CoverSlotApplyMode.normalize(slot.applyMode),
             applyTarget = slot.applyTarget?.trim()?.takeIf { it.isNotBlank() }?.let {
-                CoverSlotApplyTarget.normalize(it, defaultValue = CoverSlotApplyTarget.BOOKS)
+                CoverSlotApplyTarget.normalize(it, defaultValue = CoverSlotApplyTarget.LEGACY_FALLBACK)
             },
             dayDefaultCoverPath = copySlotFile(slot.dayDefaultCoverPath, "day_default_cover"),
             nightDefaultCoverPath = copySlotFile(slot.nightDefaultCoverPath, "night_default_cover"),
@@ -2330,7 +2375,7 @@ object UnifiedPackageRepository {
         val collectionMode = toCollectionManagerMode(slot.applyMode)
         val collectionTarget = CoverSlotApplyTarget.normalize(
             slot.applyTarget,
-            defaultValue = CoverSlotApplyTarget.BOOKS
+            defaultValue = CoverSlotApplyTarget.LEGACY_FALLBACK
         )
 
         putOrRemovePref(
@@ -2397,7 +2442,7 @@ object UnifiedPackageRepository {
             )
             context.putPrefString(
                 if (forNight) PreferKey.coverCollectionTargetNight else PreferKey.coverCollectionTargetDay,
-                CoverSlotApplyTarget.BOOKS
+                CoverSlotApplyTarget.LEGACY_FALLBACK
             )
             CoverCollectionManager.setSelected(forNight, "")
             return
@@ -2424,7 +2469,7 @@ object UnifiedPackageRepository {
             val mode = toCollectionManagerMode(slot.applyMode)
             val target = CoverSlotApplyTarget.normalize(
                 slot.applyTarget,
-                defaultValue = CoverSlotApplyTarget.BOOKS
+                defaultValue = CoverSlotApplyTarget.LEGACY_FALLBACK
             )
             putOrRemovePref(
                 context,
@@ -2790,66 +2835,12 @@ object UnifiedPackageRepository {
         isNight: Boolean,
         activateGlassNow: Boolean
     ) {
-        if (activateGlassNow) {
-            g.materialMode?.takeIf { it.isNotBlank() }?.let {
-                context.putPrefString(PreferKey.exploreGlassEffectMode, it)
-            }
-            g.frostedLevel?.let { context.putPrefInt(PreferKey.frostedGlassLevel, it.coerceIn(0, 100)) }
-            g.liquidLevel?.let { context.putPrefInt(PreferKey.liquidGlassLevel, it.coerceIn(0, 100)) }
-            g.blurScale?.let { context.putPrefInt(PreferKey.exploreGlassBlurScale, it) }
-            g.shellScale?.let { context.putPrefInt(PreferKey.exploreGlassShellScale, it) }
-            g.tintScale?.let { context.putPrefInt(PreferKey.exploreGlassTintScale, it) }
-            g.strokeScale?.let { context.putPrefInt(PreferKey.exploreGlassStrokeScale, it) }
-            putOrRemovePref(context, PreferKey.glassStrokeColor, g.strokeColor)
-            g.hardwareBlur?.let { context.putPrefBoolean(PreferKey.exploreGlassHardwareBlur, it) }
-            g.animatedSolid?.let { context.putPrefBoolean(PreferKey.exploreGlassAnimatedSolid, it) }
-        }
-        val presetIdKey = ParamStylePreset.presetIdKey(isNight)
-        val presetMatchedKey = ParamStylePreset.presetMatchedKey(isNight)
-        when (g.presetMatched) {
-            true -> {
-                context.putPrefBoolean(presetMatchedKey, true)
-                val effectivePresetId = g.stylePresetId?.takeIf { it.isNotBlank() }
-                    ?: g.materialMode?.takeIf { it.isNotBlank() }
-                putOrRemovePref(context, presetIdKey, effectivePresetId)
-            }
-            false -> {
-                context.putPrefBoolean(presetMatchedKey, false)
-                context.removePref(presetIdKey)
-            }
-            null -> {
-                val explicitPresetId = g.stylePresetId?.takeIf { it.isNotBlank() }
-                if (explicitPresetId != null) {
-                    context.putPrefString(presetIdKey, explicitPresetId)
-                } else {
-                    val storedPresetId = context.getPrefString(presetIdKey)?.takeIf { it.isNotBlank() }
-                    val storedSpec = ParamStylePreset.of(storedPresetId)
-                    val targetMode = g.materialMode?.takeIf { it.isNotBlank() }
-                    if (storedPresetId != null && (storedSpec == null || (targetMode != null && storedSpec.materialMode != targetMode))) {
-                        context.removePref(presetIdKey)
-                    }
-                }
-            }
-        }
-        g.surfaceAlpha?.let {
-            context.putPrefInt(ThemeRuntimeKeys.uiLayoutAlpha(isNight), it.coerceIn(0, 100))
-        }
-        g.dialogAlpha?.let {
-            context.putPrefInt(ThemeRuntimeKeys.dialogAlpha(isNight), it.coerceIn(0, 100))
-        }
-        g.panelBorderAlpha?.let {
-            context.putPrefInt(
-                if (isNight) PreferKey.panelBorderAlphaN else PreferKey.panelBorderAlpha,
-                it.coerceIn(0, 100)
-            )
-        }
-        val blur = if (isNight) (g.wallpaperBlurNight ?: g.wallpaperBlurDay) else (g.wallpaperBlurDay ?: g.wallpaperBlurNight)
-        blur?.let {
-            context.putPrefInt(
-                if (isNight) PreferKey.bgImageNBlurring else PreferKey.bgImageBlurring,
-                it.coerceIn(0, 25)
-            )
-        }
+        GlassRuntimeWriter.writeSurfaceGlobal(
+            context = context,
+            g = g,
+            isNight = isNight,
+            activateGlassNow = activateGlassNow
+        )
     }
 
     /**
@@ -2959,38 +2950,13 @@ object UnifiedPackageRepository {
         PreferKey.glassStrokeColor,
         PreferKey.exploreGlassHardwareBlur,
         PreferKey.exploreGlassAnimatedSolid,
-        PreferKey.uiLayoutAlpha,
-        PreferKey.uiLayoutAlphaN,
-        PreferKey.dialogAlpha,
-        PreferKey.dialogAlphaN,
-        PreferKey.panelBorderAlpha,
-        PreferKey.panelBorderAlphaN,
-        PreferKey.bgImageBlurring,
-        PreferKey.bgImageNBlurring,
-        PreferKey.paramStylePresetId,
-        PreferKey.paramStylePresetIdN,
-        PreferKey.glassPresetMatched,
-        PreferKey.glassPresetMatchedN,
-        PreferKey.uiCornerScale,
-        PreferKey.uiCornerScaleN,
-        PreferKey.themeCardShadow,
-        PreferKey.themeCardShadowN,
-        PreferKey.themeCardBackgroundBlur,
-        PreferKey.themeCardBackgroundBlurN,
-        PreferKey.uiCornerSearchFollow,
-        PreferKey.uiCornerSearchFollowN,
-        PreferKey.uiCornerReplyFollow,
-        PreferKey.uiCornerReplyFollowN,
         PreferKey.uiDensityScale,
         PreferKey.scopeOverrideTopBar,
         PreferKey.scopeOverrideBottomBar,
         PreferKey.scopeOverrideBookshelfCard,
         PreferKey.scopeOverrideDialog,
-        PreferKey.paramPackageDirty,
-        PreferKey.currentParamPackageId,
-        PreferKey.activeDayParamPackageId,
-        PreferKey.activeNightParamPackageId
-    )
+        PreferKey.currentParamPackageId
+    ) + NightKeyPairs.paramLiveSnapshotPairedKeys
 
     fun captureParamPayloadSnapshot(
         context: Context,
@@ -3064,7 +3030,8 @@ object UnifiedPackageRepository {
                             }
                         }
                     }
-                    context.putPrefBoolean(PreferKey.paramPackageDirty, false)
+                    markParamDirty(context, dirty = false, isNight = false, packageId = snapshot.preEditDayParamId)
+                    markParamDirty(context, dirty = false, isNight = true, packageId = snapshot.preEditNightParamId)
                 } finally {
                     PrefBatchTransaction.endBatch {
                         context.applicationContext.recomputeThemeUiSignatureAfterBatch()
@@ -3091,7 +3058,12 @@ object UnifiedPackageRepository {
             } ?: run {
                 applySurfaceScopes(context, payload.surfaceScopes)
             }
-            context.putPrefBoolean(PreferKey.paramPackageDirty, markDirty)
+            markParamDirty(
+                context,
+                dirty = markDirty,
+                isNight = isNight,
+                packageId = activeParamPackageId(context, isNight)
+            )
         } finally {
             PrefBatchTransaction.endBatch {
                 context.applicationContext.recomputeThemeUiSignatureAfterBatch()

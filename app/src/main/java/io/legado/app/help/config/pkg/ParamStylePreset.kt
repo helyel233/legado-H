@@ -2,14 +2,11 @@ package io.legado.app.help.config.pkg
 
 import android.content.Context
 import io.legado.app.constant.PreferKey
-import io.legado.app.lib.theme.ThemeRuntimeKeys
-import io.legado.app.ui.config.ColorPaletteHelper
-import io.legado.app.ui.main.GlassMaterialPreset
+import io.legado.app.help.config.pkg.runtime.ColorParseRuntime
+import io.legado.app.help.config.pkg.runtime.GlassMaterialModes
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.putPrefBoolean
-import io.legado.app.utils.putPrefInt
-import io.legado.app.utils.putPrefString
 import io.legado.app.utils.removePref
 import java.util.Locale
 
@@ -44,10 +41,10 @@ object ParamStylePreset {
     )
 
     val solid = Spec(
-        id = GlassMaterialPreset.SOLID,
+        id = GlassMaterialModes.SOLID,
         label = "实底",
         summaryLabel = "实底",
-        materialMode = GlassMaterialPreset.SOLID,
+        materialMode = GlassMaterialModes.SOLID,
         frostedLevel = 68,
         liquidLevel = 68,
         blurScale = 100,
@@ -62,10 +59,10 @@ object ParamStylePreset {
     )
 
     val clear = Spec(
-        id = GlassMaterialPreset.CLEAR,
+        id = GlassMaterialModes.CLEAR,
         label = "透明",
         summaryLabel = "透明",
-        materialMode = GlassMaterialPreset.CLEAR,
+        materialMode = GlassMaterialModes.CLEAR,
         frostedLevel = 68,
         liquidLevel = 68,
         blurScale = 100,
@@ -80,10 +77,10 @@ object ParamStylePreset {
     )
 
     val frosted = Spec(
-        id = GlassMaterialPreset.FROSTED,
+        id = GlassMaterialModes.FROSTED,
         label = "磨砂",
         summaryLabel = "磨砂",
-        materialMode = GlassMaterialPreset.FROSTED,
+        materialMode = GlassMaterialModes.FROSTED,
         frostedLevel = 72,
         liquidLevel = 68,
         blurScale = 115,
@@ -98,10 +95,10 @@ object ParamStylePreset {
     )
 
     val glass = Spec(
-        id = GlassMaterialPreset.GLASS,
+        id = GlassMaterialModes.GLASS,
         label = "液态",
         summaryLabel = "液态",
-        materialMode = GlassMaterialPreset.GLASS,
+        materialMode = GlassMaterialModes.GLASS,
         frostedLevel = 68,
         liquidLevel = 76,
         blurScale = 85,
@@ -184,27 +181,26 @@ object ParamStylePreset {
     }
 
     /**
-     * Derives whether [surfaceGlobal] matches its tier's default parameters in [all]
-     * and lists which atmosphere items deviate (for UI badges and collapsible counters).
+     * Computes read-only UI deviation hints against [all] for badges and collapsible counters.
      *
-     * Note: Package-level values are owned solely by the package manifest (never overwritten
-     * by external runtime hooks like bottom-bar opacity), so numeric derivation is exact here,
-     * whereas runtime UI continues using [readRuntimePresetMatched] per change-safety R4.
+     * Per change-safety R4, this function NEVER writes back `presetMatched` or `stylePresetId`:
+     * preset selection explicitly sets matched state via [applyToSurfaceGlobal], while manual
+     * slider/input edits explicitly mark customized via [markCustomized].
      */
     fun inspectDeviation(surfaceGlobal: SurfaceGlobalParams): TierDeviation {
         val tierSpec = of(surfaceGlobal.materialMode) ?: frosted
-        val usesGlass = tierSpec.id == GlassMaterialPreset.FROSTED ||
-            tierSpec.id == GlassMaterialPreset.GLASS
+        val usesGlass = tierSpec.id == GlassMaterialModes.FROSTED ||
+            tierSpec.id == GlassMaterialModes.GLASS
         val changed = ArrayList<String>(10)
         var advancedCount = 0
 
         if (usesGlass) {
-            val activeLevel = if (tierSpec.id == GlassMaterialPreset.FROSTED) {
+            val activeLevel = if (tierSpec.id == GlassMaterialModes.FROSTED) {
                 (surfaceGlobal.frostedLevel ?: tierSpec.frostedLevel).coerceIn(0, 100)
             } else {
                 (surfaceGlobal.liquidLevel ?: tierSpec.liquidLevel).coerceIn(0, 100)
             }
-            val tierLevel = if (tierSpec.id == GlassMaterialPreset.FROSTED) {
+            val tierLevel = if (tierSpec.id == GlassMaterialModes.FROSTED) {
                 tierSpec.frostedLevel
             } else {
                 tierSpec.liquidLevel
@@ -235,11 +231,11 @@ object ParamStylePreset {
                 changed += "描边倍率"
                 advancedCount++
             }
-            val currentStroke = ColorPaletteHelper.parseColorInput(
+            val currentStroke = ColorParseRuntime.parseColorInput(
                 surfaceGlobal.strokeColor,
                 allowDecimalArgb = true
             )
-            val specStroke = ColorPaletteHelper.parseColorInput(
+            val specStroke = ColorParseRuntime.parseColorInput(
                 tierSpec.strokeColor,
                 allowDecimalArgb = true
             )
@@ -262,19 +258,6 @@ object ParamStylePreset {
             changedLabels = changed,
             advancedChangedCount = advancedCount
         )
-    }
-
-    /**
-     * Synchronizes [SurfaceGlobalParams.presetMatched] and [SurfaceGlobalParams.stylePresetId]
-     * from numeric deviation against [all] so sliding back to a tier's exact defaults clears "自定义".
-     */
-    fun syncDerivedPresetState(current: SurfaceGlobalParams): SurfaceGlobalParams {
-        val deviation = inspectDeviation(current)
-        return if (deviation.isExactMatch) {
-            current.copy(stylePresetId = deviation.tierSpec.id, presetMatched = true)
-        } else {
-            current.copy(stylePresetId = null, presetMatched = false)
-        }
     }
 
     fun markCustomized(current: SurfaceGlobalParams): SurfaceGlobalParams =
@@ -311,31 +294,7 @@ object ParamStylePreset {
         isNight: Boolean
     ): Spec? {
         val spec = of(presetId) ?: return null
-        context.putPrefString(PreferKey.exploreGlassEffectMode, spec.materialMode)
-        context.putPrefInt(PreferKey.frostedGlassLevel, spec.frostedLevel.coerceIn(0, 100))
-        context.putPrefInt(PreferKey.liquidGlassLevel, spec.liquidLevel.coerceIn(0, 100))
-        context.putPrefInt(PreferKey.exploreGlassBlurScale, spec.blurScale)
-        context.putPrefInt(PreferKey.exploreGlassTintScale, spec.tintScale)
-        context.putPrefInt(PreferKey.exploreGlassShellScale, spec.shellScale)
-        context.putPrefInt(PreferKey.exploreGlassStrokeScale, spec.strokeScale)
-        val cleanStroke = spec.strokeColor?.trim()?.takeIf { it.isNotBlank() }
-        if (cleanStroke == null) {
-            context.removePref(PreferKey.glassStrokeColor)
-        } else {
-            context.putPrefString(PreferKey.glassStrokeColor, cleanStroke)
-        }
-        context.putPrefInt(ThemeRuntimeKeys.uiLayoutAlpha(isNight), spec.surfaceAlpha.coerceIn(0, 100))
-        context.putPrefInt(ThemeRuntimeKeys.dialogAlpha(isNight), spec.dialogAlpha.coerceIn(0, 100))
-        context.putPrefInt(
-            if (isNight) PreferKey.panelBorderAlphaN else PreferKey.panelBorderAlpha,
-            spec.panelBorderAlpha.coerceIn(0, 100)
-        )
-        context.putPrefInt(
-            if (isNight) PreferKey.bgImageNBlurring else PreferKey.bgImageBlurring,
-            spec.wallpaperBlur.coerceIn(0, 25)
-        )
-        context.putPrefString(presetIdKey(isNight), spec.id)
-        context.putPrefBoolean(presetMatchedKey(isNight), true)
+        GlassRuntimeWriter.writePresetSpec(context, spec, isNight)
         return spec
     }
 

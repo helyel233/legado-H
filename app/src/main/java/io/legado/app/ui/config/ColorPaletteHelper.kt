@@ -4,6 +4,7 @@ import io.legado.app.help.config.pkg.ArtPackagePayload
 import io.legado.app.help.config.pkg.ArtPaletteSpec
 import io.legado.app.help.config.pkg.ArtTypographySpec
 import io.legado.app.help.config.pkg.ArtWallpapersSpec
+import io.legado.app.help.config.pkg.runtime.ColorParseRuntime
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.max
@@ -192,66 +193,9 @@ internal object ColorPaletteHelper {
         raw: String?,
         allowDecimalArgb: Boolean = false,
         preserveAlpha: Boolean = false
-    ): Int? {
-        val text = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        if (text.startsWith("#")) {
-            val hex = text.substring(1)
-            if (!hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) return null
-            val argbLong = when (hex.length) {
-                3 -> {
-                    val expanded = buildString(8) {
-                        append("FF")
-                        hex.forEach { ch ->
-                            append(ch)
-                            append(ch)
-                        }
-                    }
-                    expanded.toLongOrNull(16)
-                }
-                4 -> {
-                    val expanded = buildString(8) {
-                        if (preserveAlpha) {
-                            append(hex[0])
-                            append(hex[0])
-                        } else {
-                            append("FF")
-                        }
-                        for (i in 1..3) {
-                            append(hex[i])
-                            append(hex[i])
-                        }
-                    }
-                    expanded.toLongOrNull(16)
-                }
-                6 -> ("FF$hex").toLongOrNull(16)
-                8 -> {
-                    val resolved = if (preserveAlpha) hex else "FF${hex.substring(2)}"
-                    resolved.toLongOrNull(16)
-                }
-                else -> null
-            } ?: return null
-            return argbLong.toInt()
-        }
-        if (allowDecimalArgb) {
-            return text.toIntOrNull()
-        }
-        if (text.length == 6 || text.length == 8) {
-            if (text.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) {
-                val normalized = when {
-                    text.length == 6 -> "FF$text"
-                    preserveAlpha -> text
-                    else -> "FF${text.substring(2)}"
-                }
-                return normalized.toLongOrNull(16)?.toInt()
-            }
-        }
-        return null
-    }
+    ): Int? = ColorParseRuntime.parseColorInput(raw, allowDecimalArgb, preserveAlpha)
 
-    fun formatHex6(argb: Int): String {
-        val rgb = argb and 0x00FFFFFF
-        return String.format(Locale.US, "#%06X", rgb)
-    }
+    fun formatHex6(argb: Int): String = ColorParseRuntime.formatHex6(argb)
 
     fun rgbToHsv(argb: Int): Triple<Float, Float, Float> {
         val r = ((argb ushr 16) and 0xFF) / 255f

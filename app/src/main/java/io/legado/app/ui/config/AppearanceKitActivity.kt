@@ -74,6 +74,7 @@ import io.legado.app.help.config.pkg.LegacyPackageMigrator
 import io.legado.app.help.config.pkg.PackageKind
 import io.legado.app.help.config.pkg.ParamPackagePayload
 import io.legado.app.help.config.pkg.ParamStylePreset
+import io.legado.app.help.config.pkg.UnifiedPackageDraftStore
 import io.legado.app.help.config.pkg.UnifiedPackageRepository
 import io.legado.app.lib.cloud.CloudStorageFile
 import io.legado.app.lib.cloud.S3ContainerScope
@@ -189,6 +190,10 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private var stylePresetIdState by mutableStateOf<String?>(null)
     private var presetMatchedState by mutableStateOf(true)
     private var paramDirtyState by mutableStateOf(false)
+    private var paramDayDirtyState by mutableStateOf(false)
+    private var paramNightDirtyState by mutableStateOf(false)
+    private var paramDirtyDayPkgIdState by mutableStateOf("")
+    private var paramDirtyNightPkgIdState by mutableStateOf("")
 
     private var useLegacyTokenPipelineState by mutableStateOf(false)
     private var useLegacyPackageManagerState by mutableStateOf(false)
@@ -200,6 +205,9 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private var deleteTargetState by mutableStateOf<DeleteDialogTarget?>(null)
     private var editingArtEntryState by mutableStateOf<UnifiedPackageRepository.StoredEntry?>(null)
     private var editingParamEntryState by mutableStateOf<UnifiedPackageRepository.StoredEntry?>(null)
+    private var recoveredParamDraftPairState by mutableStateOf<Pair<String, ParamPackagePayload>?>(null)
+    private var pendingRecoveredParamDraftState by mutableStateOf<UnifiedPackageDraftStore.ParamDraftRecord?>(null)
+    private var hasCheckedRecoveredDraft = false
     private var editingCoverSlotEntryState by mutableStateOf<UnifiedPackageRepository.StoredEntry?>(null)
     private var cloudContainerId: String? = null
     private var containerMenuLabelState by mutableStateOf<String?>(null)
@@ -460,6 +468,8 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                 val glassOptions = remember {
                     ParamStylePreset.all.map { SegmentedOption(it.id, it.label) }
                 }
+                val activeModeDirtyState = isParamSlotDirty(isNightState)
+                val paramSlotDirtyState = isParamSlotDirty(paramSlotNightState)
                 LegadoComposeTheme {
                     AppearanceStudioScreen(
                         isNightMode = isNightState,
@@ -484,7 +494,8 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         glassLevel = glassLevelState,
                         stylePresetId = stylePresetIdState,
                         presetMatched = presetMatchedState,
-                        paramDirty = paramDirtyState,
+                        paramDirty = activeModeDirtyState,
+                        paramSlotDirty = paramSlotDirtyState,
                         useLegacyTokenPipeline = useLegacyTokenPipelineState,
                         useLegacyPackageManager = useLegacyPackageManagerState,
                         topMenuActions = ::topBarMenuActions,
@@ -657,17 +668,72 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         )
                     }
 
+                    pendingRecoveredParamDraftState?.let { draft ->
+                        val style = rememberAppDialogStyle()
+                        val dialogPalette = style.toMiuixPalette()
+                        Dialog(onDismissRequest = { pendingRecoveredParamDraftState = null }) {
+                            AppDialogFrame(
+                                title = "恢复未保存的参数包草稿？",
+                                content = {
+                                    Text(
+                                        text = "检测到上次编辑「${draft.packageName.ifBlank { draft.packageId }}」时未保存退出，是否恢复草稿继续编辑？",
+                                        color = style.secondaryText,
+                                        fontSize = 13.sp
+                                    )
+                                },
+                                actions = {
+                                    LegadoMiuixActionButton(
+                                        text = "丢弃草稿",
+                                        palette = dialogPalette,
+                                        onClick = {
+                                            pendingRecoveredParamDraftState = null
+                                            UnifiedPackageDraftStore.clearParamDraft(this@AppearanceKitActivity)
+                                        }
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    LegadoMiuixActionButton(
+                                        text = "恢复编辑",
+                                        palette = dialogPalette,
+                                        primary = true,
+                                        onClick = {
+                                            pendingRecoveredParamDraftState = null
+                                            val matched = paramPackagesState.firstOrNull {
+                                                it.manifest.id == draft.packageId
+                                            }
+                                            if (matched != null) {
+                                                recoveredParamDraftPairState = draft.packageName to draft.payload
+                                                editingParamEntryState = matched
+                                            } else {
+                                                UnifiedPackageDraftStore.clearParamDraft(this@AppearanceKitActivity)
+                                            }
+                                        }
+                                    )
+                                }
+                            )
+                        }
+                    }
+
                     editingParamEntryState?.let { entry ->
                         val isMountedActive = entry.manifest.id ==
                             (if (isNightState) activeNightParamIdState else activeDayParamIdState)
+                        val isParamDirtyForEntry = UnifiedPackageRepository.isParamDirty(
+                            this@AppearanceKitActivity,
+                            isNight = isNightState,
+                            packageId = entry.manifest.id
+                        )
                         ParamPackageEditorDialog(
                             entry = entry,
                             existingNames = paramPackagesState.map { it.manifest.name },
                             isMountedActive = isMountedActive,
-                            isParamDirty = paramDirtyState,
+                            isParamDirty = isParamDirtyForEntry,
+                            recoveredDraft = recoveredParamDraftPairState,
                             onLiveRuntimeChanged = ::syncStudioRuntimeStates,
-                            onDismiss = { editingParamEntryState = null },
+                            onDismiss = {
+                                recoveredParamDraftPairState = null
+                                editingParamEntryState = null
+                            },
                             onSave = { newName, updatedParam ->
+                                recoveredParamDraftPairState = null
                                 editingParamEntryState = null
                                 executeSaveEditedParam(entry.manifest.id, newName, updatedParam)
                             }
@@ -729,7 +795,19 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             stylePresetId = ParamStylePreset.readRuntimePresetId(this, night),
             materialMode = resolvedGlassMode
         ).orEmpty()
-        paramDirtyState = UnifiedPackageRepository.isParamDirty(this)
+        paramDayDirtyState = UnifiedPackageRepository.isParamDirty(this, isNight = false)
+        paramNightDirtyState = UnifiedPackageRepository.isParamDirty(this, isNight = true)
+        paramDirtyDayPkgIdState = UnifiedPackageRepository.paramDirtyPackageId(this, isNight = false)
+        paramDirtyNightPkgIdState = UnifiedPackageRepository.paramDirtyPackageId(this, isNight = true)
+        paramDirtyState = isParamSlotDirty(night)
+    }
+
+    private fun isParamSlotDirty(night: Boolean): Boolean {
+        val dirty = if (night) paramNightDirtyState else paramDayDirtyState
+        if (!dirty) return false
+        val dirtyPkgId = if (night) paramDirtyNightPkgIdState else paramDirtyDayPkgIdState
+        val activePkgId = if (night) activeNightParamIdState else activeDayParamIdState
+        return dirtyPkgId.isNotEmpty() && dirtyPkgId == activePkgId
     }
 
     private fun refreshStudioState() {
@@ -755,6 +833,17 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             activeDayCoverSlotIdState = UnifiedPackageRepository.activeCoverSlotPackageId(this@AppearanceKitActivity, false)
             activeNightCoverSlotIdState = UnifiedPackageRepository.activeCoverSlotPackageId(this@AppearanceKitActivity, true)
             coverSlotLockedState = UnifiedPackageRepository.isCoverSlotLocked(this@AppearanceKitActivity)
+            if (!hasCheckedRecoveredDraft) {
+                hasCheckedRecoveredDraft = true
+                val draft = UnifiedPackageDraftStore.loadParamDraft(this@AppearanceKitActivity)
+                if (draft != null) {
+                    if (params.any { it.manifest.id == draft.packageId }) {
+                        pendingRecoveredParamDraftState = draft
+                    } else {
+                        UnifiedPackageDraftStore.clearParamDraft(this@AppearanceKitActivity)
+                    }
+                }
+            }
         }
     }
 
@@ -1007,10 +1096,10 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             }.onSuccess {
                 val normalizedTarget = CoverSlotApplyTarget.normalize(
                     updatedCoverSlot.applyTarget,
-                    defaultValue = CoverSlotApplyTarget.GROUPS
+                    defaultValue = CoverSlotApplyTarget.DEFAULT_NEW_PACKAGE
                 )
                 putPrefString(PreferKey.lastCoverSlotApplyTarget, normalizedTarget)
-                if (normalizedTarget != CoverSlotApplyTarget.GROUPS && !coverSlotTargetHintDismissedState) {
+                if (normalizedTarget != CoverSlotApplyTarget.DEFAULT_NEW_PACKAGE && !coverSlotTargetHintDismissedState) {
                     coverSlotTargetHintDismissedState = true
                     putPrefBoolean(PreferKey.coverSlotTargetHintDismissed, true)
                 }
@@ -1090,11 +1179,25 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
+    private fun markActiveParamDirtyState(night: Boolean) {
+        val activeId = if (night) activeNightParamIdState else activeDayParamIdState
+        UnifiedPackageRepository.markParamDirty(this, true, isNight = night, packageId = activeId)
+        if (night) {
+            paramNightDirtyState = true
+            paramDirtyNightPkgIdState = activeId
+        } else {
+            paramDayDirtyState = true
+            paramDirtyDayPkgIdState = activeId
+        }
+        if (night == isNightState) {
+            paramDirtyState = true
+        }
+    }
+
     private fun commitCornerScale(scale: Float) {
         val clamped = scale.coerceIn(0f, 3f)
         val night = isNightState
-        UnifiedPackageRepository.markParamDirty(this, true)
-        paramDirtyState = true
+        markActiveParamDirtyState(night)
         lifecycleScope.launch {
             runCatching {
                 ThemePackageManager.updateActiveRuntimeOverride(
@@ -1113,10 +1216,9 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         val clamped = alpha.coerceIn(0, 100)
         val night = isNightState
         ParamStylePreset.clearRuntimePresetMatch(this, night)
-        UnifiedPackageRepository.markParamDirty(this, true)
+        markActiveParamDirtyState(night)
         presetMatchedState = false
         stylePresetIdState = ""
-        paramDirtyState = true
         lifecycleScope.launch {
             runCatching {
                 ThemePackageManager.updateActiveRuntimeOverride(
@@ -1135,7 +1237,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         val night = isNightState
         val applied = PrefBatchTransaction.run(this) {
             ParamStylePreset.applyToRuntimePrefs(this, presetId, night)?.also {
-                UnifiedPackageRepository.markParamDirty(this, true)
+                markActiveParamDirtyState(night)
             }
         } ?: return
         layoutAlphaState = applied.surfaceAlpha
@@ -1147,7 +1249,6 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         ).coerceIn(0, 100)
         stylePresetIdState = applied.id
         presetMatchedState = true
-        paramDirtyState = true
         postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, night)
         postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, night)
     }
@@ -1159,11 +1260,10 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             putPrefInt(PreferKey.frostedGlassLevel, clamped)
             putPrefInt(PreferKey.liquidGlassLevel, clamped)
             ParamStylePreset.clearRuntimePresetMatch(this, night)
-            UnifiedPackageRepository.markParamDirty(this, true)
+            markActiveParamDirtyState(night)
         }
         presetMatchedState = false
         stylePresetIdState = ""
-        paramDirtyState = true
         postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, night)
     }
 
@@ -1533,6 +1633,7 @@ private fun AppearanceStudioScreen(
     stylePresetId: String?,
     presetMatched: Boolean,
     paramDirty: Boolean,
+    paramSlotDirty: Boolean,
     useLegacyTokenPipeline: Boolean,
     useLegacyPackageManager: Boolean,
     topMenuActions: () -> List<AppManagementMenuAction>,
@@ -1658,7 +1759,7 @@ private fun AppearanceStudioScreen(
                     entries = paramPackages,
                     palette = palette,
                     glassSignature = effectiveGlassSig,
-                    showDirtyOnSelected = paramDirty && paramSlotNight == isNightMode,
+                    showDirtyOnSelected = paramSlotDirty,
                     onSelectSlotNight = onSelectParamSlotNight,
                     onSelectEntry = onMountParamPackage,
                     onCreateNew = { onCreatePackage(PackageKind.PARAM) },
@@ -2555,7 +2656,7 @@ private fun buildPackageMetaSummary(entry: UnifiedPackageRepository.StoredEntry)
                 return "系统原生默认封面 · 无自定义图集"
             }
             val targetText = when (
-                CoverSlotApplyTarget.normalize(slot?.applyTarget, defaultValue = CoverSlotApplyTarget.BOOKS)
+                CoverSlotApplyTarget.normalize(slot?.applyTarget, defaultValue = CoverSlotApplyTarget.LEGACY_FALLBACK)
             ) {
                 CoverSlotApplyTarget.GROUPS -> "分组封面"
                 CoverSlotApplyTarget.BOTH -> "分组+书籍"

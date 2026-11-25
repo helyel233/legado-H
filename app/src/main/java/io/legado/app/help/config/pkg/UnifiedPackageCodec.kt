@@ -735,6 +735,18 @@ object UnifiedPackageCodec {
         )
     }
 
+    internal fun encodeParamPayload(param: ParamPackagePayload): String {
+        return prettyGson.toJson(encodeParam(param))
+    }
+
+    internal fun decodeParamPayload(raw: String?): ParamPackagePayload? {
+        val text = raw?.trim()?.takeIf { it.isNotBlank() } ?: return null
+        return runCatching {
+            val obj = JsonParser.parseString(text).asJsonObject
+            decodeParam(obj)
+        }.getOrNull()
+    }
+
     private fun encodeParam(param: ParamPackagePayload): JsonObject = JsonObject().apply {
         param.surfaceGlobal?.let { add("surfaceGlobal", encodeSurfaceGlobal(it)) }
         param.surfaceScopes?.let { add("surfaceScopes", encodeSurfaceScopes(it)) }

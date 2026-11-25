@@ -55,6 +55,8 @@ object CoverCollectionManager {
     private var dayCache: List<Collection>? = null
     @Volatile
     private var nightCache: List<Collection>? = null
+    @Volatile
+    private var indexPreloadPending: Boolean = false
     private var shuffleSeedsCache: HashMap<String, Long>? = null
     private val revisionCounter = AtomicLong(0L)
     private val assignmentCache = hashMapOf<String, AssignmentState>()
@@ -171,7 +173,7 @@ object CoverCollectionManager {
         }
         editor.putString(PreferKey.coverCollectionShuffleSeeds, serializeShuffleSeeds(seeds))
         legacyKeys.forEach { editor.remove(it) }
-        editor.commit()
+        editor.apply()
         clearAssignments(collectionId)
         bumpRevision()
         return nextSeed
@@ -1011,9 +1013,21 @@ object CoverCollectionManager {
 
     private fun loadIndex(isNight: Boolean): List<Collection> {
         (if (isNight) nightCache else dayCache)?.let { return it }
+        if (isMainThread()) {
+            preloadSelectedIndexAsync()
+            return emptyList()
+        }
         val file = indexFile(isNight)
         val text = PackageIoKernel.readTextWithRecovery(file, 2L * 1024L * 1024L)
-            ?: return emptyList()
+        if (text == null) {
+            val empty = emptyList<Collection>()
+            if (isNight) {
+                nightCache = empty
+            } else {
+                dayCache = empty
+            }
+            return empty
+        }
         var needsMigration = false
         val rawList = GSON.fromJsonArray<Collection>(text).getOrDefault(emptyList())
         val diskList = ArrayList<Collection>(rawList.size)
@@ -1179,6 +1193,40 @@ object CoverCollectionManager {
         synchronized(this) {
             enqueueAsyncAssignmentLoadLocked(collectionId, null)
         }
+    }
+
+    fun preloadSelectedIndexAsync() {
+        val needDay = dayCache == null
+        val needNight = nightCache == null
+        if (!needDay && !needNight) return
+        synchronized(this) {
+            if (indexPreloadPending) return
+            indexPreloadPending = true
+        }
+        assignmentIoExecutor.submit {
+            try {
+                var warmedNonEmpty = false
+                if (dayCache == null && loadIndex(false).isNotEmpty()) {
+                    warmedNonEmpty = true
+                }
+                if (nightCache == null && loadIndex(true).isNotEmpty()) {
+                    warmedNonEmpty = true
+                }
+                if (warmedNonEmpty) {
+                    bumpRevision()
+                }
+            } finally {
+                synchronized(this) {
+                    indexPreloadPending = false
+                }
+            }
+        }
+    }
+
+    suspend fun prewarmCache() = withContext(IO) {
+        loadIndex(false)
+        loadIndex(true)
+        preloadSelectedAssignmentsAsync()
     }
 
     fun preloadSelectedAssignmentsAsync() {
@@ -1612,7 +1660,9 @@ object CoverCollectionManager {
         validImagesCache.remove(collectionId)
         clearDeckCacheForCollectionLocked(collectionId)
         val file = File(rootDir, "assignments/$collectionId.json")
-        file.delete()
+        if (!isMainThread()) {
+            file.delete()
+        }
         assignmentIoExecutor.submit {
             val shouldDelete = synchronized(this) {
                 (assignmentGenerations[collectionId] ?: 0L) == nextGen &&

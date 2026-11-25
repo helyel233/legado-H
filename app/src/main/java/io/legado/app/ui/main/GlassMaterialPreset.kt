@@ -3,6 +3,7 @@ package io.legado.app.ui.main
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.pkg.runtime.GlassMaterialModes
 import io.legado.app.utils.ColorUtils
 
 /**
@@ -26,16 +27,16 @@ import io.legado.app.utils.ColorUtils
  */
 object GlassMaterialPreset {
 
-    const val SOLID = "solid"
-    const val GLASS = "glass"
-    const val FROSTED = "frosted"
+    const val SOLID = GlassMaterialModes.SOLID
+    const val GLASS = GlassMaterialModes.GLASS
+    const val FROSTED = GlassMaterialModes.FROSTED
     /**
      * 透明无玻璃：只把表面变成半透明，透出背后内容但不模糊、不折射、无色散。
      * 透明层的颜色取主题包表面色（各宿主传自己的主题色），alpha 固定 [CLEAR_SURFACE_ALPHA]。
      */
-    const val CLEAR = "clear"
+    const val CLEAR = GlassMaterialModes.CLEAR
 
-    val modes = setOf(SOLID, GLASS, FROSTED, CLEAR)
+    val modes = GlassMaterialModes.modes
 
     /**
      * 透明无玻璃档的固定 alpha：透出背后内容以体现「透明」，同时保留足够遮盖力，

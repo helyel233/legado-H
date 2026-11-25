@@ -195,7 +195,13 @@ object CoverSlotApplyTarget {
     const val BOOKS = "books"
     const val BOTH = "both"
 
-    fun normalize(raw: String?, defaultValue: String = BOOKS): String {
+    /** Newly created cover-slot packages default to group/folder covers. */
+    const val DEFAULT_NEW_PACKAGE = GROUPS
+
+    /** Legacy packages without an explicit `applyTarget` continue targeting books. */
+    const val LEGACY_FALLBACK = BOOKS
+
+    fun normalize(raw: String?, defaultValue: String = LEGACY_FALLBACK): String {
         return when (raw?.trim()?.lowercase(Locale.ROOT)) {
             GROUPS, "group", "folder", "folders" -> GROUPS
             BOOKS, "book" -> BOOKS

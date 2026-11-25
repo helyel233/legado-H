@@ -25,8 +25,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,8 +64,10 @@ import io.legado.app.help.config.pkg.SurfaceGlobalParams
 import io.legado.app.help.config.pkg.SurfaceScopeOverride
 import io.legado.app.help.config.pkg.SurfaceScopesParams
 import io.legado.app.help.config.pkg.UiScope
+import io.legado.app.help.config.pkg.UnifiedPackageDraftStore
 import io.legado.app.help.config.pkg.UnifiedPackageRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import java.io.File
 import io.legado.app.ui.main.GlassMaterialPreset
@@ -619,9 +619,28 @@ private fun ArtFontSlotSelectorRow(
  * - Tab 1：`@geometry`（全局圆角倍率 / 阴影 / 空间密度 densityScale，全局单份不随日夜跳变）
  * - Tab 2：`@surfaceScopes`（顶栏 / 底栏 / 书架卡 / 弹窗 4 大区域独立覆写）
  */
-private enum class ParamEditBaseline {
-    LIVE,
-    SAVED
+private fun summarizeLiveVsSavedDiff(
+    live: ParamPackagePayload,
+    saved: ParamPackagePayload
+): List<String> {
+    val diffs = ArrayList<String>(8)
+    val lg = live.surfaceGlobal ?: SurfaceGlobalParams()
+    val sg = normalizeParamGlobalDraft(saved.surfaceGlobal ?: SurfaceGlobalParams())
+    if (lg.materialMode != sg.materialMode) {
+        val liveLabel = ParamStylePreset.labelOf(lg.materialMode) ?: lg.materialMode.orEmpty()
+        val savedLabel = ParamStylePreset.labelOf(sg.materialMode) ?: sg.materialMode.orEmpty()
+        diffs += "材质 $liveLabel(当前) vs $savedLabel(包内)"
+    }
+    if (lg.frostedLevel != sg.frostedLevel) diffs += "磨砂强度 ${lg.frostedLevel ?: "-"} vs ${sg.frostedLevel ?: "-"}"
+    if (lg.liquidLevel != sg.liquidLevel) diffs += "液态强度 ${lg.liquidLevel ?: "-"} vs ${sg.liquidLevel ?: "-"}"
+    if (lg.surfaceAlpha != sg.surfaceAlpha) diffs += "表面不透明度 ${lg.surfaceAlpha ?: "-"}% vs ${sg.surfaceAlpha ?: "-"}%"
+    if (lg.dialogAlpha != sg.dialogAlpha) diffs += "弹窗不透明度 ${lg.dialogAlpha ?: "-"}% vs ${sg.dialogAlpha ?: "-"}%"
+    if (lg.panelBorderAlpha != sg.panelBorderAlpha) diffs += "边框不透明度 ${lg.panelBorderAlpha ?: "-"}% vs ${sg.panelBorderAlpha ?: "-"}%"
+    if (lg.cornerBaseScale != sg.cornerBaseScale) diffs += "圆角倍率 ${lg.cornerBaseScale ?: "-"} vs ${sg.cornerBaseScale ?: "-"}"
+    val liveDensity = live.layout?.densityScale
+    val savedDensity = saved.layout?.densityScale ?: 1f
+    if (liveDensity != null && liveDensity != savedDensity) diffs += "密度 ${liveDensity}x vs ${savedDensity}x"
+    return diffs
 }
 
 private fun normalizeParamGlobalDraft(g: SurfaceGlobalParams): SurfaceGlobalParams = g.copy(
@@ -656,8 +675,46 @@ private fun buildScopeDraftMap(scopes: SurfaceScopesParams?): Map<UiScope, Surfa
 )
 
 /**
+ * Pure draft payload builder anchored strictly on [savedParam].
+ * Preserves all non-edited fields (layout flags, `unknownFields`, etc.) and explicit
+ * `presetMatched` / `stylePresetId` without letting runtime LIVE snapshots contaminate the package.
+ */
+internal fun buildParamDraftPayload(
+    savedParam: ParamPackagePayload,
+    globalDraft: SurfaceGlobalParams,
+    strokeColorInput: String,
+    densityStep: Int,
+    scopeMap: Map<UiScope, SurfaceScopeOverride>
+): ParamPackagePayload {
+    val updatedGlobal = globalDraft.copy(
+        blurScale = (globalDraft.blurScale ?: 100).coerceIn(0, 200),
+        tintScale = (globalDraft.tintScale ?: 100).coerceIn(0, 200),
+        shellScale = (globalDraft.shellScale ?: 100).coerceIn(0, 200),
+        strokeScale = (globalDraft.strokeScale ?: 100).coerceIn(0, 200),
+        strokeColor = strokeColorInput.trim().takeIf { it.isNotBlank() }?.let { raw ->
+            ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
+        }
+    )
+    val updatedScopes = SurfaceScopesParams(
+        topBar = scopeMap[UiScope.TOP_BAR]?.takeUnless { it.isEmpty() },
+        bottomBar = scopeMap[UiScope.BOTTOM_BAR]?.takeUnless { it.isEmpty() },
+        bookshelfCard = scopeMap[UiScope.BOOKSHELF_CARD]?.takeUnless { it.isEmpty() },
+        dialog = scopeMap[UiScope.DIALOG]?.takeUnless { it.isEmpty() }
+    )
+    val baseLayout = savedParam.layout ?: LayoutParams()
+    val updatedLayout = baseLayout.copy(
+        densityScale = densityStep / 10f
+    )
+    return savedParam.copy(
+        surfaceGlobal = updatedGlobal,
+        surfaceScopes = updatedScopes,
+        layout = updatedLayout
+    )
+}
+
+/**
  * 二级《参数设置包编辑器》：材质档位（实底/透明/磨砂/液态 + 折叠光学微调）、几何手感与 4 区域覆写。
- * 支持实时预览、取消完整回滚（覆盖日夜双套键）以及脏态基线选择。
+ * 支持实时预览、取消完整回滚（覆盖日夜双套键）、未保存退出三选确认以及安全保存基线隔离。
  */
 @Composable
 internal fun ParamPackageEditorDialog(
@@ -665,6 +722,7 @@ internal fun ParamPackageEditorDialog(
     existingNames: List<String>,
     isMountedActive: Boolean = false,
     isParamDirty: Boolean = false,
+    recoveredDraft: Pair<String, ParamPackagePayload>? = null,
     onLiveRuntimeChanged: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (newName: String, updatedParam: ParamPackagePayload) -> Unit
@@ -674,58 +732,63 @@ internal fun ParamPackageEditorDialog(
     val dialogPalette = style.toMiuixPalette()
     val mgmtPalette = rememberAppManagementPalette()
     val savedParam = remember(entry.manifest.id) { entry.manifest.param ?: ParamPackagePayload() }
+    val draftSeedParam = remember(entry.manifest.id, recoveredDraft) {
+        recoveredDraft?.second ?: savedParam
+    }
     val runtimeSnapshot = remember(entry.manifest.id) {
         UnifiedPackageRepository.captureParamRuntimeSnapshot(context)
     }
     val showDirtyBaselineBanner = isMountedActive && isParamDirty
-    val liveParamSnapshot = remember(entry.manifest.id, showDirtyBaselineBanner) {
+    val liveDiffSummary = remember(entry.manifest.id, showDirtyBaselineBanner) {
         if (showDirtyBaselineBanner) {
-            UnifiedPackageRepository.captureParamPayloadSnapshot(context, AppConfig.isNightTheme)
+            summarizeLiveVsSavedDiff(
+                live = UnifiedPackageRepository.captureParamPayloadSnapshot(context, AppConfig.isNightTheme),
+                saved = savedParam
+            )
         } else {
-            null
+            emptyList()
         }
     }
-    var baselineMode by remember(entry.manifest.id) {
-        mutableStateOf(
-            if (showDirtyBaselineBanner) ParamEditBaseline.LIVE else ParamEditBaseline.SAVED
-        )
-    }
-    val activeBaselineParam = if (baselineMode == ParamEditBaseline.LIVE && liveParamSnapshot != null) {
-        liveParamSnapshot
-    } else {
-        savedParam
+    var previewPreEditRuntime by remember(entry.manifest.id) {
+        mutableStateOf(showDirtyBaselineBanner && recoveredDraft == null)
     }
 
-    var nameDraft by remember(entry.manifest.id) { mutableStateOf(entry.manifest.name) }
+    var nameDraft by remember(entry.manifest.id, recoveredDraft) {
+        mutableStateOf(recoveredDraft?.first?.takeIf { it.isNotBlank() } ?: entry.manifest.name)
+    }
     var activeTab by remember(entry.manifest.id) { mutableIntStateOf(0) }
     var advancedExpanded by remember(entry.manifest.id) { mutableStateOf(false) }
     var liveApplyEnabled by remember(entry.manifest.id) { mutableStateOf(isMountedActive) }
     var hasAppliedLive by remember(entry.manifest.id) { mutableStateOf(false) }
-    var skipInitialLiveSync by remember(entry.manifest.id) { mutableStateOf(isMountedActive) }
+    var skipInitialLiveSync by remember(entry.manifest.id) {
+        mutableStateOf(isMountedActive && !showDirtyBaselineBanner && recoveredDraft == null)
+    }
+    var showDiscardConfirm by remember(entry.manifest.id) { mutableStateOf(false) }
 
-    var globalDraft by remember(entry.manifest.id) {
-        mutableStateOf(normalizeParamGlobalDraft(activeBaselineParam.surfaceGlobal ?: SurfaceGlobalParams()))
+    var globalDraft by remember(entry.manifest.id, recoveredDraft) {
+        mutableStateOf(normalizeParamGlobalDraft(draftSeedParam.surfaceGlobal ?: SurfaceGlobalParams()))
     }
-    var strokeColorInput by remember(entry.manifest.id) {
-        mutableStateOf(formatStrokeColorDraft(activeBaselineParam.surfaceGlobal?.strokeColor))
+    var strokeColorInput by remember(entry.manifest.id, recoveredDraft) {
+        mutableStateOf(formatStrokeColorDraft(draftSeedParam.surfaceGlobal?.strokeColor))
     }
-    var densityStep by remember(entry.manifest.id) {
-        mutableIntStateOf(((activeBaselineParam.layout?.densityScale ?: 1f) * 10f).toInt().coerceIn(8, 13))
+    var densityStep by remember(entry.manifest.id, recoveredDraft) {
+        mutableIntStateOf(((draftSeedParam.layout?.densityScale ?: 1f) * 10f).toInt().coerceIn(8, 13))
     }
 
     // @surfaceScopes (4 Scopes)
     var selectedScope by remember(entry.manifest.id) { mutableStateOf(UiScope.TOP_BAR) }
-    var scopeMap by remember(entry.manifest.id) {
-        mutableStateOf(buildScopeDraftMap(activeBaselineParam.surfaceScopes))
+    var scopeMap by remember(entry.manifest.id, recoveredDraft) {
+        mutableStateOf(buildScopeDraftMap(draftSeedParam.surfaceScopes))
     }
 
-    val loadBaselineIntoDrafts: (ParamPackagePayload) -> Unit = { target ->
-        val tg = target.surfaceGlobal ?: SurfaceGlobalParams()
-        val tl = target.layout ?: LayoutParams()
-        globalDraft = normalizeParamGlobalDraft(tg)
-        strokeColorInput = formatStrokeColorDraft(tg.strokeColor)
-        densityStep = ((tl.densityScale ?: 1f) * 10f).toInt().coerceIn(8, 13)
-        scopeMap = buildScopeDraftMap(target.surfaceScopes)
+    val initialDraftPayload = remember(entry.manifest.id) {
+        buildParamDraftPayload(
+            savedParam = savedParam,
+            globalDraft = normalizeParamGlobalDraft(savedParam.surfaceGlobal ?: SurfaceGlobalParams()),
+            strokeColorInput = formatStrokeColorDraft(savedParam.surfaceGlobal?.strokeColor),
+            densityStep = ((savedParam.layout?.densityScale ?: 1f) * 10f).toInt().coerceIn(8, 13),
+            scopeMap = buildScopeDraftMap(savedParam.surfaceScopes)
+        )
     }
 
     val deviation = remember(globalDraft) {
@@ -748,36 +811,32 @@ internal fun ParamPackageEditorDialog(
     val replyCornerFollow = globalDraft.uiCornerReplyFollow ?: true
 
     val buildDraftPayload: () -> ParamPackagePayload = {
-        val updatedGlobal = ParamStylePreset.syncDerivedPresetState(
-            globalDraft.copy(
-                blurScale = blurScale.coerceIn(0, 200),
-                tintScale = tintScale.coerceIn(0, 200),
-                shellScale = shellScale.coerceIn(0, 200),
-                strokeScale = strokeScale.coerceIn(0, 200),
-                strokeColor = strokeColorInput.trim().takeIf { it.isNotBlank() }?.let { raw ->
-                    ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
-                }
-            )
-        )
-        val updatedScopes = SurfaceScopesParams(
-            topBar = scopeMap[UiScope.TOP_BAR]?.takeUnless { it.isEmpty() },
-            bottomBar = scopeMap[UiScope.BOTTOM_BAR]?.takeUnless { it.isEmpty() },
-            bookshelfCard = scopeMap[UiScope.BOOKSHELF_CARD]?.takeUnless { it.isEmpty() },
-            dialog = scopeMap[UiScope.DIALOG]?.takeUnless { it.isEmpty() }
-        )
-        val baseLayout = activeBaselineParam.layout ?: LayoutParams()
-        val updatedLayout = baseLayout.copy(
-            densityScale = densityStep / 10f
-        )
-        activeBaselineParam.copy(
-            surfaceGlobal = updatedGlobal,
-            surfaceScopes = updatedScopes,
-            layout = updatedLayout
+        buildParamDraftPayload(
+            savedParam = savedParam,
+            globalDraft = globalDraft,
+            strokeColorInput = strokeColorInput,
+            densityStep = densityStep,
+            scopeMap = scopeMap
         )
     }
+    val currentDraftPayload = buildDraftPayload()
+    val hasUnsavedChanges = nameDraft.trim() != entry.manifest.name.trim() ||
+        currentDraftPayload != initialDraftPayload
 
-    LaunchedEffect(liveApplyEnabled, globalDraft, strokeColorInput, densityStep, scopeMap) {
-        if (!liveApplyEnabled) {
+    val exitPreEditRuntimePreview: () -> Unit = {
+        if (previewPreEditRuntime) {
+            previewPreEditRuntime = false
+        }
+        skipInitialLiveSync = false
+    }
+
+    val updateGlobalDraft: ((SurfaceGlobalParams) -> SurfaceGlobalParams) -> Unit = { transform ->
+        exitPreEditRuntimePreview()
+        globalDraft = transform(globalDraft)
+    }
+
+    LaunchedEffect(liveApplyEnabled, previewPreEditRuntime, globalDraft, strokeColorInput, densityStep, scopeMap) {
+        if (!liveApplyEnabled || previewPreEditRuntime) {
             if (hasAppliedLive) {
                 UnifiedPackageRepository.restoreParamRuntimeSnapshot(context, runtimeSnapshot)
                 hasAppliedLive = false
@@ -799,12 +858,33 @@ internal fun ParamPackageEditorDialog(
         onLiveRuntimeChanged()
     }
 
-    val handleDismiss: () -> Unit = {
+    LaunchedEffect(entry.manifest.id, nameDraft, currentDraftPayload, hasUnsavedChanges) {
+        if (!hasUnsavedChanges) return@LaunchedEffect
+        delay(250)
+        UnifiedPackageDraftStore.saveParamDraft(
+            context = context,
+            packageId = entry.manifest.id,
+            packageName = nameDraft,
+            isNight = AppConfig.isNightTheme,
+            payload = currentDraftPayload
+        )
+    }
+
+    val performDiscardAndClose: () -> Unit = {
+        UnifiedPackageDraftStore.clearParamDraft(context)
         if (hasAppliedLive) {
             UnifiedPackageRepository.restoreParamRuntimeSnapshot(context, runtimeSnapshot)
             onLiveRuntimeChanged()
         }
         onDismiss()
+    }
+
+    val handleDismiss: () -> Unit = {
+        if (hasUnsavedChanges) {
+            showDiscardConfirm = true
+        } else {
+            performDiscardAndClose()
+        }
     }
 
     val otherNames = remember(existingNames, entry.manifest.name) {
@@ -887,86 +967,48 @@ internal fun ParamPackageEditorDialog(
                                 verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 Text(
-                                    text = "当前生效值已偏离本包（未保存微调）",
+                                    text = "当前屏幕存在未保存的运行时微调",
                                     color = dialogPalette.accent,
                                     fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
-                                    text = "选择编辑与保存的基线，避免静默覆盖当前微调：",
+                                    text = "编辑与保存始终基于包内保存值（不混入运行时覆写）。" +
+                                        if (liveDiffSummary.isNotEmpty()) {
+                                            "差异：${liveDiffSummary.take(4).joinToString("；")}"
+                                        } else {
+                                            ""
+                                        },
                                     color = style.secondaryText,
                                     fontSize = 11.sp
                                 )
                                 Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .clickable {
-                                            if (baselineMode != ParamEditBaseline.LIVE && liveParamSnapshot != null) {
-                                                baselineMode = ParamEditBaseline.LIVE
-                                                loadBaselineIntoDrafts(liveParamSnapshot)
-                                            }
-                                        }
-                                        .padding(vertical = 2.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    RadioButton(
-                                        selected = baselineMode == ParamEditBaseline.LIVE,
-                                        onClick = {
-                                            if (baselineMode != ParamEditBaseline.LIVE && liveParamSnapshot != null) {
-                                                baselineMode = ParamEditBaseline.LIVE
-                                                loadBaselineIntoDrafts(liveParamSnapshot)
-                                            }
-                                        },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = dialogPalette.accent,
-                                            unselectedColor = style.secondaryText
-                                        ),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "以当前生效值为基线（保留未保存微调）",
+                                        text = if (previewPreEditRuntime) {
+                                            "屏幕正展示：打开前微调态"
+                                        } else {
+                                            "屏幕正展示：当前编辑草稿"
+                                        },
                                         color = style.primaryText,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (baselineMode == ParamEditBaseline.LIVE) FontWeight.SemiBold else FontWeight.Normal
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f)
                                     )
-                                }
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .clickable {
-                                            if (baselineMode != ParamEditBaseline.SAVED) {
-                                                baselineMode = ParamEditBaseline.SAVED
-                                                skipInitialLiveSync = false
-                                                loadBaselineIntoDrafts(savedParam)
+                                    LegadoMiuixActionButton(
+                                        text = if (previewPreEditRuntime) "预览编辑草稿" else "看打开前微调态",
+                                        palette = dialogPalette,
+                                        minHeight = 28.dp,
+                                        onClick = {
+                                            if (previewPreEditRuntime) {
+                                                exitPreEditRuntimePreview()
+                                            } else {
+                                                previewPreEditRuntime = true
                                             }
                                         }
-                                        .padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    RadioButton(
-                                        selected = baselineMode == ParamEditBaseline.SAVED,
-                                        onClick = {
-                                            if (baselineMode != ParamEditBaseline.SAVED) {
-                                                baselineMode = ParamEditBaseline.SAVED
-                                                skipInitialLiveSync = false
-                                                loadBaselineIntoDrafts(savedParam)
-                                            }
-                                        },
-                                        colors = RadioButtonDefaults.colors(
-                                            selectedColor = dialogPalette.accent,
-                                            unselectedColor = style.secondaryText
-                                        ),
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text(
-                                        text = "以包内保存值为基线（从原包参数开始）",
-                                        color = style.primaryText,
-                                        fontSize = 12.sp,
-                                        fontWeight = if (baselineMode == ParamEditBaseline.SAVED) FontWeight.SemiBold else FontWeight.Normal
                                     )
                                 }
                             }
@@ -1034,7 +1076,8 @@ internal fun ParamPackageEditorDialog(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
                                 )
-                                if (deviation.isExactMatch) {
+                                val isExplicitMatched = globalDraft.presetMatched != false
+                                if (isExplicitMatched && deviation.isExactMatch) {
                                     Text(
                                         text = "${deviation.tierSpec.label}（原样）",
                                         color = dialogPalette.accent,
@@ -1053,12 +1096,16 @@ internal fun ParamPackageEditorDialog(
                                                     globalDraft,
                                                     deviation.tierSpec.id
                                                 )
-                                                globalDraft = resetDraft
+                                                updateGlobalDraft { resetDraft }
                                                 strokeColorInput = resetDraft.strokeColor.orEmpty()
                                             }
                                     ) {
                                         Text(
-                                            text = "已微调 ${deviation.diffCount} 项 · 回到${deviation.tierSpec.label}",
+                                            text = if (deviation.isExactMatch) {
+                                                "自定义 · 恢复${deviation.tierSpec.label}"
+                                            } else {
+                                                "已微调 ${deviation.diffCount} 项 · 回到${deviation.tierSpec.label}"
+                                            },
                                             color = dialogPalette.accent,
                                             fontSize = 11.sp,
                                             fontWeight = FontWeight.SemiBold,
@@ -1099,7 +1146,7 @@ internal fun ParamPackageEditorDialog(
                                                     globalDraft,
                                                     spec.id
                                                 )
-                                                globalDraft = nextDraft
+                                                updateGlobalDraft { nextDraft }
                                                 strokeColorInput = nextDraft.strokeColor.orEmpty()
                                             }
                                     ) {
@@ -1143,9 +1190,11 @@ internal fun ParamPackageEditorDialog(
                                     range = 0..100,
                                     palette = mgmtPalette,
                                     onValueChange = {
-                                        globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                            globalDraft.copy(frostedLevel = it, liquidLevel = it)
-                                        )
+                                        updateGlobalDraft { draft ->
+                                            ParamStylePreset.markCustomized(
+                                                draft.copy(frostedLevel = it, liquidLevel = it)
+                                            )
+                                        }
                                     }
                                 )
                             }
@@ -1156,9 +1205,9 @@ internal fun ParamPackageEditorDialog(
                                 range = 0..100,
                                 palette = mgmtPalette,
                                 onValueChange = {
-                                    globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                        globalDraft.copy(surfaceAlpha = it)
-                                    )
+                                    updateGlobalDraft { draft ->
+                                        ParamStylePreset.markCustomized(draft.copy(surfaceAlpha = it))
+                                    }
                                 }
                             )
                             EditorSliderRow(
@@ -1168,9 +1217,9 @@ internal fun ParamPackageEditorDialog(
                                 range = 0..100,
                                 palette = mgmtPalette,
                                 onValueChange = {
-                                    globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                        globalDraft.copy(dialogAlpha = it)
-                                    )
+                                    updateGlobalDraft { draft ->
+                                        ParamStylePreset.markCustomized(draft.copy(dialogAlpha = it))
+                                    }
                                 }
                             )
                             HorizontalDivider(color = mgmtPalette.settings.divider, thickness = 0.5.dp)
@@ -1222,9 +1271,9 @@ internal fun ParamPackageEditorDialog(
                                             range = 0..200,
                                             palette = mgmtPalette,
                                             onValueChange = {
-                                                globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                                    globalDraft.copy(blurScale = it)
-                                                )
+                                                updateGlobalDraft { draft ->
+                                                    ParamStylePreset.markCustomized(draft.copy(blurScale = it))
+                                                }
                                             }
                                         )
                                         EditorSliderRow(
@@ -1234,9 +1283,9 @@ internal fun ParamPackageEditorDialog(
                                             range = 0..200,
                                             palette = mgmtPalette,
                                             onValueChange = {
-                                                globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                                    globalDraft.copy(tintScale = it)
-                                                )
+                                                updateGlobalDraft { draft ->
+                                                    ParamStylePreset.markCustomized(draft.copy(tintScale = it))
+                                                }
                                             }
                                         )
                                         EditorSliderRow(
@@ -1246,9 +1295,9 @@ internal fun ParamPackageEditorDialog(
                                             range = 0..200,
                                             palette = mgmtPalette,
                                             onValueChange = {
-                                                globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                                    globalDraft.copy(shellScale = it)
-                                                )
+                                                updateGlobalDraft { draft ->
+                                                    ParamStylePreset.markCustomized(draft.copy(shellScale = it))
+                                                }
                                             }
                                         )
                                         EditorSliderRow(
@@ -1258,9 +1307,9 @@ internal fun ParamPackageEditorDialog(
                                             range = 0..200,
                                             palette = mgmtPalette,
                                             onValueChange = {
-                                                globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                                    globalDraft.copy(strokeScale = it)
-                                                )
+                                                updateGlobalDraft { draft ->
+                                                    ParamStylePreset.markCustomized(draft.copy(strokeScale = it))
+                                                }
                                             }
                                         )
                                         ColorFieldRow(
@@ -1274,9 +1323,9 @@ internal fun ParamPackageEditorDialog(
                                             val parsedStroke = nextInput.trim().takeIf { it.isNotBlank() }?.let { raw ->
                                                 ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
                                             }
-                                            globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                                globalDraft.copy(strokeColor = parsedStroke)
-                                            )
+                                            updateGlobalDraft { draft ->
+                                                ParamStylePreset.markCustomized(draft.copy(strokeColor = parsedStroke))
+                                            }
                                         }
                                     }
                                     EditorSliderRow(
@@ -1286,9 +1335,9 @@ internal fun ParamPackageEditorDialog(
                                         range = 0..100,
                                         palette = mgmtPalette,
                                         onValueChange = {
-                                            globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                                globalDraft.copy(panelBorderAlpha = it)
-                                            )
+                                            updateGlobalDraft { draft ->
+                                                ParamStylePreset.markCustomized(draft.copy(panelBorderAlpha = it))
+                                            }
                                         }
                                     )
                                     EditorSliderRow(
@@ -1298,9 +1347,11 @@ internal fun ParamPackageEditorDialog(
                                         range = 0..25,
                                         palette = mgmtPalette,
                                         onValueChange = {
-                                            globalDraft = ParamStylePreset.syncDerivedPresetState(
-                                                globalDraft.copy(wallpaperBlurDay = it, wallpaperBlurNight = it)
-                                            )
+                                            updateGlobalDraft { draft ->
+                                                ParamStylePreset.markCustomized(
+                                                    draft.copy(wallpaperBlurDay = it, wallpaperBlurNight = it)
+                                                )
+                                            }
                                         }
                                     )
                                 }
@@ -1319,7 +1370,7 @@ internal fun ParamPackageEditorDialog(
                                 range = 0..30,
                                 palette = mgmtPalette,
                                 onValueChange = {
-                                    globalDraft = globalDraft.copy(cornerBaseScale = it / 10f)
+                                    updateGlobalDraft { draft -> draft.copy(cornerBaseScale = it / 10f) }
                                 }
                             )
                             EditorSliderRow(
@@ -1329,7 +1380,7 @@ internal fun ParamPackageEditorDialog(
                                 range = 0..24,
                                 palette = mgmtPalette,
                                 onValueChange = {
-                                    globalDraft = globalDraft.copy(cardShadow = it)
+                                    updateGlobalDraft { draft -> draft.copy(cardShadow = it) }
                                 }
                             )
                             EditorSliderRow(
@@ -1338,7 +1389,10 @@ internal fun ParamPackageEditorDialog(
                                 value = densityStep,
                                 range = 8..13,
                                 palette = mgmtPalette,
-                                onValueChange = { densityStep = it }
+                                onValueChange = {
+                                    exitPreEditRuntimePreview()
+                                    densityStep = it
+                                }
                             )
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -1349,7 +1403,7 @@ internal fun ParamPackageEditorDialog(
                                 LegadoMiuixSwitch(
                                     checked = searchCornerFollow,
                                     onCheckedChange = {
-                                        globalDraft = globalDraft.copy(uiCornerSearchFollow = it)
+                                        updateGlobalDraft { draft -> draft.copy(uiCornerSearchFollow = it) }
                                     },
                                     palette = dialogPalette
                                 )
@@ -1363,7 +1417,7 @@ internal fun ParamPackageEditorDialog(
                                 LegadoMiuixSwitch(
                                     checked = replyCornerFollow,
                                     onCheckedChange = {
-                                        globalDraft = globalDraft.copy(uiCornerReplyFollow = it)
+                                        updateGlobalDraft { draft -> draft.copy(uiCornerReplyFollow = it) }
                                     },
                                     palette = dialogPalette
                                 )
@@ -1384,6 +1438,7 @@ internal fun ParamPackageEditorDialog(
                                 selectedValue = currentScopeOverride.materialMode.orEmpty(),
                                 palette = dialogPalette,
                                 onSelected = { mode ->
+                                    exitPreEditRuntimePreview()
                                     scopeMap = scopeMap.toMutableMap().apply {
                                         put(selectedScope, currentScopeOverride.copy(materialMode = mode.ifBlank { null }))
                                     }
@@ -1402,6 +1457,7 @@ internal fun ParamPackageEditorDialog(
                                 range = 0..30,
                                 palette = mgmtPalette,
                                 onValueChange = { step ->
+                                    exitPreEditRuntimePreview()
                                     scopeMap = scopeMap.toMutableMap().apply {
                                         put(selectedScope, currentScopeOverride.copy(cornerScale = step / 10f))
                                     }
@@ -1415,6 +1471,7 @@ internal fun ParamPackageEditorDialog(
                                 range = 0..100,
                                 palette = mgmtPalette,
                                 onValueChange = { a ->
+                                    exitPreEditRuntimePreview()
                                     scopeMap = scopeMap.toMutableMap().apply {
                                         put(selectedScope, currentScopeOverride.copy(alpha = a))
                                     }
@@ -1428,6 +1485,7 @@ internal fun ParamPackageEditorDialog(
                                 range = 0..24,
                                 palette = mgmtPalette,
                                 onValueChange = { sh ->
+                                    exitPreEditRuntimePreview()
                                     scopeMap = scopeMap.toMutableMap().apply {
                                         put(selectedScope, currentScopeOverride.copy(shadowElevation = sh))
                                     }
@@ -1443,6 +1501,7 @@ internal fun ParamPackageEditorDialog(
                                         palette = dialogPalette,
                                         minHeight = 32.dp,
                                         onClick = {
+                                            exitPreEditRuntimePreview()
                                             scopeMap = scopeMap.toMutableMap().apply {
                                                 put(selectedScope, SurfaceScopeOverride())
                                             }
@@ -1457,7 +1516,7 @@ internal fun ParamPackageEditorDialog(
             actions = {
                 if (showDirtyBaselineBanner) {
                     Text(
-                        text = "将把微调固化进本包",
+                        text = "基于包内原值保存",
                         color = style.secondaryText,
                         fontSize = 11.sp,
                         maxLines = 1,
@@ -1478,6 +1537,7 @@ internal fun ParamPackageEditorDialog(
                     onClick = {
                         if (!canSave) return@LegadoMiuixActionButton
                         val payloadToSave = buildDraftPayload()
+                        UnifiedPackageDraftStore.clearParamDraft(context)
                         if (!isMountedActive && hasAppliedLive) {
                             UnifiedPackageRepository.restoreParamRuntimeSnapshot(context, runtimeSnapshot)
                             onLiveRuntimeChanged()
@@ -1486,6 +1546,55 @@ internal fun ParamPackageEditorDialog(
                     }
                 )
             }
+            )
+        }
+    }
+
+    if (showDiscardConfirm) {
+        Dialog(onDismissRequest = { showDiscardConfirm = false }) {
+            AppDialogFrame(
+                title = "存在未保存的改动",
+                content = {
+                    Text(
+                        text = "当前对「${trimmedName.ifBlank { entry.manifest.name }}」的参数调整尚未保存，请选择如何处理：",
+                        color = style.secondaryText,
+                        fontSize = 13.sp
+                    )
+                },
+                actions = {
+                    LegadoMiuixActionButton(
+                        text = "继续编辑",
+                        palette = dialogPalette,
+                        onClick = { showDiscardConfirm = false }
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    LegadoMiuixActionButton(
+                        text = "放弃改动",
+                        palette = dialogPalette,
+                        onClick = {
+                            showDiscardConfirm = false
+                            performDiscardAndClose()
+                        }
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    LegadoMiuixActionButton(
+                        text = "保存并关闭",
+                        palette = dialogPalette,
+                        primary = true,
+                        enabled = canSave,
+                        onClick = {
+                            if (!canSave) return@LegadoMiuixActionButton
+                            showDiscardConfirm = false
+                            val payloadToSave = buildDraftPayload()
+                            UnifiedPackageDraftStore.clearParamDraft(context)
+                            if (!isMountedActive && hasAppliedLive) {
+                                UnifiedPackageRepository.restoreParamRuntimeSnapshot(context, runtimeSnapshot)
+                                onLiveRuntimeChanged()
+                            }
+                            onSave(trimmedName, payloadToSave)
+                        }
+                    )
+                }
             )
         }
     }
@@ -1666,7 +1775,11 @@ internal fun CoverSlotPackageEditorDialog(
 ) {
     val style = rememberAppDialogStyle()
     val dialogPalette = style.toMiuixPalette()
-    val initialSlot = entry.manifest.coverSlot ?: CoverSlotPackagePayload(applyTarget = CoverSlotApplyTarget.GROUPS)
+    val legacyNullTarget = entry.manifest.coverSlot != null &&
+        entry.manifest.coverSlot.applyTarget.isNullOrBlank()
+    val initialSlot = entry.manifest.coverSlot ?: CoverSlotPackagePayload(
+        applyTarget = CoverSlotApplyTarget.DEFAULT_NEW_PACKAGE
+    )
     val baseDir = remember(entry.manifest.id, entry.manifest.basePackageId) {
         entry.manifest.basePackageId?.takeIf { it.isNotBlank() }?.let { baseId ->
             entry.dir.parentFile?.listFiles()?.firstOrNull { dir ->
@@ -1682,7 +1795,7 @@ internal fun CoverSlotPackageEditorDialog(
         mutableStateOf(
             CoverSlotApplyTarget.normalize(
                 initialSlot.applyTarget,
-                defaultValue = CoverSlotApplyTarget.BOOKS
+                defaultValue = CoverSlotApplyTarget.LEGACY_FALLBACK
             )
         )
     }
@@ -1782,6 +1895,13 @@ internal fun CoverSlotPackageEditorDialog(
                                 style = style,
                                 palette = dialogPalette,
                                 onDismiss = { onDismissTargetHint?.invoke() }
+                            )
+                        }
+                        if (legacyNullTarget) {
+                            Text(
+                                text = "旧版封面包未声明应用目标，已按兼容规则默认「书籍封面」；保存后将固化当前目标。",
+                                color = dialogPalette.accent,
+                                fontSize = 11.sp
                             )
                         }
                         LegadoSegmentedControl(
@@ -2003,7 +2123,7 @@ internal fun CoverSlotPackageEditorDialog(
                                 applyMode = CoverSlotApplyMode.normalize(applyModeDraft),
                                 applyTarget = CoverSlotApplyTarget.normalize(
                                     applyTargetDraft,
-                                    defaultValue = CoverSlotApplyTarget.GROUPS
+                                    defaultValue = CoverSlotApplyTarget.DEFAULT_NEW_PACKAGE
                                 ),
                                 dayDefaultCoverPath = dayDefaultCoverDraft.trim().ifBlank { null },
                                 nightDefaultCoverPath = nightDefaultCoverDraft.trim().ifBlank { null },
