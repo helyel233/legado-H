@@ -22,10 +22,10 @@ import io.legado.app.R
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.AppCloudStorage
+import io.legado.app.help.config.pkg.runtime.resolvedExploreGlassMode
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.getSecondaryTextColor
-import io.legado.app.ui.main.explore.resolvedExploreGlassMode
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON

@@ -11,26 +11,7 @@ object ThemeRuntimeKeys {
 
     // 日夜键拆分前，这些字段日夜共用旧键。首次升级时把旧值复制到夜间键，
     // 否则夜间模式的字号/字体/颜色/透明度等会全部回落默认值。
-    private val legacyNightPairs = listOf(
-        PreferKey.fontScale to PreferKey.fontScaleN,
-        PreferKey.uiFontPath to PreferKey.uiFontPathN,
-        PreferKey.titleFontPath to PreferKey.titleFontPathN,
-        PreferKey.uiFontColor to PreferKey.uiFontColorN,
-        PreferKey.titleFontColor to PreferKey.titleFontColorN,
-        PreferKey.uiCornerScale to PreferKey.uiCornerScaleN,
-        PreferKey.uiLayoutAlpha to PreferKey.uiLayoutAlphaN,
-        PreferKey.dialogAlpha to PreferKey.dialogAlphaN,
-        PreferKey.uiCornerSearchFollow to PreferKey.uiCornerSearchFollowN,
-        PreferKey.uiCornerReplyFollow to PreferKey.uiCornerReplyFollowN,
-        PreferKey.themeCardColor to PreferKey.themeCardColorN,
-        PreferKey.themeMutedColor to PreferKey.themeMutedColorN,
-        PreferKey.themeSearchFieldBackgroundColor to PreferKey.themeSearchFieldBackgroundColorN,
-        PreferKey.themeTabBackgroundColor to PreferKey.themeTabBackgroundColorN,
-        PreferKey.themeShelfColor to PreferKey.themeShelfColorN,
-        PreferKey.themeCardShadow to PreferKey.themeCardShadowN,
-        PreferKey.themeCardBackgroundBlur to PreferKey.themeCardBackgroundBlurN,
-        PreferKey.themeExploreGlassBlur to PreferKey.themeExploreGlassBlurN
-    )
+    private val legacyNightPairs = NightKeyPairs.themeRuntimePairs
 
     fun migrateLegacyNightValues(context: Context) {
         val prefs = context.defaultSharedPreferences
@@ -118,42 +99,5 @@ object ThemeRuntimeKeys {
         }
     }
 
-    fun allKeys(): Set<String> = setOf(
-        PreferKey.fontScale,
-        PreferKey.fontScaleN,
-        PreferKey.uiFontPath,
-        PreferKey.uiFontPathN,
-        PreferKey.titleFontPath,
-        PreferKey.titleFontPathN,
-        PreferKey.uiFontColor,
-        PreferKey.uiFontColorN,
-        PreferKey.titleFontColor,
-        PreferKey.titleFontColorN,
-        PreferKey.uiCornerScale,
-        PreferKey.uiCornerScaleN,
-        PreferKey.uiLayoutAlpha,
-        PreferKey.uiLayoutAlphaN,
-        PreferKey.dialogAlpha,
-        PreferKey.dialogAlphaN,
-        PreferKey.uiCornerSearchFollow,
-        PreferKey.uiCornerSearchFollowN,
-        PreferKey.uiCornerReplyFollow,
-        PreferKey.uiCornerReplyFollowN,
-        PreferKey.themeCardColor,
-        PreferKey.themeCardColorN,
-        PreferKey.themeMutedColor,
-        PreferKey.themeMutedColorN,
-        PreferKey.themeSearchFieldBackgroundColor,
-        PreferKey.themeSearchFieldBackgroundColorN,
-        PreferKey.themeTabBackgroundColor,
-        PreferKey.themeTabBackgroundColorN,
-        PreferKey.themeShelfColor,
-        PreferKey.themeShelfColorN,
-        PreferKey.themeCardShadow,
-        PreferKey.themeCardShadowN,
-        PreferKey.themeCardBackgroundBlur,
-        PreferKey.themeCardBackgroundBlurN,
-        PreferKey.themeExploreGlassBlur,
-        PreferKey.themeExploreGlassBlurN
-    )
+    fun allKeys(): Set<String> = NightKeyPairs.themeRuntimeKeys
 }

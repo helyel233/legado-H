@@ -3,6 +3,7 @@ package io.legado.app.help.storage
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.ReadPresetPreferences
+import io.legado.app.lib.theme.NightKeyPairs
 import io.legado.app.utils.FileUtils
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
@@ -97,72 +98,7 @@ object BackupConfig {
     private val readPreferenceKeys: Set<String> =
         readPrefKeys.toSet() + ReadPresetPreferences.preferenceKeys
 
-    private val themePrefKeys = arrayOf(
-        PreferKey.cPrimary,
-        PreferKey.cAccent,
-        PreferKey.cBackground,
-        PreferKey.cBBackground,
-        PreferKey.bgImage,
-        PreferKey.bgImageBlurring,
-        PreferKey.bookInfoBgImage,
-        PreferKey.uiCornerScale,
-        PreferKey.uiCornerScaleN,
-        PreferKey.uiLayoutAlpha,
-        PreferKey.uiLayoutAlphaN,
-        PreferKey.uiCornerSearchFollow,
-        PreferKey.uiCornerSearchFollowN,
-        PreferKey.uiCornerReplyFollow,
-        PreferKey.uiCornerReplyFollowN,
-        PreferKey.dialogAlpha,
-        PreferKey.dialogAlphaN,
-        PreferKey.themeCardColor,
-        PreferKey.themeCardColorN,
-        PreferKey.themeMutedColor,
-        PreferKey.themeMutedColorN,
-        PreferKey.themeSearchFieldBackgroundColor,
-        PreferKey.themeSearchFieldBackgroundColorN,
-        PreferKey.themeTabBackgroundColor,
-        PreferKey.themeTabBackgroundColorN,
-        PreferKey.themeShelfColor,
-        PreferKey.themeShelfColorN,
-        PreferKey.themeCardShadow,
-        PreferKey.themeCardShadowN,
-        PreferKey.themeCardBackgroundBlur,
-        PreferKey.themeCardBackgroundBlurN,
-        PreferKey.themeExploreGlassBlur,
-        PreferKey.themeExploreGlassBlurN,
-        PreferKey.fontScale,
-        PreferKey.fontScaleN,
-        PreferKey.uiFontPath,
-        PreferKey.uiFontPathN,
-        PreferKey.titleFontPath,
-        PreferKey.titleFontPathN,
-        PreferKey.uiFontColor,
-        PreferKey.uiFontColorN,
-        PreferKey.titleFontColor,
-        PreferKey.titleFontColorN,
-        PreferKey.tNavBar,
-        PreferKey.cNPrimary,
-        PreferKey.cNAccent,
-        PreferKey.cNBackground,
-        PreferKey.cNBBackground,
-        PreferKey.bgImageN,
-        PreferKey.bgImageNBlurring,
-        PreferKey.bookInfoBgImageN,
-        PreferKey.panelBgImage,
-        PreferKey.panelBgImageN,
-        PreferKey.panelBgScaleType,
-        PreferKey.panelBgScaleTypeN,
-        PreferKey.panelBorderColor,
-        PreferKey.panelBorderColorN,
-        PreferKey.panelBorderAlpha,
-        PreferKey.panelBorderAlphaN,
-        PreferKey.paramStylePresetId,
-        PreferKey.paramStylePresetIdN,
-        PreferKey.glassPresetMatched,
-        PreferKey.glassPresetMatchedN,
-        PreferKey.tNavBarN
-    )
+    private val themePrefKeys = NightKeyPairs.themeBackupKeys
 
     private const val lastNonEInkThemeModeKey = "lastNonEInkThemeMode"
 
@@ -171,30 +107,16 @@ object BackupConfig {
         PreferKey.loadCoverOnlyWifi,
         PreferKey.loadCoverHighQuality,
         PreferKey.bookCoverShadow,
-        PreferKey.coverShowName,
-        PreferKey.coverShowAuthor,
-        PreferKey.coverShowNameN,
-        PreferKey.coverShowAuthorN,
         PreferKey.currentCoverSlotPackageId,
-        PreferKey.activeDayCoverSlotPackageId,
-        PreferKey.activeNightCoverSlotPackageId,
         PreferKey.coverSlotLocked,
-        PreferKey.coverCollectionDay,
-        PreferKey.coverCollectionNight,
-        PreferKey.coverCollectionModeDay,
-        PreferKey.coverCollectionModeNight,
-        PreferKey.coverCollectionTargetDay,
-        PreferKey.coverCollectionTargetNight,
-        PreferKey.coverCollectionShuffleSeeds
+        PreferKey.coverCollectionShuffleSeeds,
+        *NightKeyPairs.coverBackupPairedKeys
     )
 
     internal val artParamActivePrefKeys = arrayOf(
         PreferKey.currentArtPackageId,
-        PreferKey.activeDayArtPackageId,
-        PreferKey.activeNightArtPackageId,
         PreferKey.currentParamPackageId,
-        PreferKey.activeDayParamPackageId,
-        PreferKey.activeNightParamPackageId
+        *NightKeyPairs.artParamActivePairedKeys
     )
 
     fun keyIsNotIgnore(key: String): Boolean {
