@@ -1,6 +1,7 @@
 package io.legado.app.ui.config
 
 import android.graphics.BitmapFactory
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -24,9 +25,12 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,12 +44,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.pkg.ArtPackagePayload
 import io.legado.app.help.config.pkg.ArtPaletteSpec
 import io.legado.app.help.config.pkg.ArtTypographySpec
@@ -613,76 +619,118 @@ private fun ArtFontSlotSelectorRow(
  * - Tab 1：`@geometry`（全局圆角倍率 / 阴影 / 空间密度 densityScale，全局单份不随日夜跳变）
  * - Tab 2：`@surfaceScopes`（顶栏 / 底栏 / 书架卡 / 弹窗 4 大区域独立覆写）
  */
+private enum class ParamEditBaseline {
+    LIVE,
+    SAVED
+}
+
+private fun normalizeParamGlobalDraft(g: SurfaceGlobalParams): SurfaceGlobalParams = g.copy(
+    materialMode = g.materialMode?.takeIf { it.isNotBlank() } ?: GlassMaterialPreset.FROSTED,
+    frostedLevel = (g.frostedLevel ?: 68).coerceIn(0, 100),
+    liquidLevel = (g.liquidLevel ?: 68).coerceIn(0, 100),
+    blurScale = (g.blurScale ?: 100).coerceIn(0, 200),
+    tintScale = (g.tintScale ?: 100).coerceIn(0, 200),
+    shellScale = (g.shellScale ?: 100).coerceIn(0, 200),
+    strokeScale = (g.strokeScale ?: 100).coerceIn(0, 200),
+    surfaceAlpha = (g.surfaceAlpha ?: 100).coerceIn(0, 100),
+    dialogAlpha = (g.dialogAlpha ?: 100).coerceIn(0, 100),
+    panelBorderAlpha = (g.panelBorderAlpha ?: 100).coerceIn(0, 100),
+    wallpaperBlurDay = (g.wallpaperBlurDay ?: g.wallpaperBlurNight ?: 0).coerceIn(0, 25),
+    wallpaperBlurNight = (g.wallpaperBlurNight ?: g.wallpaperBlurDay ?: 0).coerceIn(0, 25),
+    cornerBaseScale = (g.cornerBaseScale ?: 1f).coerceIn(0f, 3f),
+    cardShadow = (g.cardShadow ?: 0).coerceIn(0, 24),
+    uiCornerSearchFollow = g.uiCornerSearchFollow ?: true,
+    uiCornerReplyFollow = g.uiCornerReplyFollow ?: true
+)
+
+private fun formatStrokeColorDraft(rawStroke: String?): String =
+    ColorPaletteHelper.parseColorInput(rawStroke, allowDecimalArgb = true)
+        ?.let { ColorPaletteHelper.formatHex6(it) }
+        ?: rawStroke.orEmpty()
+
+private fun buildScopeDraftMap(scopes: SurfaceScopesParams?): Map<UiScope, SurfaceScopeOverride> = mapOf(
+    UiScope.TOP_BAR to (scopes?.topBar ?: SurfaceScopeOverride()),
+    UiScope.BOTTOM_BAR to (scopes?.bottomBar ?: SurfaceScopeOverride()),
+    UiScope.BOOKSHELF_CARD to (scopes?.bookshelfCard ?: SurfaceScopeOverride()),
+    UiScope.DIALOG to (scopes?.dialog ?: SurfaceScopeOverride())
+)
+
+/**
+ * 二级《参数设置包编辑器》：材质档位（实底/透明/磨砂/液态 + 折叠光学微调）、几何手感与 4 区域覆写。
+ * 支持实时预览、取消完整回滚（覆盖日夜双套键）以及脏态基线选择。
+ */
 @Composable
 internal fun ParamPackageEditorDialog(
     entry: UnifiedPackageRepository.StoredEntry,
     existingNames: List<String>,
+    isMountedActive: Boolean = false,
+    isParamDirty: Boolean = false,
+    onLiveRuntimeChanged: () -> Unit = {},
     onDismiss: () -> Unit,
     onSave: (newName: String, updatedParam: ParamPackagePayload) -> Unit
 ) {
+    val context = LocalContext.current
     val style = rememberAppDialogStyle()
     val dialogPalette = style.toMiuixPalette()
     val mgmtPalette = rememberAppManagementPalette()
-    val initialParam = entry.manifest.param ?: ParamPackagePayload()
-    val g = initialParam.surfaceGlobal ?: SurfaceGlobalParams()
-    val l = initialParam.layout ?: LayoutParams()
+    val savedParam = remember(entry.manifest.id) { entry.manifest.param ?: ParamPackagePayload() }
+    val runtimeSnapshot = remember(entry.manifest.id) {
+        UnifiedPackageRepository.captureParamRuntimeSnapshot(context)
+    }
+    val showDirtyBaselineBanner = isMountedActive && isParamDirty
+    val liveParamSnapshot = remember(entry.manifest.id, showDirtyBaselineBanner) {
+        if (showDirtyBaselineBanner) {
+            UnifiedPackageRepository.captureParamPayloadSnapshot(context, AppConfig.isNightTheme)
+        } else {
+            null
+        }
+    }
+    var baselineMode by remember(entry.manifest.id) {
+        mutableStateOf(
+            if (showDirtyBaselineBanner) ParamEditBaseline.LIVE else ParamEditBaseline.SAVED
+        )
+    }
+    val activeBaselineParam = if (baselineMode == ParamEditBaseline.LIVE && liveParamSnapshot != null) {
+        liveParamSnapshot
+    } else {
+        savedParam
+    }
 
     var nameDraft by remember(entry.manifest.id) { mutableStateOf(entry.manifest.name) }
     var activeTab by remember(entry.manifest.id) { mutableIntStateOf(0) }
+    var advancedExpanded by remember(entry.manifest.id) { mutableStateOf(false) }
+    var liveApplyEnabled by remember(entry.manifest.id) { mutableStateOf(isMountedActive) }
+    var hasAppliedLive by remember(entry.manifest.id) { mutableStateOf(false) }
+    var skipInitialLiveSync by remember(entry.manifest.id) { mutableStateOf(isMountedActive) }
 
     var globalDraft by remember(entry.manifest.id) {
-        mutableStateOf(
-            g.copy(
-                materialMode = g.materialMode?.takeIf { it.isNotBlank() } ?: GlassMaterialPreset.FROSTED,
-                frostedLevel = (g.frostedLevel ?: 68).coerceIn(0, 100),
-                liquidLevel = (g.liquidLevel ?: 68).coerceIn(0, 100),
-                blurScale = (g.blurScale ?: 100).coerceIn(0, 200),
-                tintScale = (g.tintScale ?: 100).coerceIn(0, 200),
-                shellScale = (g.shellScale ?: 100).coerceIn(0, 200),
-                strokeScale = (g.strokeScale ?: 100).coerceIn(0, 200),
-                surfaceAlpha = (g.surfaceAlpha ?: 100).coerceIn(0, 100),
-                dialogAlpha = (g.dialogAlpha ?: 100).coerceIn(0, 100),
-                panelBorderAlpha = (g.panelBorderAlpha ?: 100).coerceIn(0, 100),
-                wallpaperBlurDay = (g.wallpaperBlurDay ?: g.wallpaperBlurNight ?: 0).coerceIn(0, 25),
-                wallpaperBlurNight = (g.wallpaperBlurNight ?: g.wallpaperBlurDay ?: 0).coerceIn(0, 25),
-                cornerBaseScale = (g.cornerBaseScale ?: 1f).coerceIn(0f, 3f),
-                cardShadow = (g.cardShadow ?: 0).coerceIn(0, 24),
-                uiCornerSearchFollow = g.uiCornerSearchFollow ?: true,
-                uiCornerReplyFollow = g.uiCornerReplyFollow ?: true
-            )
-        )
+        mutableStateOf(normalizeParamGlobalDraft(activeBaselineParam.surfaceGlobal ?: SurfaceGlobalParams()))
     }
     var strokeColorInput by remember(entry.manifest.id) {
-        mutableStateOf(
-            ColorPaletteHelper.parseColorInput(g.strokeColor, allowDecimalArgb = true)
-                ?.let { ColorPaletteHelper.formatHex6(it) }
-                ?: g.strokeColor.orEmpty()
-        )
+        mutableStateOf(formatStrokeColorDraft(activeBaselineParam.surfaceGlobal?.strokeColor))
     }
     var densityStep by remember(entry.manifest.id) {
-        mutableIntStateOf(((l.densityScale ?: 1f) * 10f).toInt().coerceIn(8, 13))
+        mutableIntStateOf(((activeBaselineParam.layout?.densityScale ?: 1f) * 10f).toInt().coerceIn(8, 13))
     }
 
     // @surfaceScopes (4 Scopes)
     var selectedScope by remember(entry.manifest.id) { mutableStateOf(UiScope.TOP_BAR) }
     var scopeMap by remember(entry.manifest.id) {
-        val initialScopes = initialParam.surfaceScopes
-        mutableStateOf(
-            mapOf(
-                UiScope.TOP_BAR to (initialScopes?.topBar ?: SurfaceScopeOverride()),
-                UiScope.BOTTOM_BAR to (initialScopes?.bottomBar ?: SurfaceScopeOverride()),
-                UiScope.BOOKSHELF_CARD to (initialScopes?.bookshelfCard ?: SurfaceScopeOverride()),
-                UiScope.DIALOG to (initialScopes?.dialog ?: SurfaceScopeOverride())
-            )
-        )
+        mutableStateOf(buildScopeDraftMap(activeBaselineParam.surfaceScopes))
     }
 
-    val isPresetMatched = globalDraft.presetMatched != false
-    val effectivePresetId = ParamStylePreset.resolveEffectivePresetId(
-        presetMatched = isPresetMatched,
-        stylePresetId = globalDraft.stylePresetId,
-        materialMode = globalDraft.materialMode
-    )
+    val loadBaselineIntoDrafts: (ParamPackagePayload) -> Unit = { target ->
+        val tg = target.surfaceGlobal ?: SurfaceGlobalParams()
+        val tl = target.layout ?: LayoutParams()
+        globalDraft = normalizeParamGlobalDraft(tg)
+        strokeColorInput = formatStrokeColorDraft(tg.strokeColor)
+        densityStep = ((tl.densityScale ?: 1f) * 10f).toInt().coerceIn(8, 13)
+        scopeMap = buildScopeDraftMap(target.surfaceScopes)
+    }
+
+    val deviation = remember(globalDraft) {
+        ParamStylePreset.inspectDeviation(globalDraft)
+    }
     val materialMode = globalDraft.materialMode ?: GlassMaterialPreset.FROSTED
     val frostedLevel = (globalDraft.frostedLevel ?: 68).coerceIn(0, 100)
     val liquidLevel = (globalDraft.liquidLevel ?: 68).coerceIn(0, 100)
@@ -699,6 +747,66 @@ internal fun ParamPackageEditorDialog(
     val searchCornerFollow = globalDraft.uiCornerSearchFollow ?: true
     val replyCornerFollow = globalDraft.uiCornerReplyFollow ?: true
 
+    val buildDraftPayload: () -> ParamPackagePayload = {
+        val updatedGlobal = ParamStylePreset.syncDerivedPresetState(
+            globalDraft.copy(
+                blurScale = blurScale.coerceIn(0, 200),
+                tintScale = tintScale.coerceIn(0, 200),
+                shellScale = shellScale.coerceIn(0, 200),
+                strokeScale = strokeScale.coerceIn(0, 200),
+                strokeColor = strokeColorInput.trim().takeIf { it.isNotBlank() }?.let { raw ->
+                    ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
+                }
+            )
+        )
+        val updatedScopes = SurfaceScopesParams(
+            topBar = scopeMap[UiScope.TOP_BAR]?.takeUnless { it.isEmpty() },
+            bottomBar = scopeMap[UiScope.BOTTOM_BAR]?.takeUnless { it.isEmpty() },
+            bookshelfCard = scopeMap[UiScope.BOOKSHELF_CARD]?.takeUnless { it.isEmpty() },
+            dialog = scopeMap[UiScope.DIALOG]?.takeUnless { it.isEmpty() }
+        )
+        val baseLayout = activeBaselineParam.layout ?: LayoutParams()
+        val updatedLayout = baseLayout.copy(
+            densityScale = densityStep / 10f
+        )
+        activeBaselineParam.copy(
+            surfaceGlobal = updatedGlobal,
+            surfaceScopes = updatedScopes,
+            layout = updatedLayout
+        )
+    }
+
+    LaunchedEffect(liveApplyEnabled, globalDraft, strokeColorInput, densityStep, scopeMap) {
+        if (!liveApplyEnabled) {
+            if (hasAppliedLive) {
+                UnifiedPackageRepository.restoreParamRuntimeSnapshot(context, runtimeSnapshot)
+                hasAppliedLive = false
+                onLiveRuntimeChanged()
+            }
+            return@LaunchedEffect
+        }
+        if (skipInitialLiveSync) {
+            skipInitialLiveSync = false
+            return@LaunchedEffect
+        }
+        UnifiedPackageRepository.applyParamDraftLive(
+            context = context,
+            payload = buildDraftPayload(),
+            isNight = AppConfig.isNightTheme,
+            markDirty = true
+        )
+        hasAppliedLive = true
+        onLiveRuntimeChanged()
+    }
+
+    val handleDismiss: () -> Unit = {
+        if (hasAppliedLive) {
+            UnifiedPackageRepository.restoreParamRuntimeSnapshot(context, runtimeSnapshot)
+            onLiveRuntimeChanged()
+        }
+        onDismiss()
+    }
+
     val otherNames = remember(existingNames, entry.manifest.name) {
         existingNames.filterNot {
             UnifiedPackageRepository.normalizePackageName(it) ==
@@ -712,20 +820,9 @@ internal fun ParamPackageEditorDialog(
 
     val tabs = remember {
         listOf(
-            SegmentedOption(0, "材质氛围(随日夜)"),
+            SegmentedOption(0, "材质(随日夜)"),
             SegmentedOption(1, "几何手感(全局)"),
             SegmentedOption(2, "4区域覆写")
-        )
-    }
-    val stylePresetOptions = remember {
-        ParamStylePreset.all.map { SegmentedOption(it.id, it.label) }
-    }
-    val fourMaterialOptions = remember {
-        listOf(
-            SegmentedOption(GlassMaterialPreset.SOLID, "实底"),
-            SegmentedOption(GlassMaterialPreset.CLEAR, "透明"),
-            SegmentedOption(GlassMaterialPreset.FROSTED, "磨砂"),
-            SegmentedOption(GlassMaterialPreset.GLASS, "液态")
         )
     }
     val scopeMaterialOptions = remember {
@@ -747,7 +844,7 @@ internal fun ParamPackageEditorDialog(
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = handleDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Box(
@@ -777,61 +874,144 @@ internal fun ParamPackageEditorDialog(
                             fontSize = 12.sp
                         )
                     }
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                    if (showDirtyBaselineBanner) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = dialogPalette.accent.copy(alpha = 0.08f),
+                            border = BorderStroke(0.75.dp, dialogPalette.accent.copy(alpha = 0.42f))
                         ) {
-                            Text(
-                                text = "材质氛围预设",
-                                color = style.primaryText,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            if (isPresetMatched) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
                                 Text(
-                                    text = ParamStylePreset.labelOf(effectivePresetId) ?: "预设",
+                                    text = "当前生效值已偏离本包（未保存微调）",
                                     color = dialogPalette.accent,
-                                    fontSize = 11.sp,
+                                    fontSize = 12.sp,
                                     fontWeight = FontWeight.SemiBold
                                 )
-                            } else {
-                                Surface(
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = dialogPalette.accent.copy(alpha = 0.14f),
-                                    border = BorderStroke(0.75.dp, dialogPalette.accent.copy(alpha = 0.55f))
+                                Text(
+                                    text = "选择编辑与保存的基线，避免静默覆盖当前微调：",
+                                    color = style.secondaryText,
+                                    fontSize = 11.sp
+                                )
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable {
+                                            if (baselineMode != ParamEditBaseline.LIVE && liveParamSnapshot != null) {
+                                                baselineMode = ParamEditBaseline.LIVE
+                                                loadBaselineIntoDrafts(liveParamSnapshot)
+                                            }
+                                        }
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
+                                    RadioButton(
+                                        selected = baselineMode == ParamEditBaseline.LIVE,
+                                        onClick = {
+                                            if (baselineMode != ParamEditBaseline.LIVE && liveParamSnapshot != null) {
+                                                baselineMode = ParamEditBaseline.LIVE
+                                                loadBaselineIntoDrafts(liveParamSnapshot)
+                                            }
+                                        },
+                                        colors = RadioButtonDefaults.colors(
+                                            selectedColor = dialogPalette.accent,
+                                            unselectedColor = style.secondaryText
+                                        ),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
                                     Text(
-                                        text = "自定义",
-                                        color = dialogPalette.accent,
-                                        fontSize = 11.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                        text = "以当前生效值为基线（保留未保存微调）",
+                                        color = style.primaryText,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (baselineMode == ParamEditBaseline.LIVE) FontWeight.SemiBold else FontWeight.Normal
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .clickable {
+                                            if (baselineMode != ParamEditBaseline.SAVED) {
+                                                baselineMode = ParamEditBaseline.SAVED
+                                                skipInitialLiveSync = false
+                                                loadBaselineIntoDrafts(savedParam)
+                                            }
+                                        }
+                                        .padding(vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = baselineMode == ParamEditBaseline.SAVED,
+                                        onClick = {
+                                            if (baselineMode != ParamEditBaseline.SAVED) {
+                                                baselineMode = ParamEditBaseline.SAVED
+                                                skipInitialLiveSync = false
+                                                loadBaselineIntoDrafts(savedParam)
+                                            }
+                                        },
+                                        colors = RadioButtonDefaults.colors(
+                                            selectedColor = dialogPalette.accent,
+                                            unselectedColor = style.secondaryText
+                                        ),
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "以包内保存值为基线（从原包参数开始）",
+                                        color = style.primaryText,
+                                        fontSize = 12.sp,
+                                        fontWeight = if (baselineMode == ParamEditBaseline.SAVED) FontWeight.SemiBold else FontWeight.Normal
                                     )
                                 }
                             }
                         }
-                        LegadoSegmentedControl(
-                            options = stylePresetOptions,
-                            selectedValue = effectivePresetId.orEmpty(),
-                            palette = dialogPalette,
-                            onSelected = { selectedId ->
-                                val nextDraft = ParamStylePreset.applyToSurfaceGlobal(globalDraft, selectedId)
-                                globalDraft = nextDraft
-                                strokeColorInput = nextDraft.strokeColor.orEmpty()
-                            },
-                            tone = SegmentedControlTone.SurfaceThumb,
-                            fontSize = 11.sp
-                        )
-                        Text(
-                            text = "套用预设将更新材质氛围参数，保留几何、布局与区域覆写",
-                            color = style.secondaryText,
-                            fontSize = 11.sp
-                        )
+                    } else if (!isMountedActive) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(mgmtPalette.settings.slot),
+                            border = BorderStroke(0.75.dp, mgmtPalette.settings.divider)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { liveApplyEnabled = !liveApplyEnabled }
+                                    .padding(horizontal = 10.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                                ) {
+                                    Text(
+                                        text = "临时套用到界面",
+                                        color = style.primaryText,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                    Text(
+                                        text = if (liveApplyEnabled) {
+                                            "实时预览中：取消或关闭将自动恢复当前挂载包"
+                                        } else {
+                                            "当前未挂载本包：仅写草稿，不影响当前屏幕画面"
+                                        },
+                                        color = style.secondaryText,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                LegadoMiuixSwitch(
+                                    checked = liveApplyEnabled,
+                                    onCheckedChange = { liveApplyEnabled = it },
+                                    palette = dialogPalette
+                                )
+                            }
+                        }
                     }
                     LegadoSegmentedControl(
                         options = tabs,
@@ -843,30 +1023,119 @@ internal fun ParamPackageEditorDialog(
                     )
                     when (activeTab) {
                         0 -> {
-                            Text(
-                                text = "渲染材质引擎",
-                                color = style.primaryText,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            LegadoSegmentedControl(
-                                options = fourMaterialOptions,
-                                selectedValue = materialMode,
-                                palette = dialogPalette,
-                                onSelected = { nextMode ->
-                                    if (nextMode != materialMode) {
-                                        globalDraft = ParamStylePreset.markCustomized(
-                                            globalDraft.copy(materialMode = nextMode)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "材质档位",
+                                    color = style.primaryText,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                if (deviation.isExactMatch) {
+                                    Text(
+                                        text = "${deviation.tierSpec.label}（原样）",
+                                        color = dialogPalette.accent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                } else {
+                                    Surface(
+                                        shape = RoundedCornerShape(999.dp),
+                                        color = dialogPalette.accent.copy(alpha = 0.12f),
+                                        border = BorderStroke(0.75.dp, dialogPalette.accent.copy(alpha = 0.5f)),
+                                        modifier = Modifier
+                                            .clip(RoundedCornerShape(999.dp))
+                                            .clickable {
+                                                val resetDraft = ParamStylePreset.applyToSurfaceGlobal(
+                                                    globalDraft,
+                                                    deviation.tierSpec.id
+                                                )
+                                                globalDraft = resetDraft
+                                                strokeColorInput = resetDraft.strokeColor.orEmpty()
+                                            }
+                                    ) {
+                                        Text(
+                                            text = "已微调 ${deviation.diffCount} 项 · 回到${deviation.tierSpec.label}",
+                                            color = dialogPalette.accent,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                                         )
                                     }
-                                },
-                                tone = SegmentedControlTone.SurfaceThumb,
-                                fontSize = 11.sp
-                            )
+                                }
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                ParamStylePreset.all.forEach { spec ->
+                                    val isSelected = materialMode == spec.id
+                                    val capsuleShape = RoundedCornerShape(dialogPalette.actionRadius ?: 10.dp)
+                                    val swatchFill = when (spec.id) {
+                                        GlassMaterialPreset.SOLID -> style.primaryText.copy(alpha = 0.78f)
+                                        GlassMaterialPreset.CLEAR -> dialogPalette.accent.copy(alpha = 0.24f)
+                                        GlassMaterialPreset.FROSTED -> dialogPalette.accent.copy(alpha = 0.52f)
+                                        else -> dialogPalette.accent
+                                    }
+                                    Surface(
+                                        shape = capsuleShape,
+                                        color = if (isSelected) {
+                                            dialogPalette.accent.copy(alpha = 0.12f)
+                                        } else {
+                                            Color(mgmtPalette.settings.slot)
+                                        },
+                                        border = BorderStroke(
+                                            width = if (isSelected) 1.5.dp else 0.75.dp,
+                                            color = if (isSelected) dialogPalette.accent else mgmtPalette.settings.divider
+                                        ),
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(capsuleShape)
+                                            .clickable {
+                                                val nextDraft = ParamStylePreset.applyToSurfaceGlobal(
+                                                    globalDraft,
+                                                    spec.id
+                                                )
+                                                globalDraft = nextDraft
+                                                strokeColorInput = nextDraft.strokeColor.orEmpty()
+                                            }
+                                    ) {
+                                        Row(
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
+                                            horizontalArrangement = Arrangement.Center,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(8.dp)
+                                                    .clip(CircleShape)
+                                                    .background(swatchFill)
+                                                    .border(0.75.dp, dialogPalette.accent.copy(alpha = 0.55f), CircleShape)
+                                            )
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Text(
+                                                text = spec.label,
+                                                color = if (isSelected) dialogPalette.accent else style.primaryText,
+                                                fontSize = 12.sp,
+                                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             val usesGlass = materialMode == GlassMaterialPreset.FROSTED ||
                                 materialMode == GlassMaterialPreset.GLASS
                             if (usesGlass) {
-                                val currentLevel = if (materialMode == GlassMaterialPreset.FROSTED) frostedLevel else liquidLevel
+                                val currentLevel = if (materialMode == GlassMaterialPreset.FROSTED) {
+                                    frostedLevel
+                                } else {
+                                    liquidLevel
+                                }
                                 EditorSliderRow(
                                     title = "玻璃材质强度",
                                     valueText = "$currentLevel%",
@@ -874,76 +1143,12 @@ internal fun ParamPackageEditorDialog(
                                     range = 0..100,
                                     palette = mgmtPalette,
                                     onValueChange = {
-                                        globalDraft = ParamStylePreset.markCustomized(
+                                        globalDraft = ParamStylePreset.syncDerivedPresetState(
                                             globalDraft.copy(frostedLevel = it, liquidLevel = it)
                                         )
                                     }
                                 )
-                                EditorSliderRow(
-                                    title = "模糊倍率 (Blur)",
-                                    valueText = "$blurScale%",
-                                    value = blurScale,
-                                    range = 0..200,
-                                    palette = mgmtPalette,
-                                    onValueChange = {
-                                        globalDraft = ParamStylePreset.markCustomized(
-                                            globalDraft.copy(blurScale = it)
-                                        )
-                                    }
-                                )
-                                EditorSliderRow(
-                                    title = "着色倍率 (Tint)",
-                                    valueText = "$tintScale%",
-                                    value = tintScale,
-                                    range = 0..200,
-                                    palette = mgmtPalette,
-                                    onValueChange = {
-                                        globalDraft = ParamStylePreset.markCustomized(
-                                            globalDraft.copy(tintScale = it)
-                                        )
-                                    }
-                                )
-                                EditorSliderRow(
-                                    title = "壳层倍率 (Shell)",
-                                    valueText = "$shellScale%",
-                                    value = shellScale,
-                                    range = 0..200,
-                                    palette = mgmtPalette,
-                                    onValueChange = {
-                                        globalDraft = ParamStylePreset.markCustomized(
-                                            globalDraft.copy(shellScale = it)
-                                        )
-                                    }
-                                )
-                                EditorSliderRow(
-                                    title = "描边倍率 (Stroke)",
-                                    valueText = "$strokeScale%",
-                                    value = strokeScale,
-                                    range = 0..200,
-                                    palette = mgmtPalette,
-                                    onValueChange = {
-                                        globalDraft = ParamStylePreset.markCustomized(
-                                            globalDraft.copy(strokeScale = it)
-                                        )
-                                    }
-                                )
-                                ColorFieldRow(
-                                    label = "玻璃描边颜色 (选填)",
-                                    value = strokeColorInput,
-                                    style = style,
-                                    palette = dialogPalette,
-                                    allowDecimalInput = true
-                                ) { nextInput ->
-                                    strokeColorInput = nextInput
-                                    val parsedStroke = nextInput.trim().takeIf { it.isNotBlank() }?.let { raw ->
-                                        ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
-                                    }
-                                    globalDraft = ParamStylePreset.markCustomized(
-                                        globalDraft.copy(strokeColor = parsedStroke)
-                                    )
-                                }
                             }
-                            HorizontalDivider(color = mgmtPalette.settings.divider, thickness = 0.5.dp)
                             EditorSliderRow(
                                 title = "全局表面不透明度",
                                 valueText = "$surfaceAlpha%",
@@ -951,7 +1156,7 @@ internal fun ParamPackageEditorDialog(
                                 range = 0..100,
                                 palette = mgmtPalette,
                                 onValueChange = {
-                                    globalDraft = ParamStylePreset.markCustomized(
+                                    globalDraft = ParamStylePreset.syncDerivedPresetState(
                                         globalDraft.copy(surfaceAlpha = it)
                                     )
                                 }
@@ -963,35 +1168,143 @@ internal fun ParamPackageEditorDialog(
                                 range = 0..100,
                                 palette = mgmtPalette,
                                 onValueChange = {
-                                    globalDraft = ParamStylePreset.markCustomized(
+                                    globalDraft = ParamStylePreset.syncDerivedPresetState(
                                         globalDraft.copy(dialogAlpha = it)
                                     )
                                 }
                             )
-                            EditorSliderRow(
-                                title = "面板边框线不透明度",
-                                valueText = "$borderAlpha%",
-                                value = borderAlpha,
-                                range = 0..100,
-                                palette = mgmtPalette,
-                                onValueChange = {
-                                    globalDraft = ParamStylePreset.markCustomized(
-                                        globalDraft.copy(panelBorderAlpha = it)
+                            HorizontalDivider(color = mgmtPalette.settings.divider, thickness = 0.5.dp)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .clickable { advancedExpanded = !advancedExpanded }
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Text(
+                                        text = "微调（光学 / 边框 / 壁纸）",
+                                        color = style.primaryText,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                    if (deviation.advancedChangedCount > 0) {
+                                        Text(
+                                            text = "已改 ${deviation.advancedChangedCount} 项",
+                                            color = dialogPalette.accent,
+                                            fontSize = 11.sp,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                                Text(
+                                    text = if (advancedExpanded) "收起 ▴" else "展开 ▾",
+                                    color = style.secondaryText,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                            AnimatedVisibility(visible = advancedExpanded) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    if (usesGlass) {
+                                        EditorSliderRow(
+                                            title = "模糊倍率 (Blur)",
+                                            valueText = "$blurScale%",
+                                            value = blurScale,
+                                            range = 0..200,
+                                            palette = mgmtPalette,
+                                            onValueChange = {
+                                                globalDraft = ParamStylePreset.syncDerivedPresetState(
+                                                    globalDraft.copy(blurScale = it)
+                                                )
+                                            }
+                                        )
+                                        EditorSliderRow(
+                                            title = "着色倍率 (Tint)",
+                                            valueText = "$tintScale%",
+                                            value = tintScale,
+                                            range = 0..200,
+                                            palette = mgmtPalette,
+                                            onValueChange = {
+                                                globalDraft = ParamStylePreset.syncDerivedPresetState(
+                                                    globalDraft.copy(tintScale = it)
+                                                )
+                                            }
+                                        )
+                                        EditorSliderRow(
+                                            title = "壳层倍率 (Shell)",
+                                            valueText = "$shellScale%",
+                                            value = shellScale,
+                                            range = 0..200,
+                                            palette = mgmtPalette,
+                                            onValueChange = {
+                                                globalDraft = ParamStylePreset.syncDerivedPresetState(
+                                                    globalDraft.copy(shellScale = it)
+                                                )
+                                            }
+                                        )
+                                        EditorSliderRow(
+                                            title = "描边倍率 (Stroke)",
+                                            valueText = "$strokeScale%",
+                                            value = strokeScale,
+                                            range = 0..200,
+                                            palette = mgmtPalette,
+                                            onValueChange = {
+                                                globalDraft = ParamStylePreset.syncDerivedPresetState(
+                                                    globalDraft.copy(strokeScale = it)
+                                                )
+                                            }
+                                        )
+                                        ColorFieldRow(
+                                            label = "玻璃描边颜色 (选填)",
+                                            value = strokeColorInput,
+                                            style = style,
+                                            palette = dialogPalette,
+                                            allowDecimalInput = true
+                                        ) { nextInput ->
+                                            strokeColorInput = nextInput
+                                            val parsedStroke = nextInput.trim().takeIf { it.isNotBlank() }?.let { raw ->
+                                                ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
+                                            }
+                                            globalDraft = ParamStylePreset.syncDerivedPresetState(
+                                                globalDraft.copy(strokeColor = parsedStroke)
+                                            )
+                                        }
+                                    }
+                                    EditorSliderRow(
+                                        title = "面板边框线不透明度",
+                                        valueText = "$borderAlpha%",
+                                        value = borderAlpha,
+                                        range = 0..100,
+                                        palette = mgmtPalette,
+                                        onValueChange = {
+                                            globalDraft = ParamStylePreset.syncDerivedPresetState(
+                                                globalDraft.copy(panelBorderAlpha = it)
+                                            )
+                                        }
+                                    )
+                                    EditorSliderRow(
+                                        title = "主背景壁纸模糊度",
+                                        valueText = "$wallpaperBlur",
+                                        value = wallpaperBlur,
+                                        range = 0..25,
+                                        palette = mgmtPalette,
+                                        onValueChange = {
+                                            globalDraft = ParamStylePreset.syncDerivedPresetState(
+                                                globalDraft.copy(wallpaperBlurDay = it, wallpaperBlurNight = it)
+                                            )
+                                        }
                                     )
                                 }
-                            )
-                            EditorSliderRow(
-                                title = "主背景壁纸模糊度",
-                                valueText = "$wallpaperBlur",
-                                value = wallpaperBlur,
-                                range = 0..25,
-                                palette = mgmtPalette,
-                                onValueChange = {
-                                    globalDraft = ParamStylePreset.markCustomized(
-                                        globalDraft.copy(wallpaperBlurDay = it, wallpaperBlurNight = it)
-                                    )
-                                }
-                            )
+                            }
                         }
                         1 -> {
                             Text(
@@ -1142,10 +1455,19 @@ internal fun ParamPackageEditorDialog(
                 }
             },
             actions = {
+                if (showDirtyBaselineBanner) {
+                    Text(
+                        text = "将把微调固化进本包",
+                        color = style.secondaryText,
+                        fontSize = 11.sp,
+                        maxLines = 1,
+                        modifier = Modifier.padding(end = 8.dp)
+                    )
+                }
                 LegadoMiuixActionButton(
                     text = "取消",
                     palette = dialogPalette,
-                    onClick = onDismiss
+                    onClick = handleDismiss
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 LegadoMiuixActionButton(
@@ -1155,32 +1477,12 @@ internal fun ParamPackageEditorDialog(
                     enabled = canSave,
                     onClick = {
                         if (!canSave) return@LegadoMiuixActionButton
-                        val updatedGlobal = globalDraft.copy(
-                            blurScale = blurScale.coerceIn(0, 200),
-                            tintScale = tintScale.coerceIn(0, 200),
-                            shellScale = shellScale.coerceIn(0, 200),
-                            strokeScale = strokeScale.coerceIn(0, 200),
-                            strokeColor = strokeColorInput.trim().takeIf { it.isNotBlank() }?.let { raw ->
-                                ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
-                            }
-                        )
-                        val updatedScopes = SurfaceScopesParams(
-                            topBar = scopeMap[UiScope.TOP_BAR]?.takeUnless { it.isEmpty() },
-                            bottomBar = scopeMap[UiScope.BOTTOM_BAR]?.takeUnless { it.isEmpty() },
-                            bookshelfCard = scopeMap[UiScope.BOOKSHELF_CARD]?.takeUnless { it.isEmpty() },
-                            dialog = scopeMap[UiScope.DIALOG]?.takeUnless { it.isEmpty() }
-                        )
-                        val updatedLayout = l.copy(
-                            densityScale = densityStep / 10f
-                        )
-                        onSave(
-                            trimmedName,
-                            initialParam.copy(
-                                surfaceGlobal = updatedGlobal,
-                                surfaceScopes = updatedScopes,
-                                layout = updatedLayout
-                            )
-                        )
+                        val payloadToSave = buildDraftPayload()
+                        if (!isMountedActive && hasAppliedLive) {
+                            UnifiedPackageRepository.restoreParamRuntimeSnapshot(context, runtimeSnapshot)
+                            onLiveRuntimeChanged()
+                        }
+                        onSave(trimmedName, payloadToSave)
                     }
                 )
             }

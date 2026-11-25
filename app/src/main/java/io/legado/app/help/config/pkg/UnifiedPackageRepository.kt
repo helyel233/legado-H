@@ -1017,11 +1017,13 @@ object UnifiedPackageRepository {
             }
             val dirName = PackageIoKernel.uniqueDirName(paramDir, cleanName)
             val targetDir = File(paramDir, dirName).apply { mkdirs() }
-            val payload = ParamPackagePayload(
-                surfaceGlobal = if (includeSurface) captureSurfaceGlobal(context, isNight) else null,
-                surfaceScopes = if (includeSurface) captureSurfaceScopes(context) else null,
-                layout = if (includeLayout) captureLayoutParams(context, isNight) else null
-            )
+            val payload = captureParamPayloadSnapshot(context, isNight).let { snap ->
+                ParamPackagePayload(
+                    surfaceGlobal = if (includeSurface) snap.surfaceGlobal else null,
+                    surfaceScopes = if (includeSurface) snap.surfaceScopes else null,
+                    layout = if (includeLayout) snap.layout else null
+                )
+            }
             val draft = UnifiedPackageManifest(
                 kind = PackageKind.PARAM,
                 id = "param_${UUID.randomUUID()}",
@@ -2938,6 +2940,166 @@ object UnifiedPackageRepository {
         l.discoveryPageLayout?.let { AppConfig.discoveryPageLayout = it }
         l.rssSourceLayout?.let { AppConfig.rssSourceLayout = it }
         l.homepageLayoutMode?.let { AppConfig.homepageLayoutMode = it }
+    }
+
+    data class ParamRuntimeSnapshot(
+        val values: Map<String, Any?>,
+        val preEditDayParamId: String,
+        val preEditNightParamId: String
+    )
+
+    private val PARAM_LIVE_SNAPSHOT_KEYS: Set<String> = setOf(
+        PreferKey.exploreGlassEffectMode,
+        PreferKey.frostedGlassLevel,
+        PreferKey.liquidGlassLevel,
+        PreferKey.exploreGlassBlurScale,
+        PreferKey.exploreGlassTintScale,
+        PreferKey.exploreGlassShellScale,
+        PreferKey.exploreGlassStrokeScale,
+        PreferKey.glassStrokeColor,
+        PreferKey.exploreGlassHardwareBlur,
+        PreferKey.exploreGlassAnimatedSolid,
+        PreferKey.uiLayoutAlpha,
+        PreferKey.uiLayoutAlphaN,
+        PreferKey.dialogAlpha,
+        PreferKey.dialogAlphaN,
+        PreferKey.panelBorderAlpha,
+        PreferKey.panelBorderAlphaN,
+        PreferKey.bgImageBlurring,
+        PreferKey.bgImageNBlurring,
+        PreferKey.paramStylePresetId,
+        PreferKey.paramStylePresetIdN,
+        PreferKey.glassPresetMatched,
+        PreferKey.glassPresetMatchedN,
+        PreferKey.uiCornerScale,
+        PreferKey.uiCornerScaleN,
+        PreferKey.themeCardShadow,
+        PreferKey.themeCardShadowN,
+        PreferKey.themeCardBackgroundBlur,
+        PreferKey.themeCardBackgroundBlurN,
+        PreferKey.uiCornerSearchFollow,
+        PreferKey.uiCornerSearchFollowN,
+        PreferKey.uiCornerReplyFollow,
+        PreferKey.uiCornerReplyFollowN,
+        PreferKey.uiDensityScale,
+        PreferKey.scopeOverrideTopBar,
+        PreferKey.scopeOverrideBottomBar,
+        PreferKey.scopeOverrideBookshelfCard,
+        PreferKey.scopeOverrideDialog,
+        PreferKey.paramPackageDirty,
+        PreferKey.currentParamPackageId,
+        PreferKey.activeDayParamPackageId,
+        PreferKey.activeNightParamPackageId
+    )
+
+    fun captureParamPayloadSnapshot(
+        context: Context,
+        isNight: Boolean = AppConfig.isNightTheme
+    ): ParamPackagePayload = ParamPackagePayload(
+        surfaceGlobal = captureSurfaceGlobal(context, isNight),
+        surfaceScopes = captureSurfaceScopes(context),
+        layout = captureLayoutParams(context, isNight)
+    )
+
+    fun captureParamRuntimeSnapshot(context: Context): ParamRuntimeSnapshot {
+        val all = context.defaultSharedPreferences.all
+        val values = LinkedHashMap<String, Any?>(PARAM_LIVE_SNAPSHOT_KEYS.size)
+        PARAM_LIVE_SNAPSHOT_KEYS.forEach { key ->
+            values[key] = all[key]
+        }
+        return ParamRuntimeSnapshot(
+            values = values,
+            preEditDayParamId = activeParamPackageId(context, false),
+            preEditNightParamId = activeParamPackageId(context, true)
+        )
+    }
+
+    fun restoreParamRuntimeSnapshot(context: Context, snapshot: ParamRuntimeSnapshot) {
+        val restored = runCatching {
+            PrefBatchTransaction.beginBatch()
+            try {
+                val editor = context.defaultSharedPreferences.edit()
+                snapshot.values.forEach { (key, value) ->
+                    when (value) {
+                        null -> editor.remove(key)
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Float -> editor.putFloat(key, value)
+                        is Long -> editor.putLong(key, value)
+                        is String -> editor.putString(key, value)
+                        else -> editor.remove(key)
+                    }
+                }
+                editor.commit()
+            } finally {
+                PrefBatchTransaction.endBatch {
+                    context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                }
+            }
+        }
+        if (restored.isFailure) {
+            // Fallback: re-apply pre-edit mounted packages for Day and Night
+            runCatching {
+                val cachedMap = synchronized(cacheLock) {
+                    paramIndexCache ?: loadEntriesIntoCacheLocked(paramDir, PackageKind.PARAM)
+                }
+                val activeNight = AppConfig.isNightTheme
+                val dayEntry = cachedMap[snapshot.preEditDayParamId]
+                val nightEntry = cachedMap[snapshot.preEditNightParamId]
+                PrefBatchTransaction.beginBatch()
+                try {
+                    dayEntry?.manifest?.param?.let { p ->
+                        p.surfaceGlobal?.let { g ->
+                            applyParamAtmosphere(context, g, isNight = false, activateGlassNow = !activeNight)
+                            if (!activeNight) {
+                                applyParamGeometryGlobal(context, g, p.surfaceScopes, p.layout?.densityScale)
+                            }
+                        }
+                    }
+                    nightEntry?.manifest?.param?.let { p ->
+                        p.surfaceGlobal?.let { g ->
+                            applyParamAtmosphere(context, g, isNight = true, activateGlassNow = activeNight)
+                            if (activeNight) {
+                                applyParamGeometryGlobal(context, g, p.surfaceScopes, p.layout?.densityScale)
+                            }
+                        }
+                    }
+                    context.putPrefBoolean(PreferKey.paramPackageDirty, false)
+                } finally {
+                    PrefBatchTransaction.endBatch {
+                        context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+                    }
+                }
+            }
+        }
+        ThemeStore.markChanged(context)
+        postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, AppConfig.isNightTheme)
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
+    }
+
+    fun applyParamDraftLive(
+        context: Context,
+        payload: ParamPackagePayload,
+        isNight: Boolean = AppConfig.isNightTheme,
+        markDirty: Boolean = true
+    ) {
+        PrefBatchTransaction.beginBatch()
+        try {
+            payload.surfaceGlobal?.let { g ->
+                applyParamAtmosphere(context, g, isNight = isNight, activateGlassNow = true)
+                applyParamGeometryGlobal(context, g, payload.surfaceScopes, payload.layout?.densityScale)
+            } ?: run {
+                applySurfaceScopes(context, payload.surfaceScopes)
+            }
+            context.putPrefBoolean(PreferKey.paramPackageDirty, markDirty)
+        } finally {
+            PrefBatchTransaction.endBatch {
+                context.applicationContext.recomputeThemeUiSignatureAfterBatch()
+            }
+        }
+        ThemeStore.markChanged(context)
+        postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, isNight)
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, true)
     }
 
     private fun putOrRemovePref(context: Context, key: String, value: String?) {

@@ -3,6 +3,7 @@ package io.legado.app.help.config.pkg
 import android.content.Context
 import io.legado.app.constant.PreferKey
 import io.legado.app.lib.theme.ThemeRuntimeKeys
+import io.legado.app.ui.config.ColorPaletteHelper
 import io.legado.app.ui.main.GlassMaterialPreset
 import io.legado.app.utils.getPrefBoolean
 import io.legado.app.utils.getPrefString
@@ -13,13 +14,14 @@ import io.legado.app.utils.removePref
 import java.util.Locale
 
 /**
- * 参数设置包「材质氛围预设模板」单一来源（与 [GlassMaterialPreset] 4 档渲染引擎解耦）。
+ * 参数设置包「材质档位」单一来源（实底 / 透明 / 磨砂 / 液态）。
  *
- * - [GlassMaterialPreset] 只负责底层 4 档光学渲染管线（`solid / clear / frosted / glass`）。
- * - [ParamStylePreset] 定义「快速切换」的一组完整 `@atmosphere` 氛围参数模板，并统一承担
- *   清单应用（[applyToSurfaceGlobal] / [markCustomized]）、运行时偏好读写
- *   （[applyToRuntimePrefs] / [clearRuntimePresetMatch] / [readRuntimePresetId] / [readRuntimePresetMatched]）
- *   以及不变量守护解析（[resolveEffectivePresetId] / [resolveRuntimePresetLabel] / [resolveSummaryLabel]）。
+ * - [GlassMaterialPreset] 负责底层 4 档光学渲染管线（`solid / clear / frosted / glass`）。
+ * - [ParamStylePreset] 定义 4 档材质的完整 `@atmosphere` 参数基线，并统一承担
+ *   清单应用（[applyToSurfaceGlobal] / [markCustomized]）、包内参数偏离派生（[inspectDeviation]）、
+ *   运行时偏好读写（[applyToRuntimePrefs] / [clearRuntimePresetMatch] / [readRuntimePresetId] /
+ *   [readRuntimePresetMatched]）以及不变量守护解析（[resolveEffectivePresetId] /
+ *   [resolveRuntimePresetLabel] / [resolveSummaryLabel]）。
  */
 object ParamStylePreset {
 
@@ -62,7 +64,7 @@ object ParamStylePreset {
     val clear = Spec(
         id = GlassMaterialPreset.CLEAR,
         label = "透明",
-        summaryLabel = "透明无玻璃",
+        summaryLabel = "透明",
         materialMode = GlassMaterialPreset.CLEAR,
         frostedLevel = 68,
         liquidLevel = 68,
@@ -80,7 +82,7 @@ object ParamStylePreset {
     val frosted = Spec(
         id = GlassMaterialPreset.FROSTED,
         label = "磨砂",
-        summaryLabel = "磨砂玻璃",
+        summaryLabel = "磨砂",
         materialMode = GlassMaterialPreset.FROSTED,
         frostedLevel = 72,
         liquidLevel = 68,
@@ -98,7 +100,7 @@ object ParamStylePreset {
     val glass = Spec(
         id = GlassMaterialPreset.GLASS,
         label = "液态",
-        summaryLabel = "液态玻璃",
+        summaryLabel = "液态",
         materialMode = GlassMaterialPreset.GLASS,
         frostedLevel = 68,
         liquidLevel = 76,
@@ -170,6 +172,109 @@ object ParamStylePreset {
             materialMode = surfaceGlobal.materialMode
         )
         return of(effectiveId)?.summaryLabel ?: "默认材质"
+    }
+
+    data class TierDeviation(
+        val tierSpec: Spec,
+        val changedLabels: List<String>,
+        val advancedChangedCount: Int
+    ) {
+        val diffCount: Int get() = changedLabels.size
+        val isExactMatch: Boolean get() = changedLabels.isEmpty()
+    }
+
+    /**
+     * Derives whether [surfaceGlobal] matches its tier's default parameters in [all]
+     * and lists which atmosphere items deviate (for UI badges and collapsible counters).
+     *
+     * Note: Package-level values are owned solely by the package manifest (never overwritten
+     * by external runtime hooks like bottom-bar opacity), so numeric derivation is exact here,
+     * whereas runtime UI continues using [readRuntimePresetMatched] per change-safety R4.
+     */
+    fun inspectDeviation(surfaceGlobal: SurfaceGlobalParams): TierDeviation {
+        val tierSpec = of(surfaceGlobal.materialMode) ?: frosted
+        val usesGlass = tierSpec.id == GlassMaterialPreset.FROSTED ||
+            tierSpec.id == GlassMaterialPreset.GLASS
+        val changed = ArrayList<String>(10)
+        var advancedCount = 0
+
+        if (usesGlass) {
+            val activeLevel = if (tierSpec.id == GlassMaterialPreset.FROSTED) {
+                (surfaceGlobal.frostedLevel ?: tierSpec.frostedLevel).coerceIn(0, 100)
+            } else {
+                (surfaceGlobal.liquidLevel ?: tierSpec.liquidLevel).coerceIn(0, 100)
+            }
+            val tierLevel = if (tierSpec.id == GlassMaterialPreset.FROSTED) {
+                tierSpec.frostedLevel
+            } else {
+                tierSpec.liquidLevel
+            }
+            if (activeLevel != tierLevel) changed += "玻璃强度"
+        }
+        if ((surfaceGlobal.surfaceAlpha ?: 100).coerceIn(0, 100) != tierSpec.surfaceAlpha) {
+            changed += "全局表面不透明度"
+        }
+        if ((surfaceGlobal.dialogAlpha ?: 100).coerceIn(0, 100) != tierSpec.dialogAlpha) {
+            changed += "弹窗表面不透明度"
+        }
+
+        if (usesGlass) {
+            if ((surfaceGlobal.blurScale ?: 100).coerceIn(0, 200) != tierSpec.blurScale) {
+                changed += "模糊倍率"
+                advancedCount++
+            }
+            if ((surfaceGlobal.tintScale ?: 100).coerceIn(0, 200) != tierSpec.tintScale) {
+                changed += "着色倍率"
+                advancedCount++
+            }
+            if ((surfaceGlobal.shellScale ?: 100).coerceIn(0, 200) != tierSpec.shellScale) {
+                changed += "壳层倍率"
+                advancedCount++
+            }
+            if ((surfaceGlobal.strokeScale ?: 100).coerceIn(0, 200) != tierSpec.strokeScale) {
+                changed += "描边倍率"
+                advancedCount++
+            }
+            val currentStroke = ColorPaletteHelper.parseColorInput(
+                surfaceGlobal.strokeColor,
+                allowDecimalArgb = true
+            )
+            val specStroke = ColorPaletteHelper.parseColorInput(
+                tierSpec.strokeColor,
+                allowDecimalArgb = true
+            )
+            if (currentStroke != specStroke) {
+                changed += "描边颜色"
+                advancedCount++
+            }
+        }
+        if ((surfaceGlobal.panelBorderAlpha ?: 100).coerceIn(0, 100) != tierSpec.panelBorderAlpha) {
+            changed += "边框不透明度"
+            advancedCount++
+        }
+        val blur = (surfaceGlobal.wallpaperBlurDay ?: surfaceGlobal.wallpaperBlurNight ?: 0).coerceIn(0, 25)
+        if (blur != tierSpec.wallpaperBlur) {
+            changed += "壁纸模糊"
+            advancedCount++
+        }
+        return TierDeviation(
+            tierSpec = tierSpec,
+            changedLabels = changed,
+            advancedChangedCount = advancedCount
+        )
+    }
+
+    /**
+     * Synchronizes [SurfaceGlobalParams.presetMatched] and [SurfaceGlobalParams.stylePresetId]
+     * from numeric deviation against [all] so sliding back to a tier's exact defaults clears "自定义".
+     */
+    fun syncDerivedPresetState(current: SurfaceGlobalParams): SurfaceGlobalParams {
+        val deviation = inspectDeviation(current)
+        return if (deviation.isExactMatch) {
+            current.copy(stylePresetId = deviation.tierSpec.id, presetMatched = true)
+        } else {
+            current.copy(stylePresetId = null, presetMatched = false)
+        }
     }
 
     fun markCustomized(current: SurfaceGlobalParams): SurfaceGlobalParams =

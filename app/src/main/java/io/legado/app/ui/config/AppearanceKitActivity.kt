@@ -103,6 +103,9 @@ import io.legado.app.ui.widget.compose.LegadoMiuixActionButton
 import io.legado.app.ui.widget.compose.LegadoMiuixSwitch
 import io.legado.app.ui.widget.compose.LegadoSegmentedControl
 import io.legado.app.ui.widget.compose.LocalLegadoTokens
+import io.legado.app.ui.widget.compose.PackageActionItem
+import io.legado.app.ui.widget.compose.PackageActionRow
+import io.legado.app.ui.widget.compose.PackageOverflowItem
 import io.legado.app.ui.widget.compose.SegmentedControlTone
 import io.legado.app.ui.widget.compose.SegmentedOption
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
@@ -655,9 +658,14 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                     }
 
                     editingParamEntryState?.let { entry ->
+                        val isMountedActive = entry.manifest.id ==
+                            (if (isNightState) activeNightParamIdState else activeDayParamIdState)
                         ParamPackageEditorDialog(
                             entry = entry,
                             existingNames = paramPackagesState.map { it.manifest.name },
+                            isMountedActive = isMountedActive,
+                            isParamDirty = paramDirtyState,
+                            onLiveRuntimeChanged = ::syncStudioRuntimeStates,
                             onDismiss = { editingParamEntryState = null },
                             onSave = { newName, updatedParam ->
                                 editingParamEntryState = null
@@ -701,8 +709,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         binding.root.addView(composeView, binding.root.indexOfChild(binding.recyclerView))
     }
 
-    private fun refreshStudioState() {
-        updateCloudContainerState()
+    private fun syncStudioRuntimeStates() {
         val night = AppConfig.isNightTheme
         val eInk = AppConfig.isEInkMode
         isNightState = night
@@ -723,6 +730,11 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             materialMode = resolvedGlassMode
         ).orEmpty()
         paramDirtyState = UnifiedPackageRepository.isParamDirty(this)
+    }
+
+    private fun refreshStudioState() {
+        updateCloudContainerState()
+        syncStudioRuntimeStates()
         useLegacyTokenPipelineState = getPrefBoolean(PreferKey.useLegacyTokenPipeline, false)
         useLegacyPackageManagerState = getPrefBoolean(PreferKey.useLegacyPackageManager, false)
         coverSlotTargetHintDismissedState = getPrefBoolean(PreferKey.coverSlotTargetHintDismissed, false)
@@ -1639,7 +1651,7 @@ private fun AppearanceStudioScreen(
             item("4_param_packages") {
                 StudioDualSlotPackageSection(
                     title = "参数设置包（日 / 夜）",
-                    subtitle = "材质氛围随日/夜槽切换；圆角、阴影、空间密度与 4 区域覆写保持全局统一",
+                    subtitle = "材质档位随日/夜槽切换；圆角、阴影、空间密度与 4 区域覆写保持全局统一",
                     isNightSlot = paramSlotNight,
                     dayMountedId = activeDayParamId,
                     nightMountedId = activeNightParamId,
@@ -2026,7 +2038,7 @@ private fun StudioLivePreviewCard(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Text(
-                                    text = "风格预设",
+                                    text = "材质档位",
                                     color = palette.settings.primaryText,
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Medium
@@ -2172,10 +2184,10 @@ private fun StudioDualSlotPackageSection(
 ) {
     val dayName = entries.firstOrNull { it.manifest.id == dayMountedId }?.manifest?.name ?: "默认"
     val nightName = entries.firstOrNull { it.manifest.id == nightMountedId }?.manifest?.name ?: "默认"
-    val slotOptions = remember(dayName, nightName) {
+    val slotOptions = remember {
         listOf(
-            SegmentedOption(false, "☀ 日间预设 ($dayName)"),
-            SegmentedOption(true, "🌙 夜间预设 ($nightName)")
+            SegmentedOption(false, "☀ 日间"),
+            SegmentedOption(true, "🌙 夜间")
         )
     }
     val currentMountedId = if (isNightSlot) nightMountedId else dayMountedId
@@ -2248,6 +2260,14 @@ private fun StudioDualSlotPackageSection(
                 onSelected = onSelectSlotNight,
                 tone = SegmentedControlTone.AccentThumb,
                 fontSize = 11.sp
+            )
+            Text(
+                text = "☀ 日间：$dayName  ·  🌙 夜间：$nightName",
+                color = palette.settings.secondaryText,
+                fontSize = 11.sp,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 2.dp)
             )
             entries.forEach { entry ->
                 val isSelected = entry.manifest.id == currentMountedId
@@ -2420,42 +2440,38 @@ private fun PackageEntryCard(
                     }
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (onReshuffle != null) {
-                    SmallPackageActionText("重新洗牌", palette.settings.accent, onReshuffle)
-                }
-                SmallPackageActionText("编辑", palette.settings.accent, onEdit)
-                SmallPackageActionText("复制", palette.settings.primaryText, onClone)
-                SmallPackageActionText("上传", palette.settings.primaryText, onUpload)
-                SmallPackageActionText("导出", palette.settings.primaryText, onExport)
-                if (canDelete) {
-                    SmallPackageActionText("删除", palette.settings.danger, onDelete)
-                }
-            }
+            PackageActionRow(
+                primary = remember(isSelected, onSelect, onEdit) {
+                    listOf(
+                        PackageActionItem(
+                            label = if (isSelected) "使用中" else "选用",
+                            selected = isSelected,
+                            onClick = onSelect
+                        ),
+                        PackageActionItem(
+                            label = "编辑",
+                            accent = true,
+                            onClick = onEdit
+                        )
+                    )
+                },
+                overflow = remember(onReshuffle, canDelete, onClone, onUpload, onExport, onDelete) {
+                    buildList {
+                        if (onReshuffle != null) {
+                            add(PackageOverflowItem(label = "重新洗牌", onClick = onReshuffle))
+                        }
+                        add(PackageOverflowItem(label = "复制", onClick = onClone))
+                        add(PackageOverflowItem(label = "上传", onClick = onUpload))
+                        add(PackageOverflowItem(label = "导出", onClick = onExport))
+                        if (canDelete) {
+                            add(PackageOverflowItem(label = "删除", danger = true, onClick = onDelete))
+                        }
+                    }
+                },
+                palette = palette
+            )
         }
     }
-}
-
-@Composable
-private fun SmallPackageActionText(
-    label: String,
-    color: Color,
-    onClick: () -> Unit
-) {
-    Text(
-        text = label,
-        color = color,
-        fontSize = 12.sp,
-        fontWeight = FontWeight.Medium,
-        modifier = Modifier
-            .clip(RoundedCornerShape(6.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 2.dp)
-    )
 }
 
 @Composable
