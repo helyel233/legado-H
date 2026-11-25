@@ -170,6 +170,9 @@ internal object ExploreGlassConfigKeys {
     /** 本设置页写入 /「恢复默认」清除的键（含旧总开关、日夜间强度两键与描边色）。 */
     val settingKeys: Set<String> = setOf(
         legacyEnabled, effectMode, presetMatched,
+        PreferKey.glassPresetMatchedN,
+        PreferKey.paramStylePresetId,
+        PreferKey.paramStylePresetIdN,
         levelDay, levelNight,
         blurScale, shellScale, tintScale, strokeScale,
         strokeColor,

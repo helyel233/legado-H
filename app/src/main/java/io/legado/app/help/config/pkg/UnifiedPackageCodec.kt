@@ -762,6 +762,7 @@ object UnifiedPackageCodec {
         putInt("strokeScale", g.strokeScale)
         putStr("strokeColor", g.strokeColor)
         putBool("presetMatched", g.presetMatched)
+        putStr("stylePresetId", g.stylePresetId)
         putBool("hardwareBlur", g.hardwareBlur)
         putBool("animatedSolid", g.animatedSolid)
         putFloat("cornerBaseScale", g.cornerBaseScale)
@@ -780,8 +781,8 @@ object UnifiedPackageCodec {
     private fun decodeSurfaceGlobal(obj: JsonObject): SurfaceGlobalParams {
         val known = setOf(
             "materialMode", "frostedLevel", "liquidLevel", "blurScale", "shellScale",
-            "tintScale", "strokeScale", "strokeColor", "presetMatched", "hardwareBlur",
-            "animatedSolid", "cornerBaseScale", "surfaceAlpha", "dialogAlpha",
+            "tintScale", "strokeScale", "strokeColor", "presetMatched", "stylePresetId",
+            "hardwareBlur", "animatedSolid", "cornerBaseScale", "surfaceAlpha", "dialogAlpha",
             "panelBorderAlpha", "cardShadow", "cardBackgroundBlur", "wallpaperBlurDay",
             "wallpaperBlurNight", "uiCornerSearchFollow", "uiCornerReplyFollow"
         )
@@ -795,6 +796,7 @@ object UnifiedPackageCodec {
             strokeScale = obj.intOrNull("strokeScale"),
             strokeColor = obj.stringOrNull("strokeColor"),
             presetMatched = obj.boolOrNull("presetMatched"),
+            stylePresetId = obj.stringOrNull("stylePresetId"),
             hardwareBlur = obj.boolOrNull("hardwareBlur"),
             animatedSolid = obj.boolOrNull("animatedSolid"),
             cornerBaseScale = obj.floatOrNull("cornerBaseScale"),

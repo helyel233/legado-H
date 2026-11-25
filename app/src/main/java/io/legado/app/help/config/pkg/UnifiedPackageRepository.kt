@@ -390,8 +390,8 @@ object UnifiedPackageRepository {
 
         val params = listParamPackages()
         if (params.isEmpty()) {
-            val dayParam = captureParamFromCurrent(context, "默认日间参数")
-            val nightParam = captureParamFromCurrent(context, "默认夜间参数")
+            val dayParam = captureParamFromCurrent(context, "默认日间参数", isNight = false)
+            val nightParam = captureParamFromCurrent(context, "默认夜间参数", isNight = true)
             context.putPrefString(PreferKey.activeDayParamPackageId, dayParam.manifest.id)
             context.putPrefString(PreferKey.activeNightParamPackageId, nightParam.manifest.id)
             context.putPrefString(
@@ -1000,7 +1000,8 @@ object UnifiedPackageRepository {
         name: String,
         includeSurface: Boolean = true,
         includeLayout: Boolean = true,
-        enforceUniqueName: Boolean = false
+        enforceUniqueName: Boolean = false,
+        isNight: Boolean = AppConfig.isNightTheme
     ): StoredEntry = withContext(IO) {
         val rawName = name.trim().ifBlank { "Param Preset" }
         repoMutex.withLock {
@@ -1017,9 +1018,9 @@ object UnifiedPackageRepository {
             val dirName = PackageIoKernel.uniqueDirName(paramDir, cleanName)
             val targetDir = File(paramDir, dirName).apply { mkdirs() }
             val payload = ParamPackagePayload(
-                surfaceGlobal = if (includeSurface) captureSurfaceGlobal(context) else null,
+                surfaceGlobal = if (includeSurface) captureSurfaceGlobal(context, isNight) else null,
                 surfaceScopes = if (includeSurface) captureSurfaceScopes(context) else null,
-                layout = if (includeLayout) captureLayoutParams(context) else null
+                layout = if (includeLayout) captureLayoutParams(context, isNight) else null
             )
             val draft = UnifiedPackageManifest(
                 kind = PackageKind.PARAM,
@@ -2562,8 +2563,10 @@ object UnifiedPackageRepository {
         )
     }
 
-    private fun captureSurfaceGlobal(context: Context): SurfaceGlobalParams {
-        val isNight = AppConfig.isNightTheme
+    private fun captureSurfaceGlobal(
+        context: Context,
+        isNight: Boolean = AppConfig.isNightTheme
+    ): SurfaceGlobalParams {
         val storedMode = context.getPrefString(PreferKey.exploreGlassEffectMode, "").orEmpty()
         val legacyEnabled = context.getPrefBoolean(PreferKey.exploreGlassEnabled, true)
         return SurfaceGlobalParams(
@@ -2575,7 +2578,8 @@ object UnifiedPackageRepository {
             tintScale = context.getPrefInt(PreferKey.exploreGlassTintScale, 100),
             strokeScale = context.getPrefInt(PreferKey.exploreGlassStrokeScale, 100),
             strokeColor = context.getPrefString(PreferKey.glassStrokeColor, ""),
-            presetMatched = context.getPrefBoolean(PreferKey.glassPresetMatched, true),
+            presetMatched = ParamStylePreset.readRuntimePresetMatched(context, isNight),
+            stylePresetId = ParamStylePreset.readRuntimePresetId(context, isNight),
             hardwareBlur = context.getPrefBoolean(PreferKey.exploreGlassHardwareBlur, true),
             animatedSolid = context.getPrefBoolean(PreferKey.exploreGlassAnimatedSolid, true),
             cornerBaseScale = context.getPrefString(ThemeRuntimeKeys.uiCornerScale(isNight), "1")
@@ -2613,8 +2617,10 @@ object UnifiedPackageRepository {
         )
     }
 
-    private fun captureLayoutParams(context: Context): LayoutParams {
-        val isNight = AppConfig.isNightTheme
+    private fun captureLayoutParams(
+        context: Context,
+        isNight: Boolean = AppConfig.isNightTheme
+    ): LayoutParams {
         val densityRaw = context.getPrefString(PreferKey.uiDensityScale, "1.0")?.toFloatOrNull() ?: 1.0f
         return LayoutParams(
             navigationPreset = MainLayoutPresetConfig.currentPreset(),
@@ -2793,9 +2799,35 @@ object UnifiedPackageRepository {
             g.tintScale?.let { context.putPrefInt(PreferKey.exploreGlassTintScale, it) }
             g.strokeScale?.let { context.putPrefInt(PreferKey.exploreGlassStrokeScale, it) }
             putOrRemovePref(context, PreferKey.glassStrokeColor, g.strokeColor)
-            g.presetMatched?.let { context.putPrefBoolean(PreferKey.glassPresetMatched, it) }
             g.hardwareBlur?.let { context.putPrefBoolean(PreferKey.exploreGlassHardwareBlur, it) }
             g.animatedSolid?.let { context.putPrefBoolean(PreferKey.exploreGlassAnimatedSolid, it) }
+        }
+        val presetIdKey = ParamStylePreset.presetIdKey(isNight)
+        val presetMatchedKey = ParamStylePreset.presetMatchedKey(isNight)
+        when (g.presetMatched) {
+            true -> {
+                context.putPrefBoolean(presetMatchedKey, true)
+                val effectivePresetId = g.stylePresetId?.takeIf { it.isNotBlank() }
+                    ?: g.materialMode?.takeIf { it.isNotBlank() }
+                putOrRemovePref(context, presetIdKey, effectivePresetId)
+            }
+            false -> {
+                context.putPrefBoolean(presetMatchedKey, false)
+                context.removePref(presetIdKey)
+            }
+            null -> {
+                val explicitPresetId = g.stylePresetId?.takeIf { it.isNotBlank() }
+                if (explicitPresetId != null) {
+                    context.putPrefString(presetIdKey, explicitPresetId)
+                } else {
+                    val storedPresetId = context.getPrefString(presetIdKey)?.takeIf { it.isNotBlank() }
+                    val storedSpec = ParamStylePreset.of(storedPresetId)
+                    val targetMode = g.materialMode?.takeIf { it.isNotBlank() }
+                    if (storedPresetId != null && (storedSpec == null || (targetMode != null && storedSpec.materialMode != targetMode))) {
+                        context.removePref(presetIdKey)
+                    }
+                }
+            }
         }
         g.surfaceAlpha?.let {
             context.putPrefInt(ThemeRuntimeKeys.uiLayoutAlpha(isNight), it.coerceIn(0, 100))

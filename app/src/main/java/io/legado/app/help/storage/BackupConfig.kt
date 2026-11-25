@@ -157,6 +157,10 @@ object BackupConfig {
         PreferKey.panelBorderColorN,
         PreferKey.panelBorderAlpha,
         PreferKey.panelBorderAlphaN,
+        PreferKey.paramStylePresetId,
+        PreferKey.paramStylePresetIdN,
+        PreferKey.glassPresetMatched,
+        PreferKey.glassPresetMatchedN,
         PreferKey.tNavBarN
     )
 

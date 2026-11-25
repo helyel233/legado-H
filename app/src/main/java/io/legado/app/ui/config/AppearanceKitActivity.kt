@@ -73,6 +73,7 @@ import io.legado.app.help.config.pkg.CoverSlotPackagePayload
 import io.legado.app.help.config.pkg.LegacyPackageMigrator
 import io.legado.app.help.config.pkg.PackageKind
 import io.legado.app.help.config.pkg.ParamPackagePayload
+import io.legado.app.help.config.pkg.ParamStylePreset
 import io.legado.app.help.config.pkg.UnifiedPackageRepository
 import io.legado.app.lib.cloud.CloudStorageFile
 import io.legado.app.lib.cloud.S3ContainerScope
@@ -182,6 +183,9 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private var layoutAlphaState by mutableIntStateOf(AppConfig.uiLayoutAlpha)
     private var glassModeState by mutableStateOf(EXPLORE_GLASS_MODE_SOLID)
     private var glassLevelState by mutableIntStateOf(GlassMaterialPreset.DEFAULT_LIQUID_LEVEL)
+    private var stylePresetIdState by mutableStateOf<String?>(null)
+    private var presetMatchedState by mutableStateOf(true)
+    private var paramDirtyState by mutableStateOf(false)
 
     private var useLegacyTokenPipelineState by mutableStateOf(false)
     private var useLegacyPackageManagerState by mutableStateOf(false)
@@ -451,15 +455,11 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setContent {
                 val glassOptions = remember {
-                    listOf(
-                        SegmentedOption(GlassMaterialPreset.SOLID, "实底"),
-                        SegmentedOption(GlassMaterialPreset.CLEAR, "透明"),
-                        SegmentedOption(GlassMaterialPreset.FROSTED, "磨砂"),
-                        SegmentedOption(GlassMaterialPreset.GLASS, "液态")
-                    )
+                    ParamStylePreset.all.map { SegmentedOption(it.id, it.label) }
                 }
                 LegadoComposeTheme {
                     AppearanceStudioScreen(
+                        isNightMode = isNightState,
                         isEInkMode = isEInkState,
                         artSlotNight = artSlotNightState,
                         paramSlotNight = paramSlotNightState,
@@ -479,6 +479,9 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         glassMode = glassModeState,
                         glassOptions = glassOptions,
                         glassLevel = glassLevelState,
+                        stylePresetId = stylePresetIdState,
+                        presetMatched = presetMatchedState,
+                        paramDirty = paramDirtyState,
                         useLegacyTokenPipeline = useLegacyTokenPipelineState,
                         useLegacyPackageManager = useLegacyPackageManagerState,
                         topMenuActions = ::topBarMenuActions,
@@ -512,7 +515,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         onLayoutAlphaCommit = {
                             commitLayoutAlpha(layoutAlphaState)
                         },
-                        onSelectGlassMode = ::selectGlassMode,
+                        onSelectGlassMode = ::applyStylePreset,
                         onGlassLevelDrag = { level ->
                             glassLevelState = level.coerceIn(0, 100)
                         },
@@ -713,6 +716,13 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         val frosted = getPrefInt(PreferKey.frostedGlassLevel, AppConfig.frostedGlassLevel)
         val liquid = getPrefInt(PreferKey.liquidGlassLevel, AppConfig.liquidGlassLevel)
         glassLevelState = GlassMaterialPreset.levelFor(resolvedGlassMode, frosted, liquid).coerceIn(0, 100)
+        presetMatchedState = ParamStylePreset.readRuntimePresetMatched(this, night)
+        stylePresetIdState = ParamStylePreset.resolveEffectivePresetId(
+            presetMatched = presetMatchedState,
+            stylePresetId = ParamStylePreset.readRuntimePresetId(this, night),
+            materialMode = resolvedGlassMode
+        ).orEmpty()
+        paramDirtyState = UnifiedPackageRepository.isParamDirty(this)
         useLegacyTokenPipelineState = getPrefBoolean(PreferKey.useLegacyTokenPipeline, false)
         useLegacyPackageManagerState = getPrefBoolean(PreferKey.useLegacyPackageManager, false)
         coverSlotTargetHintDismissedState = getPrefBoolean(PreferKey.coverSlotTargetHintDismissed, false)
@@ -863,7 +873,8 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
                         val created = UnifiedPackageRepository.captureParamFromCurrent(
                             context = this@AppearanceKitActivity,
                             name = newName,
-                            enforceUniqueName = true
+                            enforceUniqueName = true,
+                            isNight = paramSlotNightState
                         )
                         UnifiedPackageRepository.mountParamPackage(
                             context = this@AppearanceKitActivity,
@@ -1070,6 +1081,8 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun commitCornerScale(scale: Float) {
         val clamped = scale.coerceIn(0f, 3f)
         val night = isNightState
+        UnifiedPackageRepository.markParamDirty(this, true)
+        paramDirtyState = true
         lifecycleScope.launch {
             runCatching {
                 ThemePackageManager.updateActiveRuntimeOverride(
@@ -1087,6 +1100,11 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun commitLayoutAlpha(alpha: Int) {
         val clamped = alpha.coerceIn(0, 100)
         val night = isNightState
+        ParamStylePreset.clearRuntimePresetMatch(this, night)
+        UnifiedPackageRepository.markParamDirty(this, true)
+        presetMatchedState = false
+        stylePresetIdState = ""
+        paramDirtyState = true
         lifecycleScope.launch {
             runCatching {
                 ThemePackageManager.updateActiveRuntimeOverride(
@@ -1101,34 +1119,40 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
         }
     }
 
-    private fun selectGlassMode(nextMode: String) {
-        if (nextMode == glassModeState) return
-        val point = GlassMaterialPreset.presetPoint(nextMode)
-        glassModeState = nextMode
-        glassLevelState = point.level
-        PrefBatchTransaction.run(this) {
-            putPrefInt(PreferKey.frostedGlassLevel, point.level)
-            putPrefInt(PreferKey.liquidGlassLevel, point.level)
-            putPrefInt(PreferKey.exploreGlassBlurScale, point.scales.blur)
-            putPrefInt(PreferKey.exploreGlassTintScale, point.scales.tint)
-            putPrefInt(PreferKey.exploreGlassShellScale, point.scales.shell)
-            putPrefInt(PreferKey.exploreGlassStrokeScale, point.scales.stroke)
-            putPrefString(PreferKey.exploreGlassEffectMode, nextMode)
-            putPrefBoolean(PreferKey.glassPresetMatched, true)
-        }
-        UnifiedPackageRepository.markParamDirty(this, true)
-        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
+    private fun applyStylePreset(presetId: String) {
+        val night = isNightState
+        val applied = PrefBatchTransaction.run(this) {
+            ParamStylePreset.applyToRuntimePrefs(this, presetId, night)?.also {
+                UnifiedPackageRepository.markParamDirty(this, true)
+            }
+        } ?: return
+        layoutAlphaState = applied.surfaceAlpha
+        glassModeState = applied.materialMode
+        glassLevelState = GlassMaterialPreset.levelFor(
+            applied.materialMode,
+            applied.frostedLevel,
+            applied.liquidLevel
+        ).coerceIn(0, 100)
+        stylePresetIdState = applied.id
+        presetMatchedState = true
+        paramDirtyState = true
+        postEvent(EventBus.MAIN_THEME_BACKGROUND_CHANGED, night)
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, night)
     }
 
     private fun commitGlassLevel(level: Int) {
         val clamped = level.coerceIn(0, 100)
+        val night = isNightState
         PrefBatchTransaction.run(this) {
             putPrefInt(PreferKey.frostedGlassLevel, clamped)
             putPrefInt(PreferKey.liquidGlassLevel, clamped)
-            putPrefBoolean(PreferKey.glassPresetMatched, false)
+            ParamStylePreset.clearRuntimePresetMatch(this, night)
+            UnifiedPackageRepository.markParamDirty(this, true)
         }
-        UnifiedPackageRepository.markParamDirty(this, true)
-        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, isNightState)
+        presetMatchedState = false
+        stylePresetIdState = ""
+        paramDirtyState = true
+        postEvent(EventBus.MAIN_APPEARANCE_KIT_CHANGED, night)
     }
 
     private fun toggleLegacyTokenPipeline(enabled: Boolean) {
@@ -1474,6 +1498,7 @@ class AppearanceKitActivity : BaseActivity<ActivityThemeManageBinding>() {
 
 @Composable
 private fun AppearanceStudioScreen(
+    isNightMode: Boolean,
     isEInkMode: Boolean,
     artSlotNight: Boolean,
     paramSlotNight: Boolean,
@@ -1493,6 +1518,9 @@ private fun AppearanceStudioScreen(
     glassMode: String,
     glassOptions: List<SegmentedOption<String>>,
     glassLevel: Int,
+    stylePresetId: String?,
+    presetMatched: Boolean,
+    paramDirty: Boolean,
     useLegacyTokenPipeline: Boolean,
     useLegacyPackageManager: Boolean,
     topMenuActions: () -> List<AppManagementMenuAction>,
@@ -1573,6 +1601,9 @@ private fun AppearanceStudioScreen(
                     glassMode = glassMode,
                     glassOptions = glassOptions,
                     glassLevel = glassLevel,
+                    stylePresetId = stylePresetId,
+                    presetMatched = presetMatched,
+                    paramDirty = paramDirty,
                     onCornerScaleDrag = onCornerScaleDrag,
                     onCornerScaleCommit = onCornerScaleCommit,
                     onLayoutAlphaDrag = onLayoutAlphaDrag,
@@ -1615,6 +1646,7 @@ private fun AppearanceStudioScreen(
                     entries = paramPackages,
                     palette = palette,
                     glassSignature = effectiveGlassSig,
+                    showDirtyOnSelected = paramDirty && paramSlotNight == isNightMode,
                     onSelectSlotNight = onSelectParamSlotNight,
                     onSelectEntry = onMountParamPackage,
                     onCreateNew = { onCreatePackage(PackageKind.PARAM) },
@@ -1691,6 +1723,9 @@ private fun StudioLivePreviewCard(
     glassMode: String,
     glassOptions: List<SegmentedOption<String>>,
     glassLevel: Int,
+    stylePresetId: String?,
+    presetMatched: Boolean,
+    paramDirty: Boolean,
     onCornerScaleDrag: (Int) -> Unit,
     onCornerScaleCommit: () -> Unit,
     onLayoutAlphaDrag: (Int) -> Unit,
@@ -1757,6 +1792,7 @@ private fun StudioLivePreviewCard(
     }
 
     val previewTitleColor = if (isEInkMode) palette.settings.primaryText else palette.settings.accent
+    val presetLabel = ParamStylePreset.resolveRuntimePresetLabel(presetMatched, stylePresetId, glassMode)
     val body: @Composable () -> Unit = {
         Column(
             modifier = Modifier
@@ -1769,31 +1805,71 @@ private fun StudioLivePreviewCard(
                 .padding(horizontal = 12.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    text = stringResource(R.string.appearance_studio_preview_title),
-                    color = previewTitleColor,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    fontFamily = palette.settings.titleFontFamily,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                Text(
-                    text = if (quickDrawerExpanded) "收起快速微调 ▴" else "快速微调 ▾",
-                    color = previewTitleColor,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .clickable { quickDrawerExpanded = !quickDrawerExpanded }
-                        .padding(horizontal = 6.dp, vertical = 2.dp)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = stringResource(R.string.appearance_studio_preview_title),
+                        color = previewTitleColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        fontFamily = palette.settings.titleFontFamily,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                    Text(
+                        text = if (quickDrawerExpanded) "收起快速微调 ▴" else "快速微调 ▾",
+                        color = previewTitleColor,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(8.dp))
+                            .clickable { quickDrawerExpanded = !quickDrawerExpanded }
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = previewTitleColor.copy(alpha = if (presetMatched) 0.12f else 0.16f),
+                        border = BorderStroke(
+                            0.6.dp,
+                            previewTitleColor.copy(alpha = if (presetMatched) 0.35f else 0.6f)
+                        )
+                    ) {
+                        Text(
+                            text = presetLabel,
+                            color = previewTitleColor,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp)
+                        )
+                    }
+                    if (paramDirty) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = palette.settings.divider.copy(alpha = 0.25f)
+                        ) {
+                            Text(
+                                text = "未保存微调",
+                                color = palette.settings.secondaryText,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 7.dp, vertical = 1.dp)
+                            )
+                        }
+                    }
+                }
             }
             Row(
                 modifier = Modifier
@@ -1944,9 +2020,27 @@ private fun StudioLivePreviewCard(
                             onValueChangeFinished = onLayoutAlphaCommit
                         )
                         if (!isEInkMode) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    text = "风格预设",
+                                    color = palette.settings.primaryText,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = presetLabel,
+                                    color = if (presetMatched) palette.settings.accent else palette.settings.secondaryText,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            }
                             LegadoSegmentedControl(
                                 options = glassOptions,
-                                selectedValue = glassMode,
+                                selectedValue = if (presetMatched) stylePresetId.orEmpty() else "",
                                 palette = palette.miuix,
                                 onSelected = onSelectGlassMode,
                                 tone = SegmentedControlTone.SurfaceThumb,
@@ -2062,6 +2156,7 @@ private fun StudioDualSlotPackageSection(
     palette: AppManagementPalette,
     glassSignature: String?,
     headerExtra: (@Composable () -> Unit)? = null,
+    showDirtyOnSelected: Boolean = false,
     canDeleteEntry: (UnifiedPackageRepository.StoredEntry) -> Boolean = { true },
     canReshuffleEntry: (UnifiedPackageRepository.StoredEntry) -> Boolean = { false },
     onSelectSlotNight: (Boolean) -> Unit,
@@ -2165,6 +2260,7 @@ private fun StudioDualSlotPackageSection(
                     isSelected = isSelected,
                     isAlsoOtherSlot = isAlsoOtherSlot,
                     otherSlotLabel = if (isNightSlot) "日间也在用" else "夜间也在用",
+                    showDirtyTag = isSelected && showDirtyOnSelected,
                     canDelete = canDeleteEntry(entry),
                     palette = palette,
                     onSelect = { onSelectEntry(entry) },
@@ -2218,6 +2314,7 @@ private fun PackageEntryCard(
     isSelected: Boolean,
     isAlsoOtherSlot: Boolean,
     otherSlotLabel: String,
+    showDirtyTag: Boolean = false,
     canDelete: Boolean = true,
     palette: AppManagementPalette,
     onSelect: () -> Unit,
@@ -2298,12 +2395,29 @@ private fun PackageEntryCard(
                     )
                 }
                 if (isSelected) {
-                    Text(
-                        text = "当前使用",
-                        color = palette.settings.accent,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        if (showDirtyTag) {
+                            Text(
+                                text = "已微调",
+                                color = palette.settings.secondaryText,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(palette.settings.accent.copy(alpha = 0.14f))
+                                    .padding(horizontal = 5.dp, vertical = 1.dp)
+                            )
+                        }
+                        Text(
+                            text = "当前使用",
+                            color = palette.settings.accent,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
             Row(
@@ -2452,13 +2566,7 @@ private fun buildPackageMetaSummary(entry: UnifiedPackageRepository.StoredEntry)
         }
         else -> {
             val g = entry.manifest.param?.surfaceGlobal
-            val modeLabel = when (g?.materialMode) {
-                GlassMaterialPreset.SOLID -> "实底"
-                GlassMaterialPreset.CLEAR -> "透明无玻璃"
-                GlassMaterialPreset.FROSTED -> "磨砂玻璃"
-                GlassMaterialPreset.GLASS -> "液态玻璃"
-                else -> "默认材质"
-            }
+            val modeLabel = ParamStylePreset.resolveSummaryLabel(g)
             val corner = String.format(Locale.US, "%.1fx", g?.cornerBaseScale ?: 1f)
             val alpha = "${g?.surfaceAlpha ?: 100}%"
             "$modeLabel · 圆角 $corner · 不透明度 $alpha"

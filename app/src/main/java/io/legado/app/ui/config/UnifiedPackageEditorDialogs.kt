@@ -55,6 +55,7 @@ import io.legado.app.help.config.pkg.CoverSlotApplyTarget
 import io.legado.app.help.config.pkg.CoverSlotPackagePayload
 import io.legado.app.help.config.pkg.LayoutParams
 import io.legado.app.help.config.pkg.ParamPackagePayload
+import io.legado.app.help.config.pkg.ParamStylePreset
 import io.legado.app.help.config.pkg.SurfaceGlobalParams
 import io.legado.app.help.config.pkg.SurfaceScopeOverride
 import io.legado.app.help.config.pkg.SurfaceScopesParams
@@ -627,40 +628,44 @@ internal fun ParamPackageEditorDialog(
     val l = initialParam.layout ?: LayoutParams()
 
     var nameDraft by remember(entry.manifest.id) { mutableStateOf(entry.manifest.name) }
-    var activeTab by remember { mutableIntStateOf(0) }
+    var activeTab by remember(entry.manifest.id) { mutableIntStateOf(0) }
 
-    // @atmosphere (Day/Night aware) — 4 modes from GlassMaterialPreset
-    var materialMode by remember { mutableStateOf(g.materialMode ?: GlassMaterialPreset.FROSTED) }
-    var frostedLevel by remember { mutableIntStateOf((g.frostedLevel ?: 68).coerceIn(0, 100)) }
-    var liquidLevel by remember { mutableIntStateOf((g.liquidLevel ?: 68).coerceIn(0, 100)) }
-    var blurScale by remember { mutableIntStateOf((g.blurScale ?: 100).coerceIn(50, 200)) }
-    var tintScale by remember { mutableIntStateOf((g.tintScale ?: 100).coerceIn(50, 200)) }
-    var shellScale by remember { mutableIntStateOf((g.shellScale ?: 100).coerceIn(50, 200)) }
-    var strokeScale by remember { mutableIntStateOf((g.strokeScale ?: 100).coerceIn(50, 200)) }
-    var strokeColor by remember {
+    var globalDraft by remember(entry.manifest.id) {
+        mutableStateOf(
+            g.copy(
+                materialMode = g.materialMode?.takeIf { it.isNotBlank() } ?: GlassMaterialPreset.FROSTED,
+                frostedLevel = (g.frostedLevel ?: 68).coerceIn(0, 100),
+                liquidLevel = (g.liquidLevel ?: 68).coerceIn(0, 100),
+                blurScale = (g.blurScale ?: 100).coerceIn(0, 200),
+                tintScale = (g.tintScale ?: 100).coerceIn(0, 200),
+                shellScale = (g.shellScale ?: 100).coerceIn(0, 200),
+                strokeScale = (g.strokeScale ?: 100).coerceIn(0, 200),
+                surfaceAlpha = (g.surfaceAlpha ?: 100).coerceIn(0, 100),
+                dialogAlpha = (g.dialogAlpha ?: 100).coerceIn(0, 100),
+                panelBorderAlpha = (g.panelBorderAlpha ?: 100).coerceIn(0, 100),
+                wallpaperBlurDay = (g.wallpaperBlurDay ?: g.wallpaperBlurNight ?: 0).coerceIn(0, 25),
+                wallpaperBlurNight = (g.wallpaperBlurNight ?: g.wallpaperBlurDay ?: 0).coerceIn(0, 25),
+                cornerBaseScale = (g.cornerBaseScale ?: 1f).coerceIn(0f, 3f),
+                cardShadow = (g.cardShadow ?: 0).coerceIn(0, 24),
+                uiCornerSearchFollow = g.uiCornerSearchFollow ?: true,
+                uiCornerReplyFollow = g.uiCornerReplyFollow ?: true
+            )
+        )
+    }
+    var strokeColorInput by remember(entry.manifest.id) {
         mutableStateOf(
             ColorPaletteHelper.parseColorInput(g.strokeColor, allowDecimalArgb = true)
                 ?.let { ColorPaletteHelper.formatHex6(it) }
                 ?: g.strokeColor.orEmpty()
         )
     }
-    var surfaceAlpha by remember { mutableIntStateOf((g.surfaceAlpha ?: 100).coerceIn(0, 100)) }
-    var dialogAlpha by remember { mutableIntStateOf((g.dialogAlpha ?: 100).coerceIn(0, 100)) }
-    var borderAlpha by remember { mutableIntStateOf((g.panelBorderAlpha ?: 100).coerceIn(0, 100)) }
-    var wallpaperBlur by remember {
-        mutableIntStateOf((g.wallpaperBlurDay ?: g.wallpaperBlurNight ?: 0).coerceIn(0, 25))
+    var densityStep by remember(entry.manifest.id) {
+        mutableIntStateOf(((l.densityScale ?: 1f) * 10f).toInt().coerceIn(8, 13))
     }
 
-    // @geometry (Global single-track)
-    var cornerStep by remember { mutableIntStateOf(((g.cornerBaseScale ?: 1f) * 10f).toInt().coerceIn(0, 30)) }
-    var cardShadow by remember { mutableIntStateOf((g.cardShadow ?: 0).coerceIn(0, 24)) }
-    var densityStep by remember { mutableIntStateOf(((l.densityScale ?: 1f) * 10f).toInt().coerceIn(8, 13)) }
-    var searchCornerFollow by remember { mutableStateOf(g.uiCornerSearchFollow ?: true) }
-    var replyCornerFollow by remember { mutableStateOf(g.uiCornerReplyFollow ?: true) }
-
     // @surfaceScopes (4 Scopes)
-    var selectedScope by remember { mutableStateOf(UiScope.TOP_BAR) }
-    var scopeMap by remember {
+    var selectedScope by remember(entry.manifest.id) { mutableStateOf(UiScope.TOP_BAR) }
+    var scopeMap by remember(entry.manifest.id) {
         val initialScopes = initialParam.surfaceScopes
         mutableStateOf(
             mapOf(
@@ -671,6 +676,28 @@ internal fun ParamPackageEditorDialog(
             )
         )
     }
+
+    val isPresetMatched = globalDraft.presetMatched != false
+    val effectivePresetId = ParamStylePreset.resolveEffectivePresetId(
+        presetMatched = isPresetMatched,
+        stylePresetId = globalDraft.stylePresetId,
+        materialMode = globalDraft.materialMode
+    )
+    val materialMode = globalDraft.materialMode ?: GlassMaterialPreset.FROSTED
+    val frostedLevel = (globalDraft.frostedLevel ?: 68).coerceIn(0, 100)
+    val liquidLevel = (globalDraft.liquidLevel ?: 68).coerceIn(0, 100)
+    val blurScale = (globalDraft.blurScale ?: 100).coerceIn(0, 200)
+    val tintScale = (globalDraft.tintScale ?: 100).coerceIn(0, 200)
+    val shellScale = (globalDraft.shellScale ?: 100).coerceIn(0, 200)
+    val strokeScale = (globalDraft.strokeScale ?: 100).coerceIn(0, 200)
+    val surfaceAlpha = (globalDraft.surfaceAlpha ?: 100).coerceIn(0, 100)
+    val dialogAlpha = (globalDraft.dialogAlpha ?: 100).coerceIn(0, 100)
+    val borderAlpha = (globalDraft.panelBorderAlpha ?: 100).coerceIn(0, 100)
+    val wallpaperBlur = (globalDraft.wallpaperBlurDay ?: globalDraft.wallpaperBlurNight ?: 0).coerceIn(0, 25)
+    val cornerStep = ((globalDraft.cornerBaseScale ?: 1f) * 10f).toInt().coerceIn(0, 30)
+    val cardShadow = (globalDraft.cardShadow ?: 0).coerceIn(0, 24)
+    val searchCornerFollow = globalDraft.uiCornerSearchFollow ?: true
+    val replyCornerFollow = globalDraft.uiCornerReplyFollow ?: true
 
     val otherNames = remember(existingNames, entry.manifest.name) {
         existingNames.filterNot {
@@ -689,6 +716,9 @@ internal fun ParamPackageEditorDialog(
             SegmentedOption(1, "几何手感(全局)"),
             SegmentedOption(2, "4区域覆写")
         )
+    }
+    val stylePresetOptions = remember {
+        ParamStylePreset.all.map { SegmentedOption(it.id, it.label) }
     }
     val fourMaterialOptions = remember {
         listOf(
@@ -747,6 +777,62 @@ internal fun ParamPackageEditorDialog(
                             fontSize = 12.sp
                         )
                     }
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "材质氛围预设",
+                                color = style.primaryText,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                            if (isPresetMatched) {
+                                Text(
+                                    text = ParamStylePreset.labelOf(effectivePresetId) ?: "预设",
+                                    color = dialogPalette.accent,
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            } else {
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = dialogPalette.accent.copy(alpha = 0.14f),
+                                    border = BorderStroke(0.75.dp, dialogPalette.accent.copy(alpha = 0.55f))
+                                ) {
+                                    Text(
+                                        text = "自定义",
+                                        color = dialogPalette.accent,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
+                        LegadoSegmentedControl(
+                            options = stylePresetOptions,
+                            selectedValue = effectivePresetId.orEmpty(),
+                            palette = dialogPalette,
+                            onSelected = { selectedId ->
+                                val nextDraft = ParamStylePreset.applyToSurfaceGlobal(globalDraft, selectedId)
+                                globalDraft = nextDraft
+                                strokeColorInput = nextDraft.strokeColor.orEmpty()
+                            },
+                            tone = SegmentedControlTone.SurfaceThumb,
+                            fontSize = 11.sp
+                        )
+                        Text(
+                            text = "套用预设将更新材质氛围参数，保留几何、布局与区域覆写",
+                            color = style.secondaryText,
+                            fontSize = 11.sp
+                        )
+                    }
                     LegadoSegmentedControl(
                         options = tabs,
                         selectedValue = activeTab,
@@ -758,7 +844,7 @@ internal fun ParamPackageEditorDialog(
                     when (activeTab) {
                         0 -> {
                             Text(
-                                text = "材质模式（4 档，委托 GlassMaterialPreset 单一来源）",
+                                text = "渲染材质引擎",
                                 color = style.primaryText,
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium
@@ -768,14 +854,11 @@ internal fun ParamPackageEditorDialog(
                                 selectedValue = materialMode,
                                 palette = dialogPalette,
                                 onSelected = { nextMode ->
-                                    materialMode = nextMode
-                                    val preset = GlassMaterialPreset.presetPoint(nextMode)
-                                    frostedLevel = preset.level
-                                    liquidLevel = preset.level
-                                    blurScale = preset.scales.blur
-                                    tintScale = preset.scales.tint
-                                    shellScale = preset.scales.shell
-                                    strokeScale = preset.scales.stroke
+                                    if (nextMode != materialMode) {
+                                        globalDraft = ParamStylePreset.markCustomized(
+                                            globalDraft.copy(materialMode = nextMode)
+                                        )
+                                    }
                                 },
                                 tone = SegmentedControlTone.SurfaceThumb,
                                 fontSize = 11.sp
@@ -791,49 +874,74 @@ internal fun ParamPackageEditorDialog(
                                     range = 0..100,
                                     palette = mgmtPalette,
                                     onValueChange = {
-                                        frostedLevel = it
-                                        liquidLevel = it
+                                        globalDraft = ParamStylePreset.markCustomized(
+                                            globalDraft.copy(frostedLevel = it, liquidLevel = it)
+                                        )
                                     }
                                 )
                                 EditorSliderRow(
                                     title = "模糊倍率 (Blur)",
                                     valueText = "$blurScale%",
                                     value = blurScale,
-                                    range = 50..200,
+                                    range = 0..200,
                                     palette = mgmtPalette,
-                                    onValueChange = { blurScale = it }
+                                    onValueChange = {
+                                        globalDraft = ParamStylePreset.markCustomized(
+                                            globalDraft.copy(blurScale = it)
+                                        )
+                                    }
                                 )
                                 EditorSliderRow(
                                     title = "着色倍率 (Tint)",
                                     valueText = "$tintScale%",
                                     value = tintScale,
-                                    range = 50..200,
+                                    range = 0..200,
                                     palette = mgmtPalette,
-                                    onValueChange = { tintScale = it }
+                                    onValueChange = {
+                                        globalDraft = ParamStylePreset.markCustomized(
+                                            globalDraft.copy(tintScale = it)
+                                        )
+                                    }
                                 )
                                 EditorSliderRow(
                                     title = "壳层倍率 (Shell)",
                                     valueText = "$shellScale%",
                                     value = shellScale,
-                                    range = 50..200,
+                                    range = 0..200,
                                     palette = mgmtPalette,
-                                    onValueChange = { shellScale = it }
+                                    onValueChange = {
+                                        globalDraft = ParamStylePreset.markCustomized(
+                                            globalDraft.copy(shellScale = it)
+                                        )
+                                    }
                                 )
                                 EditorSliderRow(
                                     title = "描边倍率 (Stroke)",
                                     valueText = "$strokeScale%",
                                     value = strokeScale,
-                                    range = 50..200,
+                                    range = 0..200,
                                     palette = mgmtPalette,
-                                    onValueChange = { strokeScale = it }
+                                    onValueChange = {
+                                        globalDraft = ParamStylePreset.markCustomized(
+                                            globalDraft.copy(strokeScale = it)
+                                        )
+                                    }
                                 )
                                 ColorFieldRow(
                                     label = "玻璃描边颜色 (选填)",
-                                    value = strokeColor,
+                                    value = strokeColorInput,
                                     style = style,
                                     palette = dialogPalette,
                                     allowDecimalInput = true
-                                ) { strokeColor = it }
+                                ) { nextInput ->
+                                    strokeColorInput = nextInput
+                                    val parsedStroke = nextInput.trim().takeIf { it.isNotBlank() }?.let { raw ->
+                                        ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
+                                    }
+                                    globalDraft = ParamStylePreset.markCustomized(
+                                        globalDraft.copy(strokeColor = parsedStroke)
+                                    )
+                                }
                             }
                             HorizontalDivider(color = mgmtPalette.settings.divider, thickness = 0.5.dp)
                             EditorSliderRow(
@@ -842,7 +950,11 @@ internal fun ParamPackageEditorDialog(
                                 value = surfaceAlpha,
                                 range = 0..100,
                                 palette = mgmtPalette,
-                                onValueChange = { surfaceAlpha = it }
+                                onValueChange = {
+                                    globalDraft = ParamStylePreset.markCustomized(
+                                        globalDraft.copy(surfaceAlpha = it)
+                                    )
+                                }
                             )
                             EditorSliderRow(
                                 title = "弹窗表面不透明度",
@@ -850,7 +962,11 @@ internal fun ParamPackageEditorDialog(
                                 value = dialogAlpha,
                                 range = 0..100,
                                 palette = mgmtPalette,
-                                onValueChange = { dialogAlpha = it }
+                                onValueChange = {
+                                    globalDraft = ParamStylePreset.markCustomized(
+                                        globalDraft.copy(dialogAlpha = it)
+                                    )
+                                }
                             )
                             EditorSliderRow(
                                 title = "面板边框线不透明度",
@@ -858,7 +974,11 @@ internal fun ParamPackageEditorDialog(
                                 value = borderAlpha,
                                 range = 0..100,
                                 palette = mgmtPalette,
-                                onValueChange = { borderAlpha = it }
+                                onValueChange = {
+                                    globalDraft = ParamStylePreset.markCustomized(
+                                        globalDraft.copy(panelBorderAlpha = it)
+                                    )
+                                }
                             )
                             EditorSliderRow(
                                 title = "主背景壁纸模糊度",
@@ -866,7 +986,11 @@ internal fun ParamPackageEditorDialog(
                                 value = wallpaperBlur,
                                 range = 0..25,
                                 palette = mgmtPalette,
-                                onValueChange = { wallpaperBlur = it }
+                                onValueChange = {
+                                    globalDraft = ParamStylePreset.markCustomized(
+                                        globalDraft.copy(wallpaperBlurDay = it, wallpaperBlurNight = it)
+                                    )
+                                }
                             )
                         }
                         1 -> {
@@ -881,7 +1005,9 @@ internal fun ParamPackageEditorDialog(
                                 value = cornerStep,
                                 range = 0..30,
                                 palette = mgmtPalette,
-                                onValueChange = { cornerStep = it }
+                                onValueChange = {
+                                    globalDraft = globalDraft.copy(cornerBaseScale = it / 10f)
+                                }
                             )
                             EditorSliderRow(
                                 title = "卡片阴影高度",
@@ -889,7 +1015,9 @@ internal fun ParamPackageEditorDialog(
                                 value = cardShadow,
                                 range = 0..24,
                                 palette = mgmtPalette,
-                                onValueChange = { cardShadow = it }
+                                onValueChange = {
+                                    globalDraft = globalDraft.copy(cardShadow = it)
+                                }
                             )
                             EditorSliderRow(
                                 title = "空间间距密度 (Density Scale)",
@@ -907,7 +1035,9 @@ internal fun ParamPackageEditorDialog(
                                 Text("搜索框圆角跟随全局倍率", color = style.primaryText, fontSize = 13.sp)
                                 LegadoMiuixSwitch(
                                     checked = searchCornerFollow,
-                                    onCheckedChange = { searchCornerFollow = it },
+                                    onCheckedChange = {
+                                        globalDraft = globalDraft.copy(uiCornerSearchFollow = it)
+                                    },
                                     palette = dialogPalette
                                 )
                             }
@@ -919,7 +1049,9 @@ internal fun ParamPackageEditorDialog(
                                 Text("输入/回复框圆角跟随全局倍率", color = style.primaryText, fontSize = 13.sp)
                                 LegadoMiuixSwitch(
                                     checked = replyCornerFollow,
-                                    onCheckedChange = { replyCornerFollow = it },
+                                    onCheckedChange = {
+                                        globalDraft = globalDraft.copy(uiCornerReplyFollow = it)
+                                    },
                                     palette = dialogPalette
                                 )
                             }
@@ -1023,26 +1155,14 @@ internal fun ParamPackageEditorDialog(
                     enabled = canSave,
                     onClick = {
                         if (!canSave) return@LegadoMiuixActionButton
-                        val updatedGlobal = g.copy(
-                            materialMode = materialMode,
-                            frostedLevel = frostedLevel,
-                            liquidLevel = liquidLevel,
-                            blurScale = blurScale,
-                            tintScale = tintScale,
-                            shellScale = shellScale,
-                            strokeScale = strokeScale,
-                            strokeColor = strokeColor.trim().takeIf { it.isNotBlank() }?.let { raw ->
+                        val updatedGlobal = globalDraft.copy(
+                            blurScale = blurScale.coerceIn(0, 200),
+                            tintScale = tintScale.coerceIn(0, 200),
+                            shellScale = shellScale.coerceIn(0, 200),
+                            strokeScale = strokeScale.coerceIn(0, 200),
+                            strokeColor = strokeColorInput.trim().takeIf { it.isNotBlank() }?.let { raw ->
                                 ColorPaletteHelper.parseColorInput(raw, allowDecimalArgb = true)?.toString()
-                            },
-                            cornerBaseScale = cornerStep / 10f,
-                            surfaceAlpha = surfaceAlpha,
-                            dialogAlpha = dialogAlpha,
-                            panelBorderAlpha = borderAlpha,
-                            cardShadow = cardShadow,
-                            wallpaperBlurDay = wallpaperBlur,
-                            wallpaperBlurNight = wallpaperBlur,
-                            uiCornerSearchFollow = searchCornerFollow,
-                            uiCornerReplyFollow = replyCornerFollow
+                            }
                         )
                         val updatedScopes = SurfaceScopesParams(
                             topBar = scopeMap[UiScope.TOP_BAR]?.takeUnless { it.isEmpty() },

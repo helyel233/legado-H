@@ -7,6 +7,8 @@ import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.pkg.ParamStylePreset
+import io.legado.app.lib.theme.PrefBatchTransaction
 import io.legado.app.ui.config.compose.ComposeSettingFragment
 import io.legado.app.ui.config.compose.SettingActionSpec
 import io.legado.app.ui.config.compose.SettingChoiceSpec
@@ -96,7 +98,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
         // 底栏主题包每次启动会用 config.opacity 覆盖两个全局强度键（真机 70→60），
         // 数值反推会把「选了预设、效果没变」误显示成「自定义」。选档置 true、
         // 手动拖任一滑杆置 false（见下方 onSelected / onValueChange），与此键解耦。
-        val presetMatched = booleanSetting(PreferKey.glassPresetMatched, true)
+        val presetMatched = ParamStylePreset.readRuntimePresetMatched(ctx, AppConfig.isNightTheme)
         val previewPipeline = exploreGlassPreviewPipelineNow(
             context = ctx,
             mode = mode,
@@ -125,21 +127,19 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                             options = options,
                             // 偏离预设坐标时传空值：弹窗里不再勾选任何一档（与「自定义」
                             // 一致），再点同一档就是把它重置回该档的固定滑杆数值。
-                            selectedValue = if (presetMatched) mode else "",
+                            selectedValue = ParamStylePreset.resolveEffectivePresetId(
+                                presetMatched = presetMatched,
+                                stylePresetId = ParamStylePreset.readRuntimePresetId(ctx, AppConfig.isNightTheme),
+                                materialMode = mode
+                            ) ?: "",
                             // 选一档 = 写入该档的固定滑杆坐标（强度 + 四个倍率），
                             // 于是「预设」在界面上有唯一确定的滑杆位置；
                             // 之后拖动任一滑杆即偏离坐标，胶囊显示「自定义」。
                             onSelected = { next ->
-                                val point = GlassMaterialPreset.presetPoint(next)
-                                updateIntSetting(PreferKey.frostedGlassLevel, point.level)
-                                updateIntSetting(PreferKey.liquidGlassLevel, point.level)
-                                updateIntSetting(PreferKey.exploreGlassBlurScale, point.scales.blur)
-                                updateIntSetting(PreferKey.exploreGlassTintScale, point.scales.tint)
-                                updateIntSetting(PreferKey.exploreGlassShellScale, point.scales.shell)
-                                updateIntSetting(PreferKey.exploreGlassStrokeScale, point.scales.stroke)
-                                updateStringSetting(PreferKey.exploreGlassEffectMode, next)
-                                // 显式选档即回到「预设」态；底栏主题包随后覆盖强度也不改变此状态。
-                                updateBooleanSetting(PreferKey.glassPresetMatched, true)
+                                PrefBatchTransaction.run(ctx) {
+                                    ParamStylePreset.applyToRuntimePrefs(ctx, next, AppConfig.isNightTheme)
+                                }
+                                refreshSettings()
                             },
                             labelOverride = if (presetMatched) {
                                 null
@@ -165,7 +165,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
                                 // 走的都是 GlassMaterialPreset.current，不会读到不同强度。
                                 updateIntSetting(PreferKey.frostedGlassLevel, it)
                                 updateIntSetting(PreferKey.liquidGlassLevel, it)
-                                updateBooleanSetting(PreferKey.glassPresetMatched, false)
+                                ParamStylePreset.clearRuntimePresetMatch(ctx, AppConfig.isNightTheme)
                             },
                             searchKeys = listOf(
                                 "强度", "毛玻璃效果", "透明度", "glass level",
@@ -282,6 +282,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
             onSelected = { index ->
                 if (index == 0) {
                     updateStringSetting(PreferKey.glassStrokeColor, "")
+                    ParamStylePreset.clearRuntimePresetMatch(ctx, AppConfig.isNightTheme)
                     refreshSettings()
                 } else {
                     showColorPicker(current ?: ContextCompat.getColor(ctx, R.color.accent))
@@ -309,6 +310,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
     override fun onColorSelected(dialogId: Int, color: Int) {
         if (dialogId != strokeColorDialogId) return
         updateStringSetting(PreferKey.glassStrokeColor, color.toString())
+        ParamStylePreset.clearRuntimePresetMatch(ctx, AppConfig.isNightTheme)
         refreshSettings()
     }
 
@@ -337,7 +339,7 @@ class ExploreGlassConfigFragment : ComposeSettingFragment(), ColorPickerDialogLi
         valueFormatter = { "$it%" },
         onValueChange = {
             updateIntSetting(key, it)
-            updateBooleanSetting(PreferKey.glassPresetMatched, false)
+            ParamStylePreset.clearRuntimePresetMatch(ctx, AppConfig.isNightTheme)
         },
         searchKeys = searchKeys
     )

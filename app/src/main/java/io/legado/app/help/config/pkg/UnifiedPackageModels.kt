@@ -114,6 +114,7 @@ data class SurfaceGlobalParams(
     val strokeScale: Int? = null,
     val strokeColor: String? = null,
     val presetMatched: Boolean? = null,
+    val stylePresetId: String? = null,
     val hardwareBlur: Boolean? = null,
     val animatedSolid: Boolean? = null,
     val cornerBaseScale: Float? = null,

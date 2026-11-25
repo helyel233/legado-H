@@ -331,6 +331,15 @@ object PreferKey {
      * 选档时置 true、用户手动拖任一滑杆时置 false，判定与可被外部覆盖的数值彻底解耦。
      */
     const val glassPresetMatched = "glassPresetMatched"
+    const val glassPresetMatchedN = "glassPresetMatchedN"
+    /**
+     * 当前运行时套用的风格预设 ID（solid / clear / frosted / glass）。
+     * 与 [glassPresetMatched] / [glassPresetMatchedN] 配合使用：由
+     * `UnifiedPackageRepository.applyParamAtmosphere`、`ParamStylePreset.applyToRuntimePrefs`
+     * 写入，按日夜分离保存，用于区分已选预设与「自定义」。
+     */
+    const val paramStylePresetId = "paramStylePresetId"
+    const val paramStylePresetIdN = "paramStylePresetIdN"
     /**
      * 1.25.x 已废弃：跟随底栏材质的开关已从设置页移除，本常量仅供
      * 一次性迁移（migrateLegacyExploreGlassFollow）读取，禁止新增业务引用。
