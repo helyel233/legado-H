@@ -44,9 +44,10 @@ object GlassSurface {
         host: View,
         domain: GlassSamplingDomain,
         cornerRadiusPx: Float,
-        screenAligned: Boolean = false
+        screenAligned: Boolean = false,
+        modeOverride: String? = null
     ): Drawable? = wallpaperDrawable(host, domain) {
-        ExploreGlassBackdrop.panelBackground(host, cornerRadiusPx, screenAligned)
+        ExploreGlassBackdrop.panelBackground(host, cornerRadiusPx, screenAligned, modeOverride)
     }
 
     /** 列表行背景。非壁纸域返回 null（调用方保留默认透明背景）。 */
@@ -116,7 +117,10 @@ object GlassSurface {
      * 与 [dialogGlassAllowed] 的区别只在采样方式：页面卡片的宿主根视图就是屏幕
      * （多窗口下是窗口），按根视图对齐即可；对话框是独立小窗口，必须屏幕对齐。
      */
-    fun pageGlassAllowed(context: Context): Boolean = wallpaperHostAllowed(context)
+    fun pageGlassAllowed(
+        context: Context,
+        modeOverride: String? = null
+    ): Boolean = wallpaperHostAllowed(context, modeOverride)
 
     /**
      * 壁纸域玻璃**当前是否还给**（不看宿主页面是否露出壁纸）。
@@ -179,15 +183,18 @@ object GlassSurface {
         return fallback()
     }
 
-    private fun wallpaperHostAllowed(context: Context): Boolean {
-        val mode = resolvedExploreGlassMode()
+    private fun wallpaperHostAllowed(
+        context: Context,
+        modeOverride: String? = null
+    ): Boolean {
+        val mode = modeOverride?.takeIf { it in GlassMaterialPreset.modes } ?: resolvedExploreGlassMode()
         if (mode == GlassMaterialPreset.SOLID) return false
         // CLEAR 档虽然不采样壁纸，但页面卡片 / 弹出菜单仍要走同一条管线：
         // glassDrawable() 在其入口早退为「主题包取色的半透明无玻璃壳」。
         // 这里若判否，调用方会铺回 solid 实底，真机表现就是「卡片 / 菜单没有透明效果」。
         val host = context.hostBaseActivity() ?: return false
         if (!host.showsWallpaperBehindContent) return false
-        return isAvailable(GlassSamplingDomain.WALLPAPER, context)
+        return isAvailable(GlassSamplingDomain.WALLPAPER, context, modeOverride)
     }
 
     private fun Context.hostBaseActivity(): BaseActivity<*>? {
@@ -225,10 +232,14 @@ object GlassSurface {
      * 组合期可用性判定：与 drawable 入口的早退分支同源（纯函数
      * [glassSurfaceAvailable]），因此判「可用」后拿到的背景一定非空。
      */
-    fun isAvailable(domain: GlassSamplingDomain, context: Context): Boolean =
+    fun isAvailable(
+        domain: GlassSamplingDomain,
+        context: Context,
+        modeOverride: String? = null
+    ): Boolean =
         glassSurfaceAvailable(
             domain = domain,
-            mode = resolvedExploreGlassMode(),
+            mode = modeOverride?.takeIf { it in GlassMaterialPreset.modes } ?: resolvedExploreGlassMode(),
             isEInk = AppConfig.isEInkMode,
             isLowRam = ExploreGlassBackdrop.isLowRamDevice(context)
         )

@@ -56,6 +56,8 @@ fun GlassPanel(
      * 底栏 / 顶栏等由页面显式声明壁纸域的位置保持 false 即可（它们本来就只在这些页面出现）。
      */
     requireWallpaperHost: Boolean = false,
+    /** 可选区域材质覆写（如 `UiScope.BOOKSHELF_CARD`）；null 时沿用全局材质档位。 */
+    modeOverride: String? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
     val context = LocalContext.current
@@ -70,7 +72,7 @@ fun GlassPanel(
     // 自己订阅偏好变化，把值提升为 State——结论不变时不触发重组，变化时走新的
     // available key / bind key 建宿主或回退到 [fallback]。
     val wallpaperGlassAllowed = if (requireWallpaperHost) {
-        rememberGlassAvailability { GlassSurface.pageGlassAllowed(context) }
+        rememberGlassAvailability(modeOverride) { GlassSurface.pageGlassAllowed(context, modeOverride) }
     } else {
         // 底栏 / 顶栏 / 对话框：只看采样域与设备，不叠壁纸门槛（否则无背景图时整块消失）
         true
@@ -80,7 +82,7 @@ fun GlassPanel(
     val available = glassPanelAvailable(
         requireWallpaperHost = requireWallpaperHost,
         pageWallpaperAllowed = wallpaperGlassAllowed,
-        domainAvailable = GlassSurface.isAvailable(domain, context)
+        domainAvailable = GlassSurface.isAvailable(domain, context, modeOverride)
     )
     Box(modifier = modifier) {
         if (available) {
@@ -92,7 +94,8 @@ fun GlassPanel(
                         cornerRadiusPx = cornerRadiusPx,
                         signature = configSignature,
                         screenAligned = screenAligned,
-                        wallpaperGlassAllowed = wallpaperGlassAllowed
+                        wallpaperGlassAllowed = wallpaperGlassAllowed,
+                        modeOverride = modeOverride
                     )
                 },
                 modifier = Modifier.matchParentSize()
@@ -121,7 +124,7 @@ fun GlassPanel(
  * 调用方按位置传进 [keys]——`remember` 与 `DisposableEffect` 都以 `context + keys` 为
  * key，漏掉一位则 effect 不重建、闭包继续捕获旧值（`GlassSurfaceCard` 的 `screenAligned`
  * 就是这种情况：它换的是整套可用性判定入口，不能只靠「调用方保证传字面量」）。
- * 当前调用点：`GlassSurfaceCard` 传 `screenAligned`，[GlassPanel] 不传。
+ * 当前调用点：`GlassSurfaceCard` 传 `screenAligned`，[GlassPanel] 传 `modeOverride`。
  *
  * [compute] 只应在偏好变化或 [keys] 变化时被调用，因此除 [keys] 声明的参数外，**不要**
  * 读取本实例不稳定的局部状态（缓存了一次的 `colorScheme`、`remember` 出来的对象等）。
@@ -176,8 +179,12 @@ internal fun glassPanelBindKey(
     domain: GlassSamplingDomain,
     cornerRadiusPx: Float,
     screenAligned: Boolean,
-    wallpaperGlassAllowed: Boolean
-): String = "$signature|${domain.name}|$cornerRadiusPx|$screenAligned|$wallpaperGlassAllowed"
+    wallpaperGlassAllowed: Boolean,
+    modeOverride: String? = null
+): String {
+    val base = "$signature|${domain.name}|$cornerRadiusPx|$screenAligned|$wallpaperGlassAllowed"
+    return if (modeOverride.isNullOrBlank()) base else "$base|$modeOverride"
+}
 
 /**
  * 玻璃配置签名（组合期可观察）。
@@ -232,20 +239,22 @@ private class GlassPanelHost(context: Context) : FrameLayout(context) {
         cornerRadiusPx: Float,
         signature: String,
         screenAligned: Boolean,
-        wallpaperGlassAllowed: Boolean
+        wallpaperGlassAllowed: Boolean,
+        modeOverride: String? = null
     ) {
         val key = glassPanelBindKey(
             signature = signature,
             domain = domain,
             cornerRadiusPx = cornerRadiusPx,
             screenAligned = screenAligned,
-            wallpaperGlassAllowed = wallpaperGlassAllowed
+            wallpaperGlassAllowed = wallpaperGlassAllowed,
+            modeOverride = modeOverride
         )
         if (key == bindKey) return
         bindKey = key
         // 壁纸不可用时显式清空：宿主复用（AndroidView 不重建）时不能把旧玻璃留在身上
         background = if (wallpaperGlassAllowed) {
-            GlassSurface.panelBackground(this, domain, cornerRadiusPx, screenAligned)
+            GlassSurface.panelBackground(this, domain, cornerRadiusPx, screenAligned, modeOverride)
         } else {
             null
         }

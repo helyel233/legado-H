@@ -478,6 +478,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
             resources.getDimensionPixelSize(R.dimen.main_content_bottom_bar_padding).toDp()
         }
         val renderConfig = rememberBookshelfListRenderConfig()
+        val glassSignature = rememberGlassConfigSignature()
         LaunchedEffect(canScrollBackward) {
             composeCanScrollBackward = canScrollBackward
         }
@@ -523,6 +524,7 @@ class BooksFragment() : BaseFragment(R.layout.fragment_books) {
                             introMaxLines = composeListIntroLines,
                             renderConfig = renderConfig,
                             showReadProgress = AppConfig.showReadProgress,
+                            glassSignature = glassSignature,
                             modifier = Modifier.padding(vertical = marginDp.coerceAtLeast(2.dp)),
                             fragment = this@BooksFragment,
                             lifecycle = viewLifecycleOwner.lifecycle,

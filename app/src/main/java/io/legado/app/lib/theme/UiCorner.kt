@@ -304,17 +304,22 @@ object UiCorner {
      *   [SurfaceHierarchyDerivation.deriveDefaultBorderLineColor] 派生 8.5%~12.5% 柔和同系微边，
      *   若用户主动调低 `panelBorderAlpha` 则按比例缩放。
      */
-    fun borderLineColor(context: Context): Int {
+    fun borderLineColor(
+        context: Context,
+        borderAlphaPercent: Int = panelBorderAlpha(context)
+    ): Int {
         if (AppConfig.isEInkMode) {
             return Color.BLACK
         }
+        val clampedAlphaPercent = borderAlphaPercent.coerceIn(0, 100)
         val key = if (AppConfig.isNightTheme) PreferKey.panelBorderColorN else PreferKey.panelBorderColor
         val custom = context.getPrefString(key)?.takeIf { it.isNotBlank() }
             ?.let { runCatching { it.toColorInt() }.getOrNull() }
         val legacy = context.getPrefString(PreferKey.glassStrokeColor)?.toIntOrNull()
         val explicit = custom ?: legacy
         if (explicit != null) {
-            return applyPanelBorderAlpha(context, explicit)
+            val alpha = (clampedAlphaPercent * 255 / 100).coerceIn(0, 255)
+            return ColorUtils.setAlphaComponent(explicit, alpha)
         }
         val baseBorder = SurfaceHierarchyDerivation.deriveDefaultBorderLineColor(
             surfaceArgb = context.themeCardColorOrDefault(),
@@ -322,7 +327,7 @@ object UiCorner {
             isNight = AppConfig.isNightTheme,
             isEInk = false
         )
-        val userAlphaFactor = panelBorderAlpha(context) / 100f
+        val userAlphaFactor = clampedAlphaPercent / 100f
         val finalAlpha = (Color.alpha(baseBorder) * userAlphaFactor).toInt().coerceIn(0, 255)
         return ColorUtils.setAlphaComponent(baseBorder, finalAlpha)
     }
@@ -331,7 +336,10 @@ object UiCorner {
      * 兼容旧调用点：现在边框线色恒有值（跟随强调色是默认档），因此本函数不再返回 null。
      * 保留 Int? 签名是为了不动 40+ 个 `if (border != null)` 的调用处。
      */
-    fun panelBorderColor(context: Context): Int? = borderLineColor(context)
+    fun panelBorderColor(
+        context: Context,
+        borderAlphaPercent: Int = panelBorderAlpha(context)
+    ): Int? = borderLineColor(context, borderAlphaPercent)
 
     fun panelBorderAlpha(context: Context): Int {
         val key = if (AppConfig.isNightTheme) PreferKey.panelBorderAlphaN else PreferKey.panelBorderAlpha

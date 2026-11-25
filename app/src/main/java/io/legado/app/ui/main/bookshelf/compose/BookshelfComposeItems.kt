@@ -250,7 +250,7 @@ fun BookshelfGridItem(
     } else {
         4.dp
     }
-    val coverShadow = if (!tokens.env.isEInk && cardScope.isCustomOverride && cardScope.shadowElevationDp > 0) {
+    val coverShadow = if (!tokens.env.isEInk && cardScope.shadowElevationDp > 0) {
         cardScope.shadowElevationDp.dp
     } else {
         0.dp

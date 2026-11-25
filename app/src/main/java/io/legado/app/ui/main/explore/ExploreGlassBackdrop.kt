@@ -278,8 +278,9 @@ object ExploreGlassBackdrop {
     fun panelBackground(
         host: View,
         cornerRadiusPx: Float,
-        screenAligned: Boolean = false
-    ): Drawable? = glassDrawable(host, cornerRadiusPx, screenAligned)
+        screenAligned: Boolean = false,
+        modeOverride: String? = null
+    ): Drawable? = glassDrawable(host, cornerRadiusPx, screenAligned, modeOverride)
 
     /** 返回毛玻璃行背景；设备降级时返回 null，调用方保留默认透明背景。 */
     fun rowBackground(host: View): Drawable? = panelBackground(host)
@@ -359,10 +360,16 @@ object ExploreGlassBackdrop {
     private fun glassDrawable(
         host: View,
         cornerRadiusPx: Float,
-        screenAligned: Boolean = false
+        screenAligned: Boolean = false,
+        modeOverride: String? = null
     ): Drawable? {
         val context = host.context
-        val config = readExploreGlassConfig(context)
+        val baseConfig = readExploreGlassConfig(context)
+        val config = if (!modeOverride.isNullOrBlank() && modeOverride in GlassMaterialPreset.modes) {
+            baseConfig.copy(mode = modeOverride)
+        } else {
+            baseConfig
+        }
         // 无玻璃档是纯实底，没有模糊/位图采样开销，墨水屏与低内存设备也必须
         // 保持「不透明纯色块」（放在设备降级判定之前）。
         // 所有非玻璃分支都主动解绑上一份 tracker，避免切档后监听与旧 drawable 滞留。

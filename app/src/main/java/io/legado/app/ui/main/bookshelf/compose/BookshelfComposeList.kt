@@ -78,7 +78,12 @@ data class BookshelfListPalette(
     val actionRadius: Dp,
     val titleFontFamily: FontFamily,
     val bodyFontFamily: FontFamily,
-    val themeSignature: String
+    val themeSignature: String,
+    val cardMaterialMode: String = GlassMaterialPreset.SOLID,
+    val cardUsesGlassSampling: Boolean = false,
+    val cardShadowDp: Dp = 0.dp,
+    val hasUsableWallpaper: Boolean = false,
+    val isEInk: Boolean = false
 )
 
 @Immutable
@@ -102,30 +107,26 @@ fun rememberBookshelfListPalette(): BookshelfListPalette {
     val cardScope = tokens.bookshelfCard
     val themeUiPalette = rememberThemeUiPalette()
     val rowBaseColor = themeUiPalette.cardColor
-    val rawRowColor = UiCorner.surfaceColor(rowBaseColor)
-    val rowColor = when {
-        tokens.env.isEInk -> rawRowColor
-        cardScope.isClearMode -> LegadoColorUtils.withAlpha(
-            rawRowColor,
-            (android.graphics.Color.alpha(rawRowColor) / 255f) * GlassMaterialPreset.CLEAR_SURFACE_ALPHA
-        )
-        cardScope.isCustomOverride && cardScope.alphaPercent != AppConfig.uiLayoutAlpha ->
-            LegadoColorUtils.withAlpha(rawRowColor, cardScope.alphaFraction)
-        else -> rawRowColor
+    val rowColor = cardScope.resolveSurfaceColorIfActive(rowBaseColor, tokens.env.isEInk)
+    val rowPressedColor = if (tokens.env.isEInk) {
+        rowBaseColor
+    } else {
+        val baseAlpha = android.graphics.Color.alpha(rowColor) / 255f
+        LegadoColorUtils.withAlpha(rowBaseColor, (baseAlpha + 0.08f).coerceIn(0f, 1f))
     }
-    val rowPressedColor = UiCorner.surfaceColor(rowBaseColor, pressed = true)
     val primaryText = Color(tokens.colors.titleTextArgb)
     val secondaryText = Color(tokens.colors.secondaryTextArgb)
     val accent = Color(tokens.colors.accentArgb)
-    val rawBorder = UiCorner.panelBorderColor(context)
-    val border = if (rawBorder != null && !tokens.env.isEInk && cardScope.isCustomOverride) {
-        LegadoColorUtils.withAlpha(rawBorder, cardScope.borderAlphaFraction)
-    } else {
-        rawBorder
-    }
+    val border = UiCorner.panelBorderColor(context, cardScope.borderAlphaPercent)
     val panelRadiusPx = cardScope.panelRadiusPx
     val panelRadius = cardScope.panelRadiusDp.dp
     val actionRadius = cardScope.actionRadiusDp.dp
+    val cardShadowDp = if (!tokens.env.isEInk && cardScope.shadowElevationDp > 0) {
+        cardScope.shadowElevationDp.dp
+    } else {
+        0.dp
+    }
+    val cardUsesGlassSampling = !tokens.env.isEInk && cardScope.usesGlassSampling
     val titleFontFamily = FontFamily(context.titleTypeface())
     val bodyFontFamily = FontFamily(context.uiTypeface())
     return remember(
@@ -138,6 +139,11 @@ fun rememberBookshelfListPalette(): BookshelfListPalette {
         panelRadiusPx,
         panelRadius,
         actionRadius,
+        cardScope.materialMode,
+        cardUsesGlassSampling,
+        cardShadowDp,
+        tokens.wallpaperVisible,
+        tokens.env.isEInk,
         titleFontFamily,
         bodyFontFamily,
         tokens.signature,
@@ -155,7 +161,12 @@ fun rememberBookshelfListPalette(): BookshelfListPalette {
             actionRadius = actionRadius,
             titleFontFamily = titleFontFamily,
             bodyFontFamily = bodyFontFamily,
-            themeSignature = themeUiPalette.signature
+            themeSignature = themeUiPalette.signature,
+            cardMaterialMode = cardScope.materialMode,
+            cardUsesGlassSampling = cardUsesGlassSampling,
+            cardShadowDp = cardShadowDp,
+            hasUsableWallpaper = tokens.wallpaperVisible,
+            isEInk = tokens.env.isEInk
         )
     }
 }
@@ -183,6 +194,7 @@ fun BookshelfListItem(
     introMaxLines: Int,
     renderConfig: BookshelfListRenderConfig,
     showReadProgress: Boolean = false,
+    glassSignature: String? = null,
     modifier: Modifier = Modifier,
     fragment: Fragment? = null,
     lifecycle: Lifecycle? = null,
@@ -200,6 +212,7 @@ fun BookshelfListItem(
             introMaxLines = normalizedIntroMaxLines,
             renderConfig = renderConfig,
             showReadProgress = showReadProgress,
+            glassSignature = glassSignature,
             modifier = modifier,
             fragment = fragment,
             lifecycle = lifecycle,
@@ -213,6 +226,7 @@ fun BookshelfListItem(
             introMaxLines = normalizedIntroMaxLines,
             renderConfig = renderConfig,
             showReadProgress = showReadProgress,
+            glassSignature = glassSignature,
             modifier = modifier,
             fragment = fragment,
             lifecycle = lifecycle,
@@ -230,6 +244,7 @@ private fun BookshelfClassicListItem(
     introMaxLines: Int,
     renderConfig: BookshelfListRenderConfig,
     showReadProgress: Boolean,
+    glassSignature: String?,
     modifier: Modifier,
     fragment: Fragment?,
     lifecycle: Lifecycle?,
@@ -243,6 +258,7 @@ private fun BookshelfClassicListItem(
         renderConfig = renderConfig,
         modifier = modifier
             .fillMaxWidth(),
+        glassSignature = glassSignature,
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) }
     ) { metrics ->
@@ -279,6 +295,7 @@ private fun BookshelfRoundedCardListItem(
     introMaxLines: Int,
     renderConfig: BookshelfListRenderConfig,
     showReadProgress: Boolean,
+    glassSignature: String?,
     modifier: Modifier,
     fragment: Fragment?,
     lifecycle: Lifecycle?,
@@ -292,6 +309,7 @@ private fun BookshelfRoundedCardListItem(
         renderConfig = renderConfig,
         modifier = modifier
             .fillMaxWidth(),
+        glassSignature = glassSignature,
         onClick = { onClick(item) },
         onLongClick = { onLongClick(item) }
     ) { metrics ->

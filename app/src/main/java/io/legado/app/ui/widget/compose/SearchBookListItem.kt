@@ -54,10 +54,10 @@ fun SearchBookListItem(
     fragment: Fragment? = null,
     showOriginCount: Boolean = false,
     /**
-     * 玻璃配置签名；非 null 时卡片让出实底、由壁纸域玻璃接管。
+     * 玻璃配置签名；非 null 时卡片在壁纸域且材质为玻璃/磨砂时由 [io.legado.app.ui.glass.GlassPanel] 接管。
      *
-     * 只有搜书页（`SearchResultScreen`）传值：本组件同时被发现页（`ExploreModernListScreen`）
-     * 与发现页「查看更多」（`ExploreShowComposeScreen`）复用，那两页的卡片观感必须逐值不变。
+     * 由页面级（`SearchResultScreen`、`ExploreShowComposeScreen`、`ExploreModernListScreen`）
+     * 通过 `rememberGlassConfigSignature()` 算一次后传入，统一跟随参数包与材质管线。
      */
     glassSignature: String? = null
 ) {

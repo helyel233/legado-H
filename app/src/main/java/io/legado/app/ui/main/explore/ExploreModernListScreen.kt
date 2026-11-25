@@ -45,6 +45,7 @@ import androidx.lifecycle.Lifecycle
 import io.legado.app.R
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.help.config.AppConfig
+import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.main.bookshelf.compose.BookListCardSurface
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListItemStyle
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListRenderConfig
@@ -118,6 +119,7 @@ fun ExploreModernListScreen(
         }
     }
     val renderConfig = rememberBookshelfListRenderConfig()
+    val glassSignature = rememberGlassConfigSignature()
     var previewState by remember { mutableStateOf<SearchBookPreviewState?>(null) }
 
     LaunchedEffect(shouldLoadMore) {
@@ -199,6 +201,7 @@ fun ExploreModernListScreen(
                     inBookshelf = isInBookshelf(book),
                     listItemStyle = listItemStyle,
                     renderConfig = renderConfig,
+                    glassSignature = glassSignature,
                     fragment = fragment,
                     lifecycle = lifecycle,
                     onClick = onBookClick,
@@ -438,6 +441,7 @@ private fun ExploreBookListItem(
     inBookshelf: Boolean,
     listItemStyle: Int,
     renderConfig: BookshelfListRenderConfig,
+    glassSignature: String?,
     fragment: Fragment,
     lifecycle: Lifecycle,
     onClick: (SearchBook) -> Unit,
@@ -449,6 +453,7 @@ private fun ExploreBookListItem(
         inBookshelf = inBookshelf,
         rounded = rounded,
         renderConfig = renderConfig,
+        glassSignature = glassSignature,
         fragment = fragment,
         lifecycle = lifecycle,
         onClick = { onClick(book) },

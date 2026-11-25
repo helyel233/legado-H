@@ -324,6 +324,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
             resources.getDimensionPixelSize(R.dimen.main_content_bottom_bar_padding).toDp()
         }
         val renderConfig = rememberBookshelfListRenderConfig()
+        val glassSignature = rememberGlassConfigSignature()
         DisposableEffect(currentGroupId) {
             onDispose {
                 composeScrollPositions[currentGroupId] = ComposeScrollPosition(
@@ -389,6 +390,7 @@ class BookshelfFragment2 : BaseBookshelfFragment(R.layout.fragment_bookshelf2),
                             introMaxLines = composeListIntroLines,
                             renderConfig = renderConfig,
                             showReadProgress = AppConfig.showReadProgress,
+                            glassSignature = glassSignature,
                             modifier = Modifier.padding(vertical = marginDp.coerceAtLeast(2.dp)),
                             fragment = this@BookshelfFragment2,
                             lifecycle = viewLifecycleOwner.lifecycle,

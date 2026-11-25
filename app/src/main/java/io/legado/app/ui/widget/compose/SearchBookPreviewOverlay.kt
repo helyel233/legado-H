@@ -50,7 +50,9 @@ import androidx.fragment.app.Fragment
 import androidx.lifecycle.Lifecycle
 import io.legado.app.R
 import io.legado.app.help.config.AppConfig
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.bottomBackground
+import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.lib.theme.rememberThemeUiPalette
 import io.legado.app.data.entities.SearchBook
 import io.legado.app.ui.main.bookshelf.compose.BookshelfListRenderConfig
@@ -132,6 +134,7 @@ fun SearchBookPreviewOverlay(
         val contentAlpha = ((p - 0.16f) / 0.84f).coerceIn(0f, 1f)
         // Match AppDialogFrame surface: bottomBackground / custom card + dialogAlpha (not list row glass alpha).
         val previewPanelColor = rememberDialogLikePanelColor()
+        val previewBorderColor = rememberDialogLikeBorderColor()
 
         Box(modifier = Modifier.fillMaxSize()) {
             Box(
@@ -155,7 +158,7 @@ fun SearchBookPreviewOverlay(
                         .appSettingPanelBackground(
                             normalColor = previewPanelColor,
                             panelImage = renderConfig.panelImage,
-                            borderColor = renderConfig.palette.borderColor,
+                            borderColor = previewBorderColor,
                             radiusPx = radius
                         )
                 )
@@ -382,6 +385,16 @@ private fun rememberDialogLikePanelColor(): Int {
             dialogAlpha.coerceIn(0, 100) / 100f
         }
         ColorUtils.withAlpha(surfaceBase, alpha)
+    }
+}
+
+@Composable
+private fun rememberDialogLikeBorderColor(): Int? {
+    val context = LocalContext.current
+    val tokens = LocalLegadoTokens.current ?: rememberResolvedThemeTokens()
+    val dialogScope = tokens.dialog
+    return remember(context, dialogScope.borderAlphaPercent, tokens.signature) {
+        UiCorner.panelBorderColor(context, dialogScope.borderAlphaPercent)
     }
 }
 
