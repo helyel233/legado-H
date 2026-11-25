@@ -1,5 +1,16 @@
 # 更新日志
 
+## 1.40.1 版（2026-11-25）
+
+参数设置包新增「材质氛围预设模板」单一来源（实底/透明/磨砂/玻璃 4 档），与底层渲染引擎解耦；预设 ID 与匹配标记按日夜分离持久化，捕获/套用参数包时显式传 isNight，避免日夜串档。**特性 → minor+0.1、跳过 1.x.0。**
+
+- 新增 ParamStylePreset：4 档 `@atmosphere` 参数模板单一来源，统一清单应用、运行时偏好读写与不变量守护解析（有效预设 ID / 摘要标签 / 自定义标记），与 GlassMaterialPreset 4 档光学渲染管线解耦
+- 统一包 SurfaceGlobalParams 新增 stylePresetId 字段并纳入编解码（含 known 键白名单），参数包可携带并还原风格预设
+- 修复日夜串档：captureParamFromCurrent / captureSurfaceGlobal / captureLayoutParams 显式 isNight 参数，默认日夜参数快照分别以 false / true 捕获；套用参数包时按目标日夜写入 paramStylePresetId(/N) 与 glassPresetMatched(/N)
+- 偏好键新增 glassPresetMatchedN / paramStylePresetId / paramStylePresetIdN，并纳入备份白名单（BackupConfig）与探索玻璃「恢复默认」清除集合
+- 外观中心与统一包编辑器接入风格预设快速切换与摘要展示；探索玻璃设置页预设清除同步覆盖新键
+- 新增 docs/development-playbook.md：沉淀项目规则生效时序、协作硬规则、改动/交付/发版纪律与返工案例索引
+
 ## 1.39.1 版（2026-11-24）
 
 备份/恢复体系增强：新增美术/封面资源异步独立备份包（主包保持轻量、变更后后台增量同步），恢复侧补全多表覆盖与跨 ID 重映射，并对账本地 UI 资源防止恢复后出现悬空引用。**特性+修复 → minor+0.1、跳过 1.x.0。**
