@@ -16,8 +16,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
+from collections import Counter
 from pathlib import Path
 
 FIXED_HEIGHT_DP = re.compile(r"\.height\(\s*(\d+(?:\.\d+)?)\.dp\s*\)")
@@ -43,8 +45,8 @@ SUSPECT_CONTROL_HEIGHT_MIN = 30.0
 SUSPECT_CONTROL_HEIGHT_MAX = 80.0
 
 
-def scan_file(path: Path, rel: Path) -> list[tuple[int, str, str]]:
-    findings: list[tuple[int, str, str]] = []
+def scan_file(path: Path, rel: Path) -> list[tuple[int, str, str, str]]:
+    findings: list[tuple[int, str, str, str]] = []
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
     except (UnicodeDecodeError, OSError):
@@ -66,6 +68,7 @@ def scan_file(path: Path, rel: Path) -> list[tuple[int, str, str]]:
                     (
                         idx,
                         "SPACER_8DP",
+                        stripped,
                         f"{stripped}  (核实是否为主副标题间距；若是请用 AppLayoutTokens.TitleToSummaryGap)",
                     )
                 )
@@ -78,6 +81,7 @@ def scan_file(path: Path, rel: Path) -> list[tuple[int, str, str]]:
                     (
                         idx,
                         "FIXED_CONTROL_HEIGHT",
+                        stripped,
                         f"{stripped}  ({m.group(0)} 在大字号下有裁切风险，建议 heightIn/defaultMinSize)",
                     )
                 )
@@ -85,13 +89,27 @@ def scan_file(path: Path, rel: Path) -> list[tuple[int, str, str]]:
     return findings
 
 
+def finding_signature(rel: Path, kind: str, snippet: str) -> str:
+    return f"{rel.as_posix()}::{kind}::{snippet}"
+
+
 def main() -> int:
-    parser = argparse.ArgumentParser(description="UI 空间契约巡检（report-only）")
+    parser = argparse.ArgumentParser(description="UI 空间契约巡检（支持基线递减严格门禁）")
     parser.add_argument("--root", default=".", help="仓库根目录")
     parser.add_argument(
         "--strict",
         action="store_true",
         help="严格模式：存在发现项时以退出码 1 结束",
+    )
+    parser.add_argument(
+        "--baseline",
+        default="",
+        help="基线 JSON 路径：仅当出现基线之外的新增项时以退出码 1 结束",
+    )
+    parser.add_argument(
+        "--write-baseline",
+        default="",
+        help="将当前发现项写入指定基线 JSON 文件",
     )
     args = parser.parse_args()
 
@@ -101,15 +119,53 @@ def main() -> int:
         print(f"[FATAL] 找不到 UI 源码目录：{ui_dir}", file=sys.stderr)
         return 1
 
-    all_findings: list[tuple[Path, int, str, str]] = []
+    all_findings: list[tuple[Path, int, str, str, str]] = []
     scanned = 0
     for kt in sorted(ui_dir.rglob("*.kt")):
         scanned += 1
         rel = kt.relative_to(root)
-        for line_no, kind, msg in scan_file(kt, rel):
-            all_findings.append((rel, line_no, kind, msg))
+        for line_no, kind, snippet, msg in scan_file(kt, rel):
+            all_findings.append((rel, line_no, kind, snippet, msg))
 
-    for rel, line_no, kind, msg in all_findings:
+    if args.write_baseline:
+        counts = Counter(
+            finding_signature(rel, kind, snippet)
+            for rel, _, kind, snippet, _ in all_findings
+        )
+        out_path = Path(args.write_baseline)
+        if not out_path.is_absolute():
+            out_path = root / out_path
+        out_path.write_text(
+            json.dumps(dict(sorted(counts.items())), ensure_ascii=False, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        print(f"[BASELINE] 已写入 {len(all_findings)} 条基线（{len(counts)} 个签名）到 {out_path}")
+        return 0
+
+    if args.baseline:
+        base_path = Path(args.baseline)
+        if not base_path.is_absolute():
+            base_path = root / base_path
+        baseline_counts: dict[str, int] = json.loads(base_path.read_text(encoding="utf-8"))
+        seen_counts: Counter[str] = Counter()
+        regressions: list[tuple[Path, int, str, str]] = []
+        for rel, line_no, kind, snippet, msg in all_findings:
+            sig = finding_signature(rel, kind, snippet)
+            seen_counts[sig] += 1
+            if seen_counts[sig] > baseline_counts.get(sig, 0):
+                regressions.append((rel, line_no, kind, msg))
+
+        for rel, line_no, kind, msg in regressions:
+            print(f"[REGRESSION][{kind}] {rel}:{line_no} -> {msg}")
+
+        baseline_total = sum(baseline_counts.values())
+        print(
+            f"[BASELINE-GATE] 扫描 {scanned} 个文件：当前 {len(all_findings)} 条，"
+            f"基线 {baseline_total} 条，新增回归 {len(regressions)} 条。"
+        )
+        return 1 if regressions else 0
+
+    for rel, line_no, kind, _, msg in all_findings:
         print(f"[REPORT][{kind}] {rel}:{line_no} -> {msg}")
 
     mode = "STRICT" if args.strict else "REPORT-ONLY"

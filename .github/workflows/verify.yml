@@ -90,12 +90,12 @@ jobs:
           python3 tools/check_settings_mapping.py
           python3 tools/check_r58_resources.py
 
-      # 玻璃/位运算治理门禁：拦「带 alpha 的十六进制常量再 shl 24」反模式。
-      # 该写法曾让全 App 软件玻璃静默失效一个月（模糊位图 alpha 恒 0），见
-      # docs/change-safety.md R3。
-      - name: Glass governance check
+      # 玻璃/位运算治理门禁、日夜双键唯一注册表与 UI 空间契约基线门禁
+      - name: Glass, night-key, and UI layout governance checks
         run: |
           python3 tools/check_glass_governance.py
+          python3 tools/check_night_key_pairs.py
+          python3 tools/check_ui_layout_tokens.py --baseline tools/ui_layout_baseline.json
 
       # lint 目前只是报告，不拦人：这个仓库存量告警不少，先让结果跑出来看看，
       # 等告警清到可控范围再改成阻塞。
