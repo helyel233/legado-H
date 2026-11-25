@@ -1,5 +1,25 @@
 # 更新日志
 
+## 2.0.1 版（2026-11-25）
+
+2.0 首个版本：外观配置体系整体收口——配置职责拆分、日夜键单一注册表、玻璃运行时单一来源与参数草稿隔离，并把「区域材质档位」贯通到书架/搜书/发现列表卡片。**按用户要求启用 2.0 主版本，沿用跳过 `2.x.0` 的惯例定 2.0.1。**
+
+### 新增
+
+- 区域材质覆写：GlassPanel / GlassSurface / ExploreGlassBackdrop 全链路新增 `modeOverride`，列表卡片可按 `BOOKSHELF_CARD` Scope 独立选择实底/透明/磨砂/玻璃档位，不影响页面级材质；bind key 纳入覆写值，切档时宿主不会残留旧玻璃
+- 日夜键单一注册表 `NightKeyPairs`：PreferKey 的 55 对日夜键集中登记，`ThemeRuntimeKeys` / `BackupConfig` / `PARAM_LIVE_SNAPSHOT_KEYS` 三处消费方均从注册表派生，新增键不再需要手工同步多处
+- 玻璃运行时单一来源：`GlassRuntimeWriter` + `GlassModeRuntime` 收口外观编辑链路的写入与解析，避免参数包套用、主题切换、编辑器预览各自写一套
+- 参数草稿隔离 `UnifiedPackageDraftStore`：编辑器实时预览使用草稿快照，未确认的调参不污染已生效配置；新增共享包操作行 `PackageActionRow`
+- 新增两道静态门禁并接入 CI：`check_night_key_pairs.py`（日夜键零遗漏）、`check_ui_layout_tokens.py --baseline`（UI 空间 token 只减不增）
+
+### 优化与修复
+
+- 配置职责拆分：`AppAiConfig` 从 `AppConfig` 拆出（1612 行），AI 相关偏好与主题偏好不再混在同一文件；`PreferKey` 补齐日夜配对
+- 探索玻璃大文件拆分：`ExploreGlassBackdrop` 拆为 `ExploreGlassConfig` / `ExploreGlassDrawables`，材质档位与绘制实现解耦
+- 列表卡片观感统一：书架/搜书/发现/发现「查看更多」四类列表统一在页面级计算玻璃签名后逐行传入，卡片表面色、边框透明度、圆角、阴影统一由 `*Scope` 解析；搜书预览浮层改用对话框边框色，不再借列表行边框
+- `UiCorner.borderLineColor` / `panelBorderColor` 支持显式透明度百分比覆写，避免调用方再自行叠 alpha；搜索结果卡封面阴影不再要求「自定义覆盖」才生效
+- 六项静态门禁全通过（设置映射 / R58 资源 / 玻璃位运算 / 日夜键 / Compose 主题覆盖 / UI token 基线）
+
 ## 1.40.1 版（2026-11-25）
 
 参数设置包新增「材质氛围预设模板」单一来源（实底/透明/磨砂/玻璃 4 档），与底层渲染引擎解耦；预设 ID 与匹配标记按日夜分离持久化，捕获/套用参数包时显式传 isNight，避免日夜串档。**特性 → minor+0.1、跳过 1.x.0。**
