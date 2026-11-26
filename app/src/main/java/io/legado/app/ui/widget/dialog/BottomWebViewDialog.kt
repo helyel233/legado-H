@@ -59,7 +59,6 @@ import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.review.ReviewPreheatCoordinator
 import io.legado.app.help.webView.PooledWebView
 import io.legado.app.help.webView.WebJsExtensions
-import io.legado.app.help.webView.WebJsExtensions.Companion.JS_INJECTION
 import io.legado.app.help.webView.WebJsExtensions.Companion.basicJs
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameBasic
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
@@ -309,6 +308,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
      * 残余外部资源一律拦截，只允许 data: 与 review-resource:// 本地资源离线渲染。
      */
     private var offlineMode = false
+    private var webJsBridgeToken: String = WebJsExtensions.newBridgeToken()
 
     /** Set only for review snapshots that may contain review-resource:// references. */
     private var reviewResourceBook: Book? = null
@@ -1599,17 +1599,25 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         currentWebView.settings.setDarkeningAllowed(AppConfig.isNightTheme)
         // 离线快照禁止 http/https，但必须让 review-resource:// 图片进入资源拦截器。
         currentWebView.settings.configureOfflineResourceLoading(offlineMode)
-        source?.let { source ->
-            (activity as? AppCompatActivity)?.let { currentActivity ->
-                val webJsExtensions =
-                    WebJsExtensions(
-                        source, currentActivity, currentWebView, bookType,
-                        callback = this, requestLifecycle = lease
-                    )
-                currentWebView.addJavascriptInterface(webJsExtensions, nameJava)
+        if (offlineMode) {
+            currentWebView.removeJavascriptInterface(nameJava)
+            currentWebView.removeJavascriptInterface(nameSource)
+            currentWebView.removeJavascriptInterface(nameCache)
+        } else {
+            source?.let { source ->
+                (activity as? AppCompatActivity)?.let { currentActivity ->
+                    val token = WebJsExtensions.newBridgeToken()
+                    webJsBridgeToken = token
+                    val webJsExtensions =
+                        WebJsExtensions(
+                            source, currentActivity, currentWebView, bookType,
+                            callback = this, requestLifecycle = lease, bridgeToken = token
+                        )
+                    currentWebView.addJavascriptInterface(webJsExtensions, nameJava)
+                }
+                currentWebView.addJavascriptInterface(source, nameSource)
+                currentWebView.addJavascriptInterface(WebCacheManager, nameCache)
             }
-            currentWebView.addJavascriptInterface(source, nameSource)
-            currentWebView.addJavascriptInterface(WebCacheManager, nameCache)
         }
     }
 
@@ -1690,6 +1698,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         // 否则会把过期评论当成最新状态去点赞/回复
         notifyFallbackShown()
         currentWebView.settings.configureOfflineResourceLoading(true)
+        currentWebView.removeJavascriptInterface(nameJava)
+        currentWebView.removeJavascriptInterface(nameSource)
+        currentWebView.removeJavascriptInterface(nameCache)
         currentWebView.loadDataWithBaseURL(
             currentWebView.url ?: "https://localhost/",
             html,
@@ -2292,11 +2303,19 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 }
             } else if (!jsInjected && url == nameUrl) {
                 jsInjected = true
+                if (offlineMode) {
+                    return WebResourceResponse(
+                        "text/javascript",
+                        "utf-8",
+                        ByteArrayInputStream(ByteArray(0))
+                    )
+                }
                 val preloadJs = documentPreloadJs ?: ""
+                val injection = WebJsExtensions.buildInjectionScript(webJsBridgeToken)
                 return WebResourceResponse(
                     "text/javascript",
                     "utf-8",
-                    ByteArrayInputStream("(() => {$JS_INJECTION\n$preloadJs\n})();".toByteArray())
+                    ByteArrayInputStream("(() => {$injection\n$preloadJs\n})();".toByteArray())
                 )
             }
             return super.shouldInterceptRequest(view, request)

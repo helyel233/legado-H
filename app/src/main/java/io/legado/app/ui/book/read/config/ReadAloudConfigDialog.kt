@@ -303,12 +303,12 @@ class ReadAloudConfigDialog : BasePrefDialogFragment() {
                     SpeechRoute.ENGINE_HTTP -> route.engineValue.toLongOrNull()
                         ?.let { appDb.httpTTSDao.getName(it) }
                         ?: "HTTP TTS"
-                    SpeechRoute.ENGINE_SYSTEM -> route.speakerName.ifBlank { str(R.string.system_tts) }
+                    SpeechRoute.ENGINE_SYSTEM -> route.displaySpeakerName().ifBlank { str(R.string.system_tts) }
                     else -> str(R.string.system_tts)
                 }
                 return buildList {
                     add(engineName)
-                    route.speakerName
+                    route.displaySpeakerName()
                         .takeIf { it.isNotBlank() && it != engineName }
                         ?.let(::add)
                     route.emotionName.takeIf { it.isNotBlank() }?.let(::add)

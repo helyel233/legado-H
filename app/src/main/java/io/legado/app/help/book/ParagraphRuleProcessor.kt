@@ -10,6 +10,7 @@ import com.script.rhino.RhinoScriptEngine
 import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.ParagraphRule
@@ -29,6 +30,8 @@ import org.mozilla.javascript.NativeArray
 import org.mozilla.javascript.NativeObject
 import org.mozilla.javascript.Scriptable
 import org.mozilla.javascript.Scriptable.NOT_FOUND
+import org.mozilla.javascript.Undefined
+import org.mozilla.javascript.Wrapper
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.EmptyCoroutineContext
 import java.util.LinkedHashMap
@@ -36,6 +39,7 @@ import java.util.LinkedHashMap
 object ParagraphRuleProcessor {
     private const val CLICK_PREFIX = "paragraphRule:"
     private const val RULE_PREFIX = "rule:"
+    private const val SOURCE_KEY_PREFIX = "paragraph_rule_"
     private const val PROCESS_CACHE_MAX_SIZE = 16
     private const val PROCESS_CACHE_MAX_BYTES = 8L * 1024L * 1024L
     private const val COMPILED_SCRIPT_CACHE_SIZE = 8
@@ -137,6 +141,13 @@ object ParagraphRuleProcessor {
         val colon = body.indexOf(':', startIndex = RULE_PREFIX.length)
         if (colon <= RULE_PREFIX.length) return null
         return body.substring(RULE_PREFIX.length, colon).toLongOrNull()
+    }
+
+    fun resolveSource(sourceKey: String?): BaseSource? {
+        val raw = sourceKey?.trim().orEmpty()
+        if (!raw.startsWith(SOURCE_KEY_PREFIX)) return null
+        val ruleId = raw.removePrefix(SOURCE_KEY_PREFIX).toLongOrNull() ?: return null
+        return appDb.paragraphRuleDao.get(ruleId)?.let(::ParagraphRuleJsExtensions)
     }
 
     fun wrapClick(ruleId: Long, js: String): String = "$CLICK_PREFIX$RULE_PREFIX$ruleId\n$js"
@@ -256,7 +267,8 @@ object ParagraphRuleProcessor {
         if (!isParagraphClick(click)) return false
         val (ruleId, js) = parseClick(click) ?: return false
         val rule = appDb.paragraphRuleDao.get(ruleId) ?: return false
-        val ctx = buildCtx(rule, book, chapter, result, emptyList(), readVars(rule.id))
+        val initialVars = readVars(rule.id)
+        val ctx = buildCtx(rule, book, chapter, result, emptyList(), initialVars.toMutableMap())
         val scope = buildScope(rule, book, chapter, result, ctx, coroutineContext, browserCallback)
         // 段评点击热路径：兼容层/jsLib/点击脚本均为固定文本，按内容哈希缓存
         // 编译结果，每次点击只执行不再重新解析；ctx 前缀含本次点击的 src，
@@ -267,6 +279,7 @@ object ParagraphRuleProcessor {
             compiledScript(jsLibCacheKey(rule.jsLib), rule.jsLib).eval(scope, coroutineContext)
         }
         compiledScript(clickCacheKey(js), js).eval(scope, coroutineContext)
+        writeVars(rule.id, scope, initialVars)
         return true
     }
 
@@ -279,11 +292,12 @@ object ParagraphRuleProcessor {
     ): ChapterResult {
         val paragraphs = parseParagraphs(current.paragraphs)
         if (paragraphs.isEmpty()) return current
-        val ctx = buildCtx(rule, book, chapter, current.content, paragraphs, readVars(rule.id))
+        val initialVars = readVars(rule.id)
+        val ctx = buildCtx(rule, book, chapter, current.content, paragraphs, initialVars.toMutableMap())
         val scope = buildScope(rule, book, chapter, current.content, ctx, coroutineContext, null)
         val script = buildRuleScript(rule, ctx)
         val jsResult = RhinoScriptEngine.eval(script, scope, coroutineContext)
-        writeVars(rule.id, ctx["vars"])
+        writeVars(rule.id, scope, initialVars)
         return applyChapterResult(current, paragraphs, jsResult).wrapPclicks(rule.id)
     }
 
@@ -296,11 +310,12 @@ object ParagraphRuleProcessor {
     ): String {
         val paragraphs = parseContent(content)
         if (paragraphs.isEmpty()) return content
-        val ctx = buildCtx(rule, book, chapter, content, paragraphs, readVars(rule.id))
+        val initialVars = readVars(rule.id)
+        val ctx = buildCtx(rule, book, chapter, content, paragraphs, initialVars.toMutableMap())
         val scope = buildScope(rule, book, chapter, content, ctx, coroutineContext, null)
         val script = buildRuleScript(rule, ctx)
         val jsResult = RhinoScriptEngine.eval(script, scope, coroutineContext)
-        writeVars(rule.id, ctx["vars"])
+        writeVars(rule.id, scope, initialVars)
         return wrapPclicks(rule.id, applyResult(content, paragraphs, jsResult))
     }
 
@@ -836,13 +851,93 @@ object ParagraphRuleProcessor {
         return appDb.paragraphRuleDao.vars(ruleId).associate { it.name to it.value }.toMutableMap()
     }
 
-    private fun writeVars(ruleId: Long, values: Any?) {
-        val map = when (val v = unwrap(values)) {
-            is Map<*, *> -> v
-            else -> return
+    private fun writeVars(ruleId: Long, scope: Scriptable, initialVars: Map<String, String>) {
+        val finalVars = readScopeVars(scope, initialVars) ?: return
+        val toPut = ArrayList<ParagraphRuleVar>()
+        finalVars.forEach { (key, value) ->
+            if (initialVars[key] != value) {
+                toPut.add(ParagraphRuleVar(ruleId, key, value))
+            }
         }
-        map.forEach { (key, value) ->
-            if (key != null) appDb.paragraphRuleDao.putVar(ParagraphRuleVar(ruleId, key.toString(), value?.toString() ?: ""))
+        val toDelete = initialVars.keys.filter { it !in finalVars }
+        if (toPut.isEmpty() && toDelete.isEmpty()) return
+        appDb.runInTransaction {
+            if (toPut.isNotEmpty()) {
+                appDb.paragraphRuleDao.putVars(toPut)
+            }
+            if (toDelete.isNotEmpty()) {
+                toDelete.chunked(500).forEach { chunk ->
+                    appDb.paragraphRuleDao.deleteVarsByNames(ruleId, chunk)
+                }
+            }
+        }
+    }
+
+    private fun readScopeVars(scope: Scriptable, initialVars: Map<String, String>): Map<String, String>? {
+        val ctxObj = scope.get("ctx", scope)
+        val ctxVarsRaw = (ctxObj as? Scriptable)?.get("vars", ctxObj)
+            ?.takeIf { it != NOT_FOUND && it != Undefined.instance && it != null }
+        val scopeVarsRaw = scope.get("vars", scope)
+            ?.takeIf { it != NOT_FOUND && it != Undefined.instance && it != null }
+        val ctxVars = ctxVarsRaw?.let { extractVarsMap(it) }
+        val scopeVars = if (scopeVarsRaw != null && scopeVarsRaw !== ctxVarsRaw) {
+            extractVarsMap(scopeVarsRaw)
+        } else {
+            null
+        }
+        return when {
+            ctxVars != null && scopeVars != null ->
+                if (ctxVars != initialVars) ctxVars else if (scopeVars != initialVars) scopeVars else ctxVars
+            ctxVars != null -> ctxVars
+            else -> scopeVars
+        }
+    }
+
+    private fun extractVarsMap(raw: Any?): Map<String, String>? {
+        val unwrapped = when (raw) {
+            is Wrapper -> raw.unwrap()
+            else -> raw
+        }
+        val entries: Map<*, *> = when (val v = unwrap(unwrapped)) {
+            is Map<*, *> -> v
+            else -> return null
+        }
+        val result = linkedMapOf<String, String>()
+        entries.forEach { (key, value) ->
+            if (key == null) return@forEach
+            val strVal = jsVarValueToString(value) ?: return@forEach
+            result[key.toString()] = strVal
+        }
+        return result
+    }
+
+    private fun jsVarValueToString(value: Any?): String? = when (value) {
+        null -> ""
+        NOT_FOUND, Undefined.instance -> null
+        is CharSequence -> value.toString()
+        is Boolean -> value.toString()
+        is Number -> {
+            val d = value.toDouble()
+            if (d.isFinite() && d == d.toLong().toDouble() && (value is Double || value is Float)) {
+                d.toLong().toString()
+            } else {
+                value.toString()
+            }
+        }
+        is NativeObject, is NativeArray -> GSON.toJson(deepUnwrap(value))
+        is Wrapper -> jsVarValueToString(value.unwrap())
+        is Map<*, *>, is Collection<*> -> GSON.toJson(value)
+        else -> value.toString()
+    }
+
+    private fun deepUnwrap(value: Any?, depth: Int = 0): Any? {
+        if (depth > 16) return null
+        return when (value) {
+            null, NOT_FOUND, Undefined.instance -> null
+            is NativeObject -> value.toMap().entries.associate { (k, v) -> k.toString() to deepUnwrap(v, depth + 1) }
+            is NativeArray -> value.toList().map { deepUnwrap(it, depth + 1) }
+            is Wrapper -> deepUnwrap(value.unwrap(), depth + 1)
+            else -> value
         }
     }
 

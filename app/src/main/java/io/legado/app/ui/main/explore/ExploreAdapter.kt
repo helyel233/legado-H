@@ -49,7 +49,6 @@ import io.legado.app.utils.InfoMap
 import io.legado.app.utils.activity
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.gone
-import io.legado.app.utils.removeLastElement
 import io.legado.app.utils.setSelectionSafely
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.startActivity
@@ -590,7 +589,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         return (if (recycler.isEmpty()) {
             ItemFilletTextBinding.inflate(inflater, flexbox, false).root
         } else {
-            recycler.removeLastElement()
+            recycler.removeAt(recycler.lastIndex)
         }).apply {
             applyGlassControlBackground()
         }
@@ -601,7 +600,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         return (if (textRecycler.isEmpty()) {
             ItemFilletCompleteTextBinding.inflate(inflater, flexbox, false).root
         } else {
-            textRecycler.removeLastElement()
+            textRecycler.removeAt(textRecycler.lastIndex)
         }).apply {
             applyGlassControlBackground()
         }
@@ -612,7 +611,7 @@ class ExploreAdapter(context: Context, val callBack: CallBack) :
         return (if (selectRecycler.isEmpty()) {
             ItemFilletSelectorSingleBinding.inflate(inflater, flexbox, false).root
         } else {
-            selectRecycler.removeLastElement()
+            selectRecycler.removeAt(selectRecycler.lastIndex)
         }).apply {
             applyGlassControlBackground()
         }

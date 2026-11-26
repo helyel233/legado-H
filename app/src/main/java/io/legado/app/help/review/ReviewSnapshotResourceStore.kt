@@ -205,6 +205,9 @@ object ReviewSnapshotResourceStore {
         require(url.isNotBlank()) { "评论资源 URL 为空" }
         require(mimeType.isNotBlank()) { "评论资源 MIME 为空: $url" }
         check(source.isFile) { "评论资源暂存文件不存在: ${source.absolutePath}" }
+        // 任何资源写入（含阅读预热/点击抓拍，不限于 Coordinator REVIEW worker）
+        // 都推进 epoch，阻止并发中的资源 GC 误删刚写入但尚未被快照引用的新 blob。
+        ReviewResourceEpoch.markReviewStarted()
         prepareForCapture(book)
         val dir = ReviewSnapshotStore.reviewsDir(book)
 

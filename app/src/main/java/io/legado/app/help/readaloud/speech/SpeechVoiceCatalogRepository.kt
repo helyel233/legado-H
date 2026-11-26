@@ -20,10 +20,11 @@ data class SpeechVoiceOption(
     val explicitSpeaker: Boolean = false
 ) {
     fun toRoute(emotion: SpeechEmotion? = null, source: String = SpeechRoute.SOURCE_MANUAL): SpeechRoute {
+        val isSystemDefault = SpeechRoute.isSystemDefaultEngine(engineType, engineValue)
         return SpeechRoute(
             engineType = engineType,
-            engineValue = engineValue,
-            speakerName = speakerName,
+            engineValue = if (isSystemDefault) "" else engineValue,
+            speakerName = if (isSystemDefault) "" else speakerName,
             toneID = toneID,
             emotionName = emotion?.emotionName.orEmpty(),
             emotionTag = emotion?.emotionTag.orEmpty(),
@@ -127,10 +128,10 @@ object SpeechVoiceCatalogRepository {
                 tts.shutdown()
             }
         }.getOrDefault(emptyList())
-        return (listOf("系统默认" to "") + engines)
+        return (listOf(appCtx.getString(R.string.ra_cfg_system_default) to "") + engines)
             .distinctBy { it.second }
             .map { (title, value) ->
-                val engineValue = GSON.toJson(SelectItem(title, value))
+                val engineValue = if (value.isBlank()) "" else GSON.toJson(SelectItem(title, value))
                 val option = SpeechVoiceOption(
                     key = "system:$value",
                     engineType = SpeechRoute.ENGINE_SYSTEM,
@@ -164,8 +165,8 @@ object SpeechVoiceCatalogRepository {
         if (httpDefaults.isNotEmpty()) return httpDefaults
         val systemDefault = SpeechRoute(
             engineType = SpeechRoute.ENGINE_SYSTEM,
-            engineValue = GSON.toJson(SelectItem(appCtx.getString(R.string.ra_cfg_system_default), "")),
-            speakerName = appCtx.getString(R.string.ra_cfg_system_default),
+            engineValue = "",
+            speakerName = "",
             source = SpeechRoute.SOURCE_AUTO
         )
         return listOf(systemDefault).filterNot(SpeechVoiceGroupRepository::isBlockedRoute)

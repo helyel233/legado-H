@@ -113,9 +113,12 @@ class AudioPlayViewModel(application: Application) : BaseViewModel(application) 
             book.inheritNotShelfStateFrom(oldBook)
             book.removeType(BookType.updateError)
             appDb.runInTransaction {
-                oldBook?.delete()
-                appDb.bookDao.insert(book)
-                appDb.bookChapterDao.insert(*toc.toTypedArray())
+                if (oldBook != null) {
+                    appDb.bookDao.replace(oldBook, book)
+                } else {
+                    appDb.bookDao.upsertWithoutCascade(book)
+                }
+                appDb.bookChapterDao.replaceByBook(book.bookUrl, toc)
             }
             AudioPlay.book = book
             AudioPlay.bookSource = source

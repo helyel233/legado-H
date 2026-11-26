@@ -379,6 +379,9 @@ interface BookDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     fun insertRaw(vararg book: Book)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    fun insertIgnore(book: Book): Long
+
     @Update
     fun updateRaw(vararg book: Book)
 
@@ -396,6 +399,30 @@ interface BookDao {
 
     @Delete
     fun delete(vararg book: Book)
+
+    @Query("UPDATE OR IGNORE book_collection_items SET bookUrl = :newBookUrl WHERE bookUrl = :oldBookUrl")
+    fun migrateCollectionItems(oldBookUrl: String, newBookUrl: String)
+
+    @Query("UPDATE book_illustrations SET bookUrl = :newBookUrl WHERE bookUrl = :oldBookUrl")
+    fun migrateIllustrations(oldBookUrl: String, newBookUrl: String)
+
+    @Query("UPDATE OR IGNORE book_paragraph_rules SET bookUrl = :newBookUrl WHERE bookUrl = :oldBookUrl")
+    fun migrateParagraphRules(oldBookUrl: String, newBookUrl: String)
+
+    @Query("DELETE FROM book_paragraph_rules WHERE bookUrl = :oldBookUrl")
+    fun deleteParagraphRulesByBookUrl(oldBookUrl: String)
+
+    /**
+     * Upsert a book row without `INSERT OR REPLACE` so SQLite does not execute an
+     * implicit DELETE that triggers `ON DELETE CASCADE` on child tables.
+     */
+    @Transaction
+    fun upsertWithoutCascade(book: Book) {
+        book.sanitizeForStorage()
+        if (insertIgnore(book) == -1L) {
+            updateRaw(book)
+        }
+    }
 
     @Query("delete from books where bookUrl = :bookUrl and type & ${BookType.notShelf} > 0")
     fun deleteIfNotShelf(bookUrl: String): Int
@@ -420,10 +447,37 @@ interface BookDao {
 
     @Transaction
     fun replace(oldBook: Book, newBook: Book) {
-        newBook.sanitizeForStorage()
+        if (oldBook.bookUrl == newBook.bookUrl) {
+            upsertWithoutCascade(newBook)
+            return
+        }
+        upsertWithoutCascade(newBook)
+        migrateCollectionItems(oldBook.bookUrl, newBook.bookUrl)
+        migrateIllustrations(oldBook.bookUrl, newBook.bookUrl)
+        migrateParagraphRules(oldBook.bookUrl, newBook.bookUrl)
+        deleteParagraphRulesByBookUrl(oldBook.bookUrl)
         delete(oldBook)
-        insertRaw(newBook)
     }
+
+    @Query(
+        """
+        update books set
+        durChapterIndex = :durChapterIndex,
+        durChapterPos = :durChapterPos,
+        durChapterTitle = :durChapterTitle,
+        durChapterTime = :durChapterTime,
+        syncTime = :syncTime
+        where bookUrl = :bookUrl
+        """
+    )
+    fun updateSyncedProgress(
+        bookUrl: String,
+        durChapterIndex: Int,
+        durChapterPos: Int,
+        durChapterTitle: String?,
+        durChapterTime: Long,
+        syncTime: Long
+    )
 
     @Query("update books set durChapterPos = :pos where bookUrl = :bookUrl")
     fun upProgress(bookUrl: String, pos: Int)

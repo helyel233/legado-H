@@ -26,6 +26,9 @@ object LibrarySearchIndexer {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val cjkRegex = Regex("[\\p{IsHan}\\p{IsHiragana}\\p{IsKatakana}\\p{IsHangul}]")
+    private val ftsSyntaxCharsRegex = Regex("""["*:()+\-^]""")
+    private val pureWordTokenRegex = Regex("^[\\p{L}\\p{N}_]+$")
+    private val ftsBooleanKeywords = setOf("AND", "OR", "NOT", "NEAR")
 
     /** 全库重建进行中标志：重建覆盖全部章节，期间不再接受单章懒索引 */
     @Volatile
@@ -58,18 +61,26 @@ object LibrarySearchIndexer {
 
     /**
      * 将用户查询转为 FTS MATCH 表达式。
-     * CJK 词转单字短语，非 CJK 词转前缀匹配，多词之间 AND。
+     * 剥离/转义 FTS4 语法字符与布尔关键字，CJK 词转单字短语，安全单词转前缀匹配，多词之间 AND。
      */
     fun buildMatchQuery(query: String): String? {
-        val terms = query.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
+        val cleaned = ftsSyntaxCharsRegex.replace(query, " ").trim()
+        if (cleaned.isEmpty()) return null
+        val terms = cleaned.split(Regex("\\s+")).filter { it.isNotBlank() }
         if (terms.isEmpty()) return null
         val expressions = terms.mapNotNull { term ->
-            val sanitized = term.replace("\"", "")
-            if (sanitized.isEmpty()) return@mapNotNull null
-            if (cjkRegex.containsMatchIn(sanitized)) {
-                "\"" + segmentText(sanitized).trim() + "\""
-            } else {
-                sanitized + "*"
+            if (!term.any { it.isLetterOrDigit() }) return@mapNotNull null
+            when {
+                cjkRegex.containsMatchIn(term) -> {
+                    val segmented = segmentText(term).trim()
+                    if (segmented.isEmpty()) null else "\"$segmented\""
+                }
+                pureWordTokenRegex.matches(term) && term.uppercase() !in ftsBooleanKeywords -> {
+                    "$term*"
+                }
+                else -> {
+                    "\"$term\""
+                }
             }
         }
         if (expressions.isEmpty()) return null
@@ -137,8 +148,8 @@ object LibrarySearchIndexer {
         chapterTitle: String,
         content: String
     ) {
-        appDb.libraryContentFtsDao.deleteChapter(bookUrl, chapterIndex)
         if (content.isBlank()) {
+            appDb.libraryContentFtsDao.deleteChapter(bookUrl, chapterIndex)
             synchronized(indexedKeys) { indexedKeys.remove(keyOf(bookUrl, chapterIndex)) }
             return
         }
@@ -147,14 +158,18 @@ object LibrarySearchIndexer {
         } else {
             content
         }
-        appDb.libraryContentFtsDao.insert(
-            LibraryContentFts(
-                bookUrl = bookUrl,
-                chapterIndex = chapterIndex,
-                chapterTitle = chapterTitle,
-                content = segmentText(bounded)
+        val segmented = segmentText(bounded)
+        appDb.runInTransaction {
+            appDb.libraryContentFtsDao.deleteChapter(bookUrl, chapterIndex)
+            appDb.libraryContentFtsDao.insert(
+                LibraryContentFts(
+                    bookUrl = bookUrl,
+                    chapterIndex = chapterIndex,
+                    chapterTitle = chapterTitle,
+                    content = segmented
+                )
             )
-        )
+        }
         synchronized(indexedKeys) { indexedKeys.add(keyOf(bookUrl, chapterIndex)) }
     }
 
@@ -191,8 +206,8 @@ object LibrarySearchIndexer {
     }
 
     /**
-     * 重建全库索引：清除旧表数据后扫描书架上所有有缓存正文的书。
-     * 同时清理已删除书籍的残留行。
+     * 重建全库索引：按书在事务内原子替换（deleteByBook + insert），
+     * 完成后再清理已不在书架的残留书目，避免中途取消时清空整个索引。
      * @return 索引的章节数
      */
     suspend fun rebuildAll(onProgress: (String) -> Unit): Int = withContext(Dispatchers.IO) {
@@ -200,11 +215,6 @@ object LibrarySearchIndexer {
         try {
             runCatching {
                 val dao = appDb.libraryContentFtsDao
-                dao.deleteAll()
-                synchronized(indexedKeys) {
-                    indexedKeys.clear()
-                    loadedBooks.clear()
-                }
                 val books = appDb.bookDao.all
                 val validUrls = books.map { it.bookUrl }.toHashSet()
                 var indexed = 0
@@ -213,23 +223,66 @@ object LibrarySearchIndexer {
                     // 否则会空跑整个书库（且旧写法会让 rebuilding 永远复位不了）
                     currentCoroutineContext().ensureActive()
                     onProgress("[${index + 1}/${books.size}] ${book.name}")
-                    if (book.isImage) return@forEachIndexed
+                    if (book.isImage) {
+                        runCatching {
+                            dao.deleteByBook(book.bookUrl)
+                            synchronized(indexedKeys) {
+                                loadedBooks.add(book.bookUrl)
+                                indexedKeys.removeAll { it.startsWith("${book.bookUrl}|") }
+                            }
+                        }.onFailure {
+                            AppLog.put("全库搜索清理图片书索引失败: ${book.name}", it)
+                        }
+                        return@forEachIndexed
+                    }
                     val chapters = appDb.bookChapterDao.getChapterList(book.bookUrl)
+                    val items = ArrayList<LibraryContentFts>(chapters.size)
                     chapters.forEach { chapter ->
                         currentCoroutineContext().ensureActive()
                         val content = BookHelp.getContent(book, chapter) ?: return@forEach
-                        runCatching {
-                            indexChapterInternal(book.bookUrl, chapter.index, chapter.title, content)
-                            indexed++
-                        }.onFailure {
-                            AppLog.put("全库搜索重建索引失败: ${book.name}:${chapter.index}", it)
+                        if (content.isBlank()) return@forEach
+                        val bounded = if (content.length > MaxIndexContentLength) {
+                            content.substring(0, MaxIndexContentLength)
+                        } else {
+                            content
                         }
+                        items.add(
+                            LibraryContentFts(
+                                bookUrl = book.bookUrl,
+                                chapterIndex = chapter.index,
+                                chapterTitle = chapter.title,
+                                content = segmentText(bounded)
+                            )
+                        )
+                    }
+                    runCatching {
+                        appDb.runInTransaction {
+                            dao.deleteByBook(book.bookUrl)
+                            if (items.isNotEmpty()) {
+                                items.chunked(200).forEach { chunk ->
+                                    dao.insert(*chunk.toTypedArray())
+                                }
+                            }
+                        }
+                        synchronized(indexedKeys) {
+                            loadedBooks.add(book.bookUrl)
+                            indexedKeys.removeAll { it.startsWith("${book.bookUrl}|") }
+                            items.forEach { indexedKeys.add(keyOf(book.bookUrl, it.chapterIndex)) }
+                        }
+                        indexed += items.size
+                    }.onFailure {
+                        AppLog.put("全库搜索重建索引失败: ${book.name}", it)
                     }
                 }
                 // 清理已删除书籍的残留索引
-                appDb.libraryContentFtsDao.indexedBookUrls().forEach { url ->
+                dao.indexedBookUrls().forEach { url ->
+                    currentCoroutineContext().ensureActive()
                     if (url !in validUrls) {
-                        appDb.libraryContentFtsDao.deleteByBook(url)
+                        dao.deleteByBook(url)
+                        synchronized(indexedKeys) {
+                            loadedBooks.remove(url)
+                            indexedKeys.removeAll { it.startsWith("$url|") }
+                        }
                     }
                 }
                 indexed

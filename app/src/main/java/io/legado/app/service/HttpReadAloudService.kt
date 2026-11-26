@@ -940,8 +940,11 @@ class HttpReadAloudService : BaseReadAloudService(),
         if (route.engineType == SpeechRoute.ENGINE_SYSTEM && route.isConfigured) return route
         return SpeechRoute(
             engineType = SpeechRoute.ENGINE_SYSTEM,
-            engineValue = ReadAloud.ttsEngine.orEmpty(),
-            speakerName = appCtx.getString(R.string.ra_cfg_system_default),
+            engineValue = SpeechRoute.canonicalEngineIdentity(
+                SpeechRoute.ENGINE_SYSTEM,
+                ReadAloud.ttsEngine.orEmpty()
+            ),
+            speakerName = "",
             source = SpeechRoute.SOURCE_AUTO
         )
     }

@@ -269,9 +269,9 @@ object BookHelp {
             )
             return
         }
-        //保存文本：临时文件 + rename 原子替换——预取、缓存下载、阅读加载可能
-        //同时写同一章，直接 writeText 会截断/交错，读到残缺正文
-        writeTextAtomically(getPrimaryContentFile(book, bookChapter).createFileIfNotExist(), content)
+        //保存文本：唯一临时文件 + rename 原子替换——预取、缓存下载、阅读加载可能
+        //同时写同一章，直接 writeText 或共享 .tmp 会截断/交错，读到残缺正文
+        writeTextAtomically(getPrimaryContentFile(book, bookChapter), content)
         // 同步全库搜索索引（异步，不影响保存路径）
         LibrarySearchIndexer.indexChapterAsync(book, bookChapter, content)
         // 清理旧的 index 型文件，避免重复占用和命中过期缓存
@@ -292,16 +292,26 @@ object BookHelp {
      * rename 失败（跨分区/文件系统不支持）时回退直接写，保证功能可用。
      */
     private fun writeTextAtomically(file: File, content: String) {
-        val tmp = File(file.parentFile, file.name + ".tmp")
+        val parent = file.parentFile
+        if (parent != null && !parent.exists()) {
+            parent.mkdirs()
+        }
+        val prefix = "${file.name}.".let { if (it.length < 3) "tmp$it" else it }
+        var tmp: File? = null
         try {
+            tmp = File.createTempFile(prefix, ".tmp", parent)
             tmp.writeText(content)
             if (!tmp.renameTo(file)) {
                 file.writeText(content)
-                tmp.delete()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             file.writeText(content)
-            tmp.delete()
+        } finally {
+            tmp?.let {
+                if (it.exists()) {
+                    it.delete()
+                }
+            }
         }
     }
 

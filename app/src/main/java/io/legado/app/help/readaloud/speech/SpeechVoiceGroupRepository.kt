@@ -4,8 +4,6 @@ import io.legado.app.data.appDb
 import io.legado.app.data.entities.HttpTTS
 import io.legado.app.data.entities.ReadAloudSpeakerGroup
 import io.legado.app.data.entities.ReadAloudSpeakerGroupItem
-import io.legado.app.lib.dialogs.SelectItem
-import io.legado.app.utils.GSON
 import io.legado.app.R
 import splitties.init.appCtx
 
@@ -42,9 +40,7 @@ object SpeechVoiceGroupRepository {
                 ManagedSpeechVoiceGroup(
                     group = group,
                     items = validItems,
-                    routes = validItems.map { it.toSpeechRoute() }.distinctBy {
-                        "${it.engineType}|${it.engineValue}|${it.toneID}|${it.speakerName}"
-                    }
+                    routes = validItems.map { it.toSpeechRoute() }.distinctBy(::routeKey)
                 )
             }
         }
@@ -54,7 +50,7 @@ object SpeechVoiceGroupRepository {
         return managedGroups(httpTtsList)
             .flatMap { it.routes }
             .filterNot(::isBlockedRoute)
-            .distinctBy { "${it.engineType}|${it.engineValue}|${it.toneID}|${it.speakerName}" }
+            .distinctBy(::routeKey)
     }
 
     fun isInvalidGroup(group: ReadAloudSpeakerGroup): Boolean {
@@ -127,7 +123,7 @@ object SpeechVoiceGroupRepository {
         httpTtsList: List<HttpTTS> = appDb.httpTTSDao.all
     ): Boolean {
         return when (item.engineType) {
-            SpeechRoute.ENGINE_SYSTEM -> item.speakerName.isNotBlank() || item.engineName.isNotBlank()
+            SpeechRoute.ENGINE_SYSTEM -> true
             SpeechRoute.ENGINE_HTTP -> {
                 val httpTts = item.engineValue.toLongOrNull()
                     ?.let { id -> httpTtsList.firstOrNull { it.id == id } }
@@ -153,12 +149,13 @@ object SpeechVoiceGroupRepository {
         sortOrder: Int,
         now: Long = System.currentTimeMillis()
     ): ReadAloudSpeakerGroupItem {
+        val isSystemDefault = SpeechRoute.isSystemDefaultEngine(option.engineType, option.engineValue)
         return ReadAloudSpeakerGroupItem(
             groupId = groupId,
             engineType = option.engineType,
-            engineValue = option.engineValue,
-            engineName = option.engineName,
-            speakerName = option.speakerName,
+            engineValue = if (isSystemDefault) "" else option.engineValue,
+            engineName = if (isSystemDefault) "" else option.engineName,
+            speakerName = if (isSystemDefault) "" else option.speakerName,
             toneID = option.toneID,
             sourceGroupId = option.groupId,
             sourceGroupName = option.groupName,
@@ -176,9 +173,9 @@ object SpeechVoiceGroupRepository {
         return ReadAloudSpeakerGroupItem(
             groupId = groupId,
             engineType = SpeechRoute.ENGINE_SYSTEM,
-            engineValue = GSON.toJson(SelectItem(appCtx.getString(R.string.ra_cfg_system_default), "")),
-            engineName = appCtx.getString(R.string.ra_cfg_system_default),
-            speakerName = appCtx.getString(R.string.ra_cfg_system_default),
+            engineValue = "",
+            engineName = "",
+            speakerName = "",
             sortOrder = sortOrder,
             createdAt = now,
             updatedAt = now
@@ -186,11 +183,11 @@ object SpeechVoiceGroupRepository {
     }
 
     fun routeKey(route: SpeechRoute): String {
-        return "${route.engineType}|${route.engineValue}|${route.toneID}|${route.speakerName}"
+        return route.identityKey()
     }
 
     fun itemKey(item: ReadAloudSpeakerGroupItem): String {
-        return "${item.engineType}|${item.engineValue}|${item.toneID}|${item.speakerName}"
+        return SpeechRoute.routeIdentityKey(item.engineType, item.engineValue, item.toneID, item.speakerName)
     }
 
     private fun invalidRouteKeys(): Set<String> {
@@ -230,10 +227,11 @@ object SpeechVoiceGroupRepository {
 }
 
 fun ReadAloudSpeakerGroupItem.toSpeechRoute(source: String = SpeechRoute.SOURCE_AUTO): SpeechRoute {
+    val isSystemDefault = SpeechRoute.isSystemDefaultEngine(engineType, engineValue)
     return SpeechRoute(
         engineType = engineType,
-        engineValue = engineValue,
-        speakerName = speakerName.ifBlank { engineName },
+        engineValue = if (isSystemDefault) "" else engineValue,
+        speakerName = if (isSystemDefault) "" else speakerName.ifBlank { engineName },
         toneID = toneID,
         groupId = sourceGroupId,
         groupName = sourceGroupName,

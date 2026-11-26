@@ -456,7 +456,7 @@ object Restore {
         restoreAppearanceKits(path)
         restoreUnifiedPackages(path)
         restoreVisualResourcePackages(path)
-        restoreSourceRuntime(path)
+        restoreSourceRuntime(path, aes)
         // 直接以文件形式读取 config.xml：SharedPreferences 进程级缓存只在首次
         // 创建时读盘，本机此前若做过备份，缓存里还是本机上次备份的旧值，
         // 直接读文件才能拿到刚解压出来的备份内容
@@ -753,10 +753,16 @@ object Restore {
         return restoredFile.takeIf { it.exists() }?.absolutePath ?: avatar
     }
 
-    private fun restoreSourceRuntime(path: String) {
+    private fun restoreSourceRuntime(path: String, aes: BackupAES) {
         if (BackupConfig.ignoreSourceRuntime) return
         File(path, "sourceRuntime.json").takeIf { it.exists() }?.runCatching {
-            val backup = GSON.fromJsonObject<SourceRuntimeBackup>(readText()).getOrNull()
+            val raw = readText()
+            val json = if (raw.trimStart().startsWith("{")) {
+                raw
+            } else {
+                aes.decryptStr(raw)
+            }
+            val backup = GSON.fromJsonObject<SourceRuntimeBackup>(json).getOrNull()
                 ?: return@runCatching
             backup.items.forEach { item ->
                 val source = when (item.sourceType) {

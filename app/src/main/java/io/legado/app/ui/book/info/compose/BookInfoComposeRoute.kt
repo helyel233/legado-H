@@ -121,7 +121,6 @@ import io.legado.app.help.config.BookInfoQuickActionItem
 import io.legado.app.help.config.BookInfoQuickActionType
 import io.legado.app.help.book.BookCloudEntryMode
 import io.legado.app.help.glide.ImageLoader
-import io.legado.app.help.webView.WebJsExtensions.Companion.getInjectionString
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.composeActionRadius
 import io.legado.app.lib.theme.composePanelRadius
@@ -2524,7 +2523,6 @@ private class BookInfoIntroWebViewClient(
     private val isTokenActive: (Long) -> Boolean,
     private val onPageReady: (Long) -> Unit
 ) : WebViewClient() {
-    private val jsStr = getInjectionString
 
     override fun shouldOverrideUrlLoading(
         view: WebView?,
@@ -2551,7 +2549,7 @@ private class BookInfoIntroWebViewClient(
         super.onPageStarted(view, url, favicon)
         val token = currentToken()
         if (isTokenActive(token)) {
-            runCatching { view?.evaluateJavascript(jsStr, null) }
+            BookInfoUseWebHost.injectBridge(view)
         }
     }
 
@@ -2560,7 +2558,7 @@ private class BookInfoIntroWebViewClient(
         view ?: return
         val token = currentToken()
         if (!isTokenActive(token)) return
-        runCatching { view.evaluateJavascript(jsStr, null) }
+        BookInfoUseWebHost.injectBridge(view)
         onPageReady(token)
     }
 }

@@ -24,7 +24,6 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.webView.PooledWebView
 import io.legado.app.help.webView.WebJsExtensions
-import io.legado.app.help.webView.WebJsExtensions.Companion.getInjectionString
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameJava
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
@@ -121,6 +120,8 @@ class BackstageWebView(
         }
     }
 
+    private val webJsBridgeToken = WebJsExtensions.newBridgeToken()
+
     private fun getEncoding(): String {
         return encode ?: "utf-8"
     }
@@ -145,7 +146,10 @@ class BackstageWebView(
                                    }
                                }
                                webView.addJavascriptInterface(it as BaseSource, nameSource)
-                               val webJsExtensions = WebJsExtensions(it, null, webView)
+                               val webJsExtensions = WebJsExtensions(
+                                   it, null, webView,
+                                   bridgeToken = webJsBridgeToken
+                               )
                                webView.addJavascriptInterface(webJsExtensions, nameJava)
                             }
                         }
@@ -267,7 +271,7 @@ class BackstageWebView(
             private val intervals = listOf(200L, 400L, 600L, 800L, 1000L)
             private val mWebView: WeakReference<WebView> = WeakReference(webView)
             private val jsStr = if (isRule) {
-                "$getInjectionString\n$mJavaScript"
+                "${WebJsExtensions.buildInjectionString(webJsBridgeToken)}\n$mJavaScript"
             } else mJavaScript
             override fun run() {
                 val webView = mWebView.get() ?: return

@@ -155,13 +155,59 @@ object RhinoClassShutter : ClassShutter {
         return visibleToScripts(obj.javaClass.name)
     }
 
+    private const val LEGADO_PACKAGE_PREFIX = "io.legado.app."
+
+    // Explicit allowlist for io.legado.app.* classes legitimately bound to or used by book-source JS.
+    // All other io.legado.app.* classes (FileUtils, SecurePrefs, AppConfig, LocalConfig, AppDatabase,
+    // dao.*, api.controller.*, Backup/Restore, AppWebDav/AppCloudStorage, service.*, etc.) are blocked.
+    private val legadoAllowedPackages = listOf(
+        "io.legado.app.data.entities",
+        "io.legado.app.model.analyzeRule",
+    )
+
+    private val legadoAllowedClasses = setOf(
+        "io.legado.app.api.ReturnData",
+        "io.legado.app.exception.NoStackTraceException",
+        "io.legado.app.help.CacheManager",
+        "io.legado.app.help.JsExtensions",
+        "io.legado.app.help.ai.AiImageService\$AiImageJsSource",
+        "io.legado.app.help.book.ParagraphRuleJsExtensions",
+        "io.legado.app.help.crypto.SymmetricCryptoAndroid",
+        "io.legado.app.help.http.CookieStore",
+        "io.legado.app.help.http.StrResponse",
+        "io.legado.app.help.http.dns.DnsScope",
+        "io.legado.app.ui.main.ai.AiImageProviderConfig",
+        "io.legado.app.ui.rss.read.RssJsExtensions",
+        "io.legado.app.utils.ChineseUtils",
+        "io.legado.app.utils.EncoderUtils",
+        "io.legado.app.utils.HtmlFormatter",
+        "io.legado.app.utils.JsURL",
+        "io.legado.app.utils.MD5Utils",
+        "io.legado.app.utils.NetworkUtils",
+        "io.legado.app.utils.StringUtils",
+        "io.legado.app.utils.UrlUtil",
+    )
+
+    private fun isLegadoClassAllowed(fullClassName: String): Boolean {
+        if (fullClassName in legadoAllowedClasses) {
+            return true
+        }
+        val outerClassName = fullClassName.substringBefore('$')
+        if (outerClassName != fullClassName && outerClassName in legadoAllowedClasses) {
+            return true
+        }
+        return legadoAllowedPackages.any { pkg ->
+            fullClassName.startsWith(pkg) && fullClassName.getOrNull(pkg.length) == '.'
+        }
+    }
+
     fun visibleToScripts(clazz: Class<*>): Boolean {
         protectedClasses.forEach {
             if (it.isAssignableFrom(clazz)) {
                 return false
             }
         }
-        return true
+        return visibleToScripts(clazz.name)
     }
 
     fun wrapJavaClass(scope: Scriptable, javaClass: Class<*>): Scriptable {
@@ -175,7 +221,13 @@ object RhinoClassShutter : ClassShutter {
     }
 
     override fun visibleToScripts(fullClassName: String): Boolean {
-        return !protectedClassNamesMatcher.match(fullClassName)
+        if (protectedClassNamesMatcher.match(fullClassName)) {
+            return false
+        }
+        if (fullClassName.startsWith(LEGADO_PACKAGE_PREFIX)) {
+            return isLegadoClassAllowed(fullClassName)
+        }
+        return true
     }
 
 }

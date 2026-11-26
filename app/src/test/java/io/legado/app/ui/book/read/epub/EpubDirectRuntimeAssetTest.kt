@@ -447,6 +447,7 @@ class EpubDirectRuntimeAssetTest {
     fun `font document runtime and activation stages all have hard deadlines`() {
         val runtime = runtimeSource()
         val webLayer = webLayerSource()
+        val templateInjector = templateInjectorSource()
         val activity = readBookActivitySource()
         val readerFontBody = functionBody(runtime, "readerFontReady")
         val documentTimeoutBody = kotlinFunctionBody(webLayer, "scheduleDocumentLoadTimeout")
@@ -463,7 +464,8 @@ class EpubDirectRuntimeAssetTest {
         assertTrue("delay(EPUB_PREPARE_TIMEOUT_MS)" in activityTimeoutBody)
         assertTrue("private const val DOCUMENT_LOAD_TIMEOUT_MS = 12_000L" in webLayer)
         assertTrue("private const val RUNTIME_STABLE_TIMEOUT_MS = EpubRenderTimeoutPolicy.DIRECT_STARTUP_MS" in webLayer)
-        assertTrue("private const val TEMPLATE_STABLE_TIMEOUT_MS = EpubRenderTimeoutPolicy.TEMPLATE_STARTUP_MS" in webLayer)
+        assertTrue("private const val TEMPLATE_STABLE_TIMEOUT_MS = EpubWebTemplateInjector.TEMPLATE_STABLE_TIMEOUT_MS" in webLayer)
+        assertTrue("internal const val TEMPLATE_STABLE_TIMEOUT_MS = EpubRenderTimeoutPolicy.TEMPLATE_STARTUP_MS" in templateInjector)
         assertTrue("private const val PAGE_ACTIVATION_TIMEOUT_MS = 8_000L" in webLayer)
         assertTrue("private const val EPUB_PREPARE_TIMEOUT_MS = 15_000L" in activity)
         assertFalse("MAX_READY_ATTEMPTS" in webLayer)
@@ -477,7 +479,7 @@ class EpubDirectRuntimeAssetTest {
         val publisherStyledCss = readerCssBody
             .substringAfter("if (layoutMode == EpubDirectLayoutMode.PUBLISHER_STYLED)")
             .substringBefore("if (layoutMode == EpubDirectLayoutMode.INTERACTIVE")
-        val runtimeScriptBody = kotlinFunctionBody(webLayerSource(), "runtimeScript")
+        val runtimeScriptBody = kotlinFunctionBody(templateInjectorSource(), "runtimeScript")
 
         assertTrue("readerFontOverridePublisher = font != null" in activitySource)
         assertTrue("readerFontRevision = font?.revision" in activitySource)
@@ -603,6 +605,7 @@ class EpubDirectRuntimeAssetTest {
         val animationBody = kotlinFunctionBody(source, "startPageAnimation")
         val applyBody = kotlinFunctionBody(source, "applyPage")
         val commitBody = kotlinFunctionBody(source, "commitPageAndReaderChrome")
+        val commitScriptBody = kotlinFunctionBody(templateInjectorSource(), "commitPageAndReaderChromeScript")
         val verificationBody = kotlinFunctionBody(source, "verifyAnimationTargetPage")
         val visualStateBody = kotlinFunctionBody(source, "completePageAnimationVisualState")
 
@@ -618,7 +621,8 @@ class EpubDirectRuntimeAssetTest {
         assertTrue("revealLivePageAnimationTarget(overlay)" in animationBody)
         assertTrue("recoverUncommittedPageTurn(view, token, index)" in animationBody)
         assertTrue("commitPageAndReaderChrome(" in applyBody)
-        assertTrue("api.metrics(true)" in commitBody)
+        assertTrue("templateInjector.commitPageAndReaderChromeScript(" in commitBody)
+        assertTrue("api.metrics(true)" in commitScriptBody)
         assertTrue("evaluatePageJavascript(view, MEASURE_VIEWPORT_SCRIPT)" in verificationBody)
         assertTrue("EpubDirectActivationTargetPolicy.isSatisfied(" in verificationBody)
         assertStableRenderStateVerification(source, verificationBody)
@@ -837,13 +841,15 @@ class EpubDirectRuntimeAssetTest {
         val setupFailureBody = kotlinFunctionBody(source, "failCandidateSetup")
         val restoreBody = kotlinFunctionBody(source, "restoreCommittedViewAfterCandidateFailure")
         val commitBody = kotlinFunctionBody(source, "commitPageAndReaderChrome")
+        val commitScriptBody = kotlinFunctionBody(templateInjectorSource(), "commitPageAndReaderChromeScript")
 
         assertTrue("requestPendingActivationProbe(view = view, token = token, immediate = true)" in readyBody)
         assertTrue("view.evaluateJavascript(MEASURE_SCRIPT)" in probeBody)
         assertTrue("applyCandidatePage(" in probeBody)
         assertTrue("requestPendingActivationProbe" in source)
         assertTrue("commitPageAndReaderChrome(" in candidateBody)
-        assertTrue("api.setActivationPage" in commitBody)
+        assertTrue("templateInjector.commitPageAndReaderChromeScript(" in commitBody)
+        assertTrue("api.setActivationPage" in commitScriptBody)
         assertTrue("completePageAnimationVisualState" in candidateBody)
         assertTrue("isCandidateActivationVerified(" in candidateBody)
         assertTrue("requestPendingActivationProbe(view, token)" in candidateBody)
@@ -902,6 +908,7 @@ class EpubDirectRuntimeAssetTest {
         val setPageBody = kotlinFunctionBody(source, "setPage")
         val applyBody = kotlinFunctionBody(source, "applyPage")
         val commitBody = kotlinFunctionBody(source, "commitPageAndReaderChrome")
+        val commitScriptBody = kotlinFunctionBody(templateInjectorSource(), "commitPageAndReaderChromeScript")
 
         assertTrue("requestedStyle != EpubDirectPageAnimationPolicy.Style.None" in setPageBody)
         assertTrue("scheduleCommittedPageSnapshotRefresh(" in setPageBody)
@@ -915,10 +922,11 @@ class EpubDirectRuntimeAssetTest {
         assertFalse("liveFallbackDurationMillis" in setPageBody)
         assertFalse("horizontalAnimationMillis" in setPageBody)
         assertTrue("commitPageAndReaderChrome(" in applyBody)
-        assertTrue("api.setReaderChrome(" in commitBody)
-        assertTrue("api.setReaderChromeData(" in commitBody)
-        assertTrue("api.setPage(\$safePageIndex,0,'\$behavior')" in commitBody)
-        assertTrue("api.commitPage(" in commitBody)
+        assertTrue("templateInjector.commitPageAndReaderChromeScript(" in commitBody)
+        assertTrue("api.setReaderChrome(" in commitScriptBody)
+        assertTrue("api.setReaderChromeData(" in commitScriptBody)
+        assertTrue("api.setPage(\$safePageIndex,0,'\$behavior')" in commitScriptBody)
+        assertTrue("api.commitPage(" in commitScriptBody)
     }
 
     @Test
@@ -976,6 +984,7 @@ class EpubDirectRuntimeAssetTest {
         val bootstrap = runtime.substringBefore("var activeToken=")
         val terminalBody = kotlinFunctionBody(webLayerSource(), "consumeRuntimeTerminal")
         val installBody = kotlinFunctionBody(webLayerSource(), "installRuntime")
+        val runtimeInstallBody = kotlinFunctionBody(templateInjectorSource(), "runtimeInstallScript")
 
         assertTrue("window.__legadoEpub.setToken(TOKEN)" in bootstrap)
         assertTrue("requestAnimationFrame(function(){" in bootstrap)
@@ -983,7 +992,8 @@ class EpubDirectRuntimeAssetTest {
         assertTrue("api.replayRuntimeTerminal(TOKEN)" in bootstrap)
         assertTrue("bridge.onStable(TOKEN)" in bootstrap)
         assertTrue("else if (token != generation)" in terminalBody)
-        assertTrue("runtimeScript(installToken, chapter, config)" in installBody)
+        assertTrue("templateInjector.runtimeInstallScript(" in installBody)
+        assertTrue("runtimeScript(token, chapter, config)" in runtimeInstallBody)
         assertTrue("scheduleRuntimeStableTimeout()" in installBody)
         assertFalse("stableAlready" in installBody)
     }
@@ -1670,7 +1680,7 @@ class EpubDirectRuntimeAssetTest {
 
     @Test
     fun `failed resources avoid cache while content addressed reader fonts are immutable`() {
-        val source = webLayerSource()
+        val source = resourceInterceptorSource()
         val body = kotlinFunctionBody(source, "nonCacheableResourceHeaders")
         val readerFontBody = kotlinFunctionBody(source, "readerFontResponse")
         val readerFontHeadersBody = kotlinFunctionBody(source, "readerFontHeaders")
@@ -1699,6 +1709,10 @@ class EpubDirectRuntimeAssetTest {
         ).firstOrNull(File::isFile) ?: error("EPUB Direct WebLayer source not found")
         return file.readText()
     }
+
+    private fun templateInjectorSource(): String = epubSource("EpubWebTemplateInjector.kt")
+
+    private fun resourceInterceptorSource(): String = epubSource("EpubWebResourceInterceptor.kt")
 
     private fun readBookActivitySource(): String {
         val relativePath = "io/legado/app/ui/book/read/ReadBookActivity.kt"

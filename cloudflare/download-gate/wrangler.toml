@@ -4,6 +4,9 @@ compatibility_date = "2026-06-29"
 workers_dev = true
 preview_urls = false
 
+# shortcut: Bind Cloudflare WAF Rate Limiting rules in the Cloudflare dashboard
+# in front of /latest and /download to throttle DOWNLOAD_KEY brute-force attempts.
+
 [vars]
 APP_TITLE = "Legado ARM64 Private Release"
 R2_APK_KEY = "legado-arm64-v8a.apk"

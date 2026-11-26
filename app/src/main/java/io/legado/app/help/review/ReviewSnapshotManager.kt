@@ -4,6 +4,7 @@ import io.legado.app.constant.AppLog
 import io.legado.app.constant.AppPattern
 import io.legado.app.constant.BookType
 import io.legado.app.data.appDb
+import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
@@ -203,6 +204,15 @@ object ReviewSnapshotManager {
 
     /** 单个按钮解析评论页地址的超时 */
     private const val RESOLVE_TIMEOUT_MS = 20_000L
+
+    private fun buttonCaptureTimeoutMs(): Long {
+        val pageTimeout = ReviewDownloadConfig.Number.PAGE_TIMEOUT.value.toLong().coerceAtLeast(15_000L)
+        return (pageTimeout * 2L + 30_000L).coerceIn(90_000L, 300_000L)
+    }
+
+    internal fun resolveCaptureSource(bookSource: BookSource, sourceKey: String?): BaseSource {
+        return ParagraphRuleProcessor.resolveSource(sourceKey) ?: bookSource
+    }
 
     /**
      * 已缓存正文的章节在重新缓存/刷新时也必须走“是否需要补评论”的判断，
@@ -787,6 +797,7 @@ object ReviewSnapshotManager {
         val url: String,
         val html: String?,
         val preloadJs: String?,
+        val sourceKey: String? = null,
     )
 
     /**
@@ -814,6 +825,7 @@ object ReviewSnapshotManager {
             sb.append("8. 章评/书评补充快照：跳过（本章没有评论按钮成功解析出评论页地址）\n")
             return
         }
+        val captureSource = resolveCaptureSource(bookSource, resolved.sourceKey)
         sb.append("8. 章评/书评补充快照：\n")
         val chapterTabPolicy = resolveExistingSnapshotPolicy(
             ReviewSnapshotStore.hasCompleteChapterTab(book, chapter),
@@ -838,7 +850,7 @@ object ReviewSnapshotManager {
                     commitIfLeaseActive = commitIfLeaseActive,
                     capture = { incrementalMode ->
                         ReviewSnapshotCapture.captureChapterTab(
-                            bookSource,
+                            captureSource,
                             book,
                             chapter,
                             resolved.url,
@@ -858,7 +870,7 @@ object ReviewSnapshotManager {
                 val outcome = runCatching {
                     run {
                         ReviewSnapshotCapture.captureChapterTab(
-                            bookSource,
+                            captureSource,
                             book,
                             chapter,
                             resolved.url,
@@ -927,7 +939,7 @@ object ReviewSnapshotManager {
                         commitIfLeaseActive = commitIfLeaseActive,
                         capture = { incrementalMode ->
                             ReviewSnapshotCapture.captureBookTab(
-                                bookSource,
+                                captureSource,
                                 book,
                                 resolved.url,
                                 resolved.html,
@@ -947,7 +959,7 @@ object ReviewSnapshotManager {
                 val outcome = runCatching {
                     run {
                         ReviewSnapshotCapture.captureBookTab(
-                            bookSource,
+                            captureSource,
                             book,
                             resolved.url,
                             resolved.html,
@@ -1209,21 +1221,24 @@ object ReviewSnapshotManager {
         // 不再为补充快照单独执行 click/js 解析
         resolvedPageRecorder.compareAndSet(
             null,
-            ResolvedPageContext(url, page.html, page.preloadJs),
+            ResolvedPageContext(url, page.html, page.preloadJs, page.sourceKey),
         )
+        val captureSource = resolveCaptureSource(bookSource, page.sourceKey)
         val outcome = runCatching {
-            ReviewSnapshotCapture.capture(
-                bookSource,
-                book,
-                chapter,
-                button.src,
-                url,
-                page.html,
-                page.preloadJs,
-                diagnostics.forChapter(chapter.index),
-                commitIfLeaseActive,
-                incremental = incrementalBase != null,
-            )
+            withTimeout(buttonCaptureTimeoutMs()) {
+                ReviewSnapshotCapture.capture(
+                    captureSource,
+                    book,
+                    chapter,
+                    button.src,
+                    url,
+                    page.html,
+                    page.preloadJs,
+                    diagnostics.forChapter(chapter.index),
+                    commitIfLeaseActive,
+                    incremental = incrementalBase != null,
+                )
+            }
         }
         if (outcome.isFailure) {
             val e = outcome.exceptionOrNull()!!
@@ -1350,7 +1365,9 @@ object ReviewSnapshotManager {
         /** showBrowser 路径书源已取到的渲染 HTML（可为 null） */
         val html: String?,
         /** showBrowser 路径书源传入的 preloadJs（页面 JS bridge 需要） */
-        val preloadJs: String? = null
+        val preloadJs: String? = null,
+        /** 段落规则点击产生的源键（paragraph_rule_<id>），供抓拍阶段恢复规则宿主 */
+        val sourceKey: String? = null,
     )
 
     suspend fun resolveReviewPageUrl(
@@ -1360,8 +1377,13 @@ object ReviewSnapshotManager {
         button: ReviewButton
     ): ReviewPage {
         val resolvedPage = CompletableDeferred<ReviewPage>()
-        fun record(url: String, html: String? = null, preloadJs: String? = null) {
-            resolvedPage.complete(ReviewPage(url, html, preloadJs))
+        fun record(
+            url: String,
+            html: String? = null,
+            preloadJs: String? = null,
+            sourceKey: String? = null,
+        ) {
+            resolvedPage.complete(ReviewPage(url, html, preloadJs, sourceKey))
         }
         return withTimeout(RESOLVE_TIMEOUT_MS) {
             when {
@@ -1377,7 +1399,7 @@ object ReviewSnapshotManager {
                             config: String?,
                             sourceKey: String?
                         ): Boolean {
-                            record(url, html, preloadJs)
+                            record(url, html, preloadJs, sourceKey)
                             return true
                         }
                     }

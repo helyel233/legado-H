@@ -22,7 +22,6 @@ import io.legado.app.utils.getPrefLong
 import io.legado.app.utils.getPrefString
 import io.legado.app.utils.getPrefStringSet
 import io.legado.app.utils.isNightMode
-import io.legado.app.utils.parseIpsFromString
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.putPrefBoolean
 import io.legado.app.utils.putPrefInt
@@ -44,7 +43,6 @@ import io.legado.app.ui.main.ai.AiSkillConfig
 import io.legado.app.ui.main.ai.AiWorldBookConfig
 import io.legado.app.ui.book.read.ReadAiBookHistory
 import splitties.init.appCtx
-import java.net.InetAddress
 import io.legado.app.R
 
 @Suppress("MemberVisibilityCanBePrivate", "ConstPropertyName")
@@ -282,7 +280,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             PreferKey.customHosts -> {
                 customHosts = appCtx.getPrefString(PreferKey.customHosts)
                 _hostMap = null
-                _addressCache = null
             }
 
             PreferKey.editTheme -> editTheme = appCtx.getPrefInt(PreferKey.editTheme, 0)
@@ -343,26 +340,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             val cache = GSON.fromJsonObject<Map<String, Any?>>(customHosts).getOrNull() ?: emptyMap()
             _hostMap = cache
             cache
-        }
-    private var _addressCache: Map<String, List<InetAddress>>? = null
-    val addressCache: Map<String, List<InetAddress>>
-        get() = _addressCache ?: run {
-            val cache = hostMap.mapNotNull { (host, ipValue) ->
-                val addresses = when (ipValue) {
-                    is String -> ipValue.parseIpsFromString()
-                    is List<*> -> ipValue.parseIpsFromList()
-                    else -> null
-                }
-                addresses?.let { host to it }
-            }.toMap()
-            _addressCache = cache
-            cache
-        }
-    private fun List<*>.parseIpsFromList(): List<InetAddress> =
-        mapNotNull { element ->
-            (element as? String)?.trim()?.takeIf { it.isNotEmpty() }
-                ?.runCatching { InetAddress.getByName(this) }
-                ?.getOrNull()
         }
 
     var isNightTheme: Boolean
@@ -647,9 +624,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
                 appCtx.putPrefString(PreferKey.modernRssSourceUrl, value)
             }
         }
-
-    val showRSS: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.showRss, false)
 
     val showReadRecord: Boolean
         get() = appCtx.getPrefBoolean(PreferKey.showReadRecord, true)

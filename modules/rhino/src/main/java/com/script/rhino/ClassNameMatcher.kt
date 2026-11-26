@@ -18,7 +18,7 @@ class ClassNameMatcher(classNames: List<String>) {
     }
 
     private fun matchInternal(className: String): Boolean {
-        val index = sortedClassNames.fastBinarySearch { prefix ->
+        val index = sortedClassNames.binarySearch { prefix ->
             comparePrefix(className, prefix)
         }
         if (index >= 0) {

@@ -18,6 +18,7 @@ import io.legado.app.help.cache.CacheLifecycle
 import io.legado.app.help.cache.CachePhase
 import io.legado.app.help.cache.CacheSnapshot
 import io.legado.app.help.cache.ReviewRetryResult
+import io.legado.app.help.review.ReviewPreheatCoordinator
 import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.UiCorner
@@ -83,6 +84,7 @@ class ReviewSnapshotStatusDialog :
             val retryStartedAt = System.currentTimeMillis()
             val result = try {
                 withContext(Dispatchers.IO) {
+                    ReviewPreheatCoordinator.clearBookFailures(book.bookUrl)
                     CacheCoordinator.retryReviewSnapshotsWithResult(book, items.map { it.chapter })
                 }
             } catch (error: CancellationException) {
@@ -109,7 +111,35 @@ class ReviewSnapshotStatusDialog :
                     toastOnUi(R.string.cache_manage_review_retry_unsupported)
                 }
                 ReviewRetryResult.AlreadyInProgress -> {
-                    toastOnUi(R.string.cache_manage_review_retry_in_progress)
+                    val progress = CacheCoordinator.activeReviewProgress(book.bookUrl)
+                    alert(
+                        getString(R.string.cache_manage_review_retry_in_progress_title),
+                        getString(
+                            R.string.cache_manage_review_retry_in_progress_message,
+                            progress?.first ?: 0,
+                            progress?.second ?: items.size,
+                        ),
+                    ) {
+                        positiveButton(R.string.cache_manage_review_retry_force_restart) {
+                            viewLifecycleOwner.lifecycleScope.launch {
+                                val stopped = withContext(Dispatchers.IO) {
+                                    CacheCoordinator.cancelActiveReviewTasks(book.bookUrl)
+                                    CacheCoordinator.awaitReviewTasksStopped(book.bookUrl, 5_000L)
+                                }
+                                if (stopped) {
+                                    retryFailed(items)
+                                } else {
+                                    toastOnUi(R.string.cache_manage_review_retry_stopping)
+                                }
+                            }
+                        }
+                        negativeButton(R.string.cache_manage_review_retry_keep_waiting) {
+                            observeRetryCompletion(
+                                retryStartedAt,
+                                items.map { it.chapter.index }.toSet(),
+                            )
+                        }
+                    }
                 }
                 ReviewRetryResult.NothingToRetry -> {
                     toastOnUi(R.string.cache_manage_review_retry_nothing)
@@ -223,6 +253,7 @@ class ReviewSnapshotStatusDialog :
     private fun clearAllSnapshots() {
         viewLifecycleOwner.lifecycleScope.launch {
             val removed = withContext(Dispatchers.IO) {
+                ReviewPreheatCoordinator.clearBookFailures(book.bookUrl)
                 ReviewSnapshotStore.clearAll(book)
             }
             toastOnUi(getString(R.string.cache_manage_review_cleared, removed))

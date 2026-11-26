@@ -10,22 +10,6 @@ internal interface CacheTaskPersistence {
     fun recoverLoadFailure(): Result<Unit>
 }
 
-internal class InMemoryCacheTaskPersistence(
-    initial: CacheSnapshot? = null,
-) : CacheTaskPersistence {
-    var snapshot: CacheSnapshot? = initial
-        private set
-
-    override fun load(): Result<CacheSnapshot?> = Result.success(snapshot)
-
-    override fun save(snapshot: CacheSnapshot): Result<Unit> {
-        this.snapshot = snapshot
-        return Result.success(Unit)
-    }
-
-    override fun recoverLoadFailure(): Result<Unit> = Result.success(Unit)
-}
-
 /** Small atomic JSON snapshot. It is intentionally replaceable in tests and by a future Room store. */
 internal object AppFileCacheTaskPersistence : CacheTaskPersistence {
     private val file by lazy { File(appCtx.filesDir, "cache_tasks.json") }

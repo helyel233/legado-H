@@ -26,6 +26,7 @@ import java.io.ByteArrayOutputStream
  *   未设访问口令时由 WebService 传回环地址，避免局域网内任何人无鉴权增删书源。
  */
 class HttpServer(port: Int, hostname: String? = null) : NanoHTTPD(hostname, port) {
+    private val serverPort = port
     private val assetsWeb = AssetsWeb("web")
 
     override fun serve(session: IHTTPSession): Response {
@@ -40,11 +41,20 @@ class HttpServer(port: Int, hostname: String? = null) : NanoHTTPD(hostname, port
             "${session.method.name} - $uri - ${sanitizeQuery(session.queryParameterString)} - Start($startAt)"
         }
 
+        // Reject untrusted cross-origin browser requests (both CORS preflight and CSRF).
+        if (!WebServiceGuard.isAllowedHttpOrigin(session, serverPort)) {
+            return newFixedLengthResponse(
+                Response.Status.FORBIDDEN,
+                "application/json",
+                """{"msg":"forbidden origin"}"""
+            )
+        }
+
         // 访问口令校验。口令未启用（默认）时这里直接放行，行为与旧版一致。
         // 必须放在静态资源之前：启用了口令就连页面都不该能打开。
         // 放在 try 外：守卫是纯字符串判断不应抛异常，而一旦真抛了也必须
         // fail-closed（拒绝请求），绝不能落进 catch 变成 200 放行。
-        // OPTIONS 预检不执行业务、不泄露数据，放行以保住跨域场景的 CORS 协商，
+        // OPTIONS 预检不执行业务、不泄露数据，放行以保住同源/受信任场景的 CORS 协商，
         // 真正的数据请求仍会在下面被校验。
         if (session.method != Method.OPTIONS && !WebServiceGuard.isAuthorized(session)) {
             return unauthorizedResponse(session)
@@ -54,9 +64,12 @@ class HttpServer(port: Int, hostname: String? = null) : NanoHTTPD(hostname, port
             when (session.method) {
                 Method.OPTIONS -> {
                     val response = newFixedLengthResponse("")
-                    response.addHeader("Access-Control-Allow-Methods", "POST")
-                    response.addHeader("Access-Control-Allow-Headers", "content-type")
-                    response.addHeader("Access-Control-Allow-Origin", session.headers["origin"])
+                    response.addHeader("Access-Control-Allow-Methods", "GET, POST")
+                    response.addHeader("Access-Control-Allow-Headers", "content-type, authorization")
+                    WebServiceGuard.allowedCorsOrigin(session, serverPort)?.let { origin ->
+                        response.addHeader("Access-Control-Allow-Origin", origin)
+                        response.addHeader("Vary", "Origin")
+                    }
                     //response.addHeader("Access-Control-Max-Age", "3600");
                     return response
                 }
@@ -164,7 +177,10 @@ class HttpServer(port: Int, hostname: String? = null) : NanoHTTPD(hostname, port
                 }
             }
             response.addHeader("Access-Control-Allow-Methods", "GET, POST")
-            response.addHeader("Access-Control-Allow-Origin", session.headers["origin"])
+            WebServiceGuard.allowedCorsOrigin(session, serverPort)?.let { origin ->
+                response.addHeader("Access-Control-Allow-Origin", origin)
+                response.addHeader("Vary", "Origin")
+            }
             LogUtils.d(TAG) {
                 "${session.method.name} - $uri - ${sanitizeQuery(session.queryParameterString)} - End($startAt)"
             }

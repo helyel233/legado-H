@@ -52,6 +52,7 @@ import io.legado.app.ui.book.read.page.entities.column.HiddenReviewSpan
 import io.legado.app.ui.book.read.page.entities.ReviewButton
 import io.legado.app.ui.book.read.page.entities.ReviewBubble
 import io.legado.app.ui.book.read.page.entities.column.TextColumn
+import io.legado.app.utils.decodeBase64DataUrlBytes
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.fastSum
 import io.legado.app.utils.getTextWidthsCompat
@@ -67,7 +68,6 @@ import kotlinx.coroutines.launch
 import java.util.LinkedList
 import java.util.Locale
 import kotlin.math.roundToInt
-import android.util.Base64
 import android.util.Size
 import androidx.core.text.HtmlCompat
 import io.legado.app.constant.AppPattern.noWordCountRegex
@@ -440,18 +440,25 @@ class TextChapterLayout(
 
         val isTextImageStyle = imageStyle.equals(Book.imgStyleText, true)
 
+        val betweenParagraphIllustrations = illustrations.filter {
+            it.anchorType == BookIllustration.ANCHOR_BETWEEN_PARAGRAPHS
+        }
         val sb = StringBuffer()
         var isSetTypedImage = false
         var wordCount = 0
         contents.forEachIndexed { contentIndex, content ->
             currentCoroutineContext().ensureActive()
             currentSourceIndex = bookContent.sourceIndexes.getOrElse(contentIndex) { contentIndex }
-            if (contentIndex > 0) {
+            if (
+                contentIndex > 0 &&
+                betweenParagraphIllustrations.isNotEmpty() &&
+                placedIllustrationIds.size < betweenParagraphIllustrations.size
+            ) {
                 insertIllustrationsAtBoundary(
                     book = book,
                     frontText = contents[contentIndex - 1],
                     backText = content,
-                    illustrations = illustrations,
+                    illustrations = betweenParagraphIllustrations,
                     placedIds = placedIllustrationIds
                 )
             }
@@ -666,13 +673,13 @@ class TextChapterLayout(
         illustrations: List<BookIllustration>,
         placedIds: MutableSet<Long>
     ) {
+        if (illustrations.isEmpty()) return
         val boundaryPos = currentChapterOffset()
         val frontFp = IllustrationHelp.fingerprint(frontText, false)
         val backFp = IllustrationHelp.fingerprint(backText, true)
         val matched = illustrations
             .filter {
                 it.id !in placedIds &&
-                    it.anchorType == BookIllustration.ANCHOR_BETWEEN_PARAGRAPHS &&
                     (
                         (
                             it.frontFingerprint.isNotBlank() &&
@@ -2749,9 +2756,15 @@ class TextChapterLayout(
             } else {
                 source
             }
-            decodeDataSvg(sourcePart)
-                ?.let { extractForcedBubbleTextFromSvg(it) }
-                ?.let { return it }
+            val comma = sourcePart.indexOf(',')
+            if (comma >= 0 && sourcePart.substring(0, comma).startsWith("data:image/svg+xml", ignoreCase = true)) {
+                val svg = if (sourcePart.substring(0, comma).contains(";base64", ignoreCase = true)) {
+                    sourcePart.decodeBase64DataUrlBytes()?.toString(Charsets.UTF_8)
+                } else {
+                    runCatching { Uri.decode(sourcePart.substring(comma + 1)) }.getOrNull()
+                }
+                svg?.let { extractForcedBubbleTextFromSvg(it) }?.let { return it }
+            }
         }
         return null
     }
@@ -2799,18 +2812,6 @@ class TextChapterLayout(
 
     private fun Map<String, String>.valueIgnoreCase(key: String): String? {
         return entries.firstOrNull { it.key.equals(key, ignoreCase = true) }?.value
-    }
-
-    private fun decodeDataSvg(sourcePart: String): String? {
-        if (!sourcePart.startsWith("data:image/svg+xml", ignoreCase = true)) return null
-        return runCatching {
-            if (sourcePart.contains(";base64,", ignoreCase = true)) {
-                val base64 = sourcePart.substringAfter(";base64,")
-                String(Base64.decode(base64, Base64.DEFAULT), Charsets.UTF_8)
-            } else {
-                Uri.decode(sourcePart.substringAfter(",", ""))
-            }
-        }.getOrNull()
     }
 
     private fun parseParagraphBubble(src: String): ImageInfo {

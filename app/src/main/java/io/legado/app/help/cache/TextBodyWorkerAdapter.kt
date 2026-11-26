@@ -31,20 +31,26 @@ internal class TextBodyWorkerAdapter(
             workerPort.skip(lease, CacheTaskSkipReason.ALREADY_RUNNING, detail)
             return
         }
-        runnableUnits
-            .forEach { unit ->
-                workerPort.updateUnit(lease, unit.key, CacheUnitStatus.RUNNING)
+        try {
+            runnableUnits
+                .forEach { unit ->
+                    workerPort.updateUnit(lease, unit.key, CacheUnitStatus.RUNNING)
+                }
+            ranges(runnableUnits.map { it.key.chapterIndex }).forEach { (start, end) ->
+                CacheBook.start(
+                    appCtx,
+                    book,
+                    start,
+                    end,
+                    coordinatorSessionId = lease.sessionId,
+                    coordinatorTaskId = lease.taskId,
+                    coordinatorGeneration = lease.generation,
+                )
             }
-        ranges(runnableUnits.map { it.key.chapterIndex }).forEach { (start, end) ->
-            CacheBook.start(
-                appCtx,
-                book,
-                start,
-                end,
-                coordinatorSessionId = lease.sessionId,
-                coordinatorTaskId = lease.taskId,
-                coordinatorGeneration = lease.generation,
-            )
+        } catch (e: Throwable) {
+            registry.remove(lease.sessionId, lease.taskId)
+            CacheBook.stop(book.bookUrl)
+            throw e
         }
     }
 

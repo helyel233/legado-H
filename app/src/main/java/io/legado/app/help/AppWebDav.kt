@@ -542,16 +542,22 @@ object AppWebDav {
                 return@forEach
             }
             getBookProgress(book)?.let { bookProgress ->
-                if (bookProgress.durChapterIndex > book.durChapterIndex
-                    || (bookProgress.durChapterIndex == book.durChapterIndex
-                            && bookProgress.durChapterPos > book.durChapterPos)
-                ) {
-                    book.durChapterIndex = bookProgress.durChapterIndex
-                    book.durChapterPos = bookProgress.durChapterPos
-                    book.durChapterTitle = bookProgress.durChapterTitle
-                    book.durChapterTime = bookProgress.durChapterTime
-                    book.syncTime = System.currentTimeMillis()
-                    appDb.bookDao.update(book)
+                appDb.runInTransaction {
+                    val latest = appDb.bookDao.getBook(book.bookUrl) ?: return@runInTransaction
+                    if (webDavFile.lastModify <= latest.syncTime) return@runInTransaction
+                    if (bookProgress.durChapterIndex > latest.durChapterIndex
+                        || (bookProgress.durChapterIndex == latest.durChapterIndex
+                                && bookProgress.durChapterPos > latest.durChapterPos)
+                    ) {
+                        appDb.bookDao.updateSyncedProgress(
+                            bookUrl = latest.bookUrl,
+                            durChapterIndex = bookProgress.durChapterIndex,
+                            durChapterPos = bookProgress.durChapterPos,
+                            durChapterTitle = bookProgress.durChapterTitle,
+                            durChapterTime = bookProgress.durChapterTime,
+                            syncTime = System.currentTimeMillis()
+                        )
+                    }
                 }
             }
         }

@@ -84,6 +84,8 @@ import androidx.core.net.toUri
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
 
+private val SAFE_DOWNLOAD_TYPE_REGEX = Regex("^[A-Za-z0-9]{1,16}$")
+
 /**
  * js扩展类, 在js中通过java变量调用
  * 添加方法，请更新文档/legado/app/src/main/assets/help/JsHelp.md
@@ -551,12 +553,21 @@ interface JsExtensions : JsEncodeUtils {
     fun downloadFile(url: String): String {
         rhinoContextOrNull?.ensureActive()
         val analyzeUrl = AnalyzeUrl(url, dnsScope = getNetworkDnsScope(), source = getSource(), coroutineContext = context)
-        val type = analyzeUrl.type ?: UrlUtil.getSuffix(url)
-        val path = FileUtils.getPath(
-            File(FileUtils.getCachePath()),
-            "${MD5Utils.md5Encode16(url)}.${type}"
-        )
-        val file = File(path)
+        val explicitType = analyzeUrl.type
+        val type = if (explicitType != null) {
+            if (!SAFE_DOWNLOAD_TYPE_REGEX.matches(explicitType)) {
+                throw IllegalArgumentException("Invalid download file type")
+            }
+            explicitType
+        } else {
+            val suffix = UrlUtil.getSuffix(url)
+            if (SAFE_DOWNLOAD_TYPE_REGEX.matches(suffix)) suffix else "tmp"
+        }
+        val cacheDir = FileUtils.createFolderIfNotExist(FileUtils.getCachePath())
+        val file = File(cacheDir, "${MD5Utils.md5Encode16(url)}.${type}")
+        if (!file.isSameOrSubFileOf(cacheDir)) {
+            throw IllegalArgumentException("Invalid download path")
+        }
         file.delete()
         analyzeUrl.getInputStream().use { iStream ->
             file.createFileReplace()
@@ -569,7 +580,7 @@ interface JsExtensions : JsEncodeUtils {
                 throw e
             }
         }
-        return path.substring(FileUtils.getCachePath().length)
+        return file.path.substring(cacheDir.path.length)
     }
 
 
@@ -588,18 +599,21 @@ interface JsExtensions : JsEncodeUtils {
         rhinoContextOrNull?.ensureActive()
         val type = AnalyzeUrl(url, dnsScope = getNetworkDnsScope(), source = getSource(), coroutineContext = context).type
             ?: return ""
-        val path = FileUtils.getPath(
-            FileUtils.createFolderIfNotExist(FileUtils.getCachePath()),
-            "${MD5Utils.md5Encode16(url)}.${type}"
-        )
-        val file = File(path)
+        if (!SAFE_DOWNLOAD_TYPE_REGEX.matches(type)) {
+            throw IllegalArgumentException("Invalid download file type")
+        }
+        val cacheDir = FileUtils.createFolderIfNotExist(FileUtils.getCachePath())
+        val file = File(cacheDir, "${MD5Utils.md5Encode16(url)}.${type}")
+        if (!file.isSameOrSubFileOf(cacheDir)) {
+            throw IllegalArgumentException("Invalid download path")
+        }
         file.createFileReplace()
         HexUtil.decodeHex(content).let {
             if (it.isNotEmpty()) {
                 file.writeBytes(it)
             }
         }
-        return path.substring(FileUtils.getCachePath().length)
+        return file.path.substring(cacheDir.path.length)
     }
 
     /**

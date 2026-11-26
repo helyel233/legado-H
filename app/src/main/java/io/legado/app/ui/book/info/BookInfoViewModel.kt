@@ -557,10 +557,17 @@ class BookInfoViewModel(application: Application) : BaseViewModel(application) {
             }
             if (inBookshelf) {
                 book.removeType(BookType.updateError)
+                val oldBook = bookData.value
                 appDb.runInTransaction {
-                    bookData.value?.delete()
-                    appDb.bookDao.insert(book)
-                    appDb.bookChapterDao.insert(*toc.toTypedArray())
+                    if (oldBook != null) {
+                        if (ReadBook.book?.bookUrl == oldBook.bookUrl) {
+                            ReadBook.book = null
+                        }
+                        appDb.bookDao.replace(oldBook, book)
+                    } else {
+                        appDb.bookDao.upsertWithoutCascade(book)
+                    }
+                    appDb.bookChapterDao.replaceByBook(book.bookUrl, toc)
                 }
             }
             bookData.postValue(book)

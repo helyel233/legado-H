@@ -740,15 +740,22 @@ object AppCloudStorage {
             val file = map[getProgressFileName(book.name, book.author)] ?: return@forEach
             if (file.lastModify <= book.syncTime) return@forEach
             getBookProgress(book)?.let { progress ->
-                if (progress.durChapterIndex > book.durChapterIndex ||
-                    (progress.durChapterIndex == book.durChapterIndex && progress.durChapterPos > book.durChapterPos)
-                ) {
-                    book.durChapterIndex = progress.durChapterIndex
-                    book.durChapterPos = progress.durChapterPos
-                    book.durChapterTitle = progress.durChapterTitle
-                    book.durChapterTime = progress.durChapterTime
-                    book.syncTime = System.currentTimeMillis()
-                    appDb.bookDao.update(book)
+                appDb.runInTransaction {
+                    val latest = appDb.bookDao.getBook(book.bookUrl) ?: return@runInTransaction
+                    if (file.lastModify <= latest.syncTime) return@runInTransaction
+                    if (progress.durChapterIndex > latest.durChapterIndex ||
+                        (progress.durChapterIndex == latest.durChapterIndex &&
+                            progress.durChapterPos > latest.durChapterPos)
+                    ) {
+                        appDb.bookDao.updateSyncedProgress(
+                            bookUrl = latest.bookUrl,
+                            durChapterIndex = progress.durChapterIndex,
+                            durChapterPos = progress.durChapterPos,
+                            durChapterTitle = progress.durChapterTitle,
+                            durChapterTime = progress.durChapterTime,
+                            syncTime = System.currentTimeMillis()
+                        )
+                    }
                 }
             }
         }

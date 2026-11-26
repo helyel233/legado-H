@@ -4,6 +4,10 @@
 
     <uses-sdk tools:overrideLibrary="androidx.compose.animation,androidx.compose.animation.core,androidx.compose.foundation,androidx.compose.foundation.layout,androidx.compose.material.ripple,androidx.compose.material3,androidx.compose.runtime,androidx.compose.runtime.annotation,androidx.compose.runtime.retain,androidx.compose.runtime.saveable,androidx.compose.ui,androidx.compose.ui.geometry,androidx.compose.ui.graphics,androidx.compose.ui.text,androidx.compose.ui.tooling,androidx.compose.ui.tooling.data,androidx.compose.ui.tooling.preview,androidx.compose.ui.unit,androidx.compose.ui.util,androidx.window,androidx.window.core,androidx.navigationevent,androidx.navigationevent.compose,com.qmdeve.liquidglass,top.yukonga.miuix.kmp" />
 
+    <permission
+        android:name="${applicationId}.permission.READER_PROVIDER"
+        android:protectionLevel="signature" />
+
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Android 17(API 37) 起局域网访问受「本地网络保护」限制：未声明并申请该权限时，
          系统静默丢弃局域网数据包，表现为连接超时（Web 服务只能本机访问、本地 AI 连不上） -->
@@ -809,7 +813,7 @@
             android:authorities="${applicationId}.readerProvider"
             android:enabled="true"
             android:exported="true"
-            tools:ignore="ExportedContentProvider" />
+            android:permission="${applicationId}.permission.READER_PROVIDER" />
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileProvider"

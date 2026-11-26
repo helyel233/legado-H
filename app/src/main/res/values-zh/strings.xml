@@ -2871,6 +2871,11 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="cache_manage_review_retry_unavailable">请先开启缓存评论</string>
     <string name="cache_manage_review_retry_unsupported">当前书籍不支持评论缓存重试</string>
     <string name="cache_manage_review_retry_in_progress">评论缓存任务正在后台执行，请稍候</string>
+    <string name="cache_manage_review_retry_in_progress_title">评论缓存进行中</string>
+    <string name="cache_manage_review_retry_in_progress_message">后台已有评论缓存任务正在进行（已完成 %1$d/%2$d 章），是否取消旧任务并立即重新重试？</string>
+    <string name="cache_manage_review_retry_force_restart">取消并重试</string>
+    <string name="cache_manage_review_retry_keep_waiting">继续等待</string>
+    <string name="cache_manage_review_retry_stopping">旧任务仍在停止中，请等几秒再点重试</string>
     <string name="cache_manage_review_retry_nothing">当前没有可重试的失败项</string>
     <string name="cache_manage_review_preheated">已预热</string>
     <string name="cache_manage_review_retry_failed">评论快照重试失败</string>

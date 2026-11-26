@@ -10,7 +10,6 @@ import io.legado.app.model.localBook.EpubFile
 import io.legado.app.ui.book.read.page.entities.column.ImageColumn
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
 import io.legado.app.ui.book.read.page.provider.TextChapterLayout
-import io.legado.app.utils.fastBinarySearchBy
 import kotlinx.coroutines.CoroutineScope
 import org.jsoup.parser.Parser
 import java.util.concurrent.ConcurrentHashMap
@@ -299,7 +298,7 @@ data class TextChapter(
         if (pageSize == 0) {
             return -1
         }
-        val bIndex = pages.fastBinarySearchBy(charIndex, 0, pageSize) {
+        val bIndex = pages.binarySearchBy(charIndex, 0, pageSize) {
             it.chapterPosition
         }
         val index = abs(bIndex + 1) - 1

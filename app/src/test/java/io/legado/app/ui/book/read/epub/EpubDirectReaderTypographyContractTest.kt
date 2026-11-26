@@ -23,10 +23,10 @@ class EpubDirectReaderTypographyContractTest {
 
     @Test
     fun `native runtime gate supplies the typography capability`() {
-        val webLayer = source("src/main/java/io/legado/app/ui/book/read/epub/EpubDirectWebLayer.kt")
+        val templateInjector = source("src/main/java/io/legado/app/ui/book/read/epub/EpubWebTemplateInjector.kt")
 
-        assertTrue("EpubDirectReaderTypographyPolicy.isSupported" in webLayer)
-        assertTrue("\"__LEGADO_READER_TYPOGRAPHY__\" to readerTypography.toString()" in webLayer)
+        assertTrue("EpubDirectReaderTypographyPolicy.isSupported" in templateInjector)
+        assertTrue("\"__LEGADO_READER_TYPOGRAPHY__\" to readerTypography.toString()" in templateInjector)
     }
 
     private fun source(path: String): String {

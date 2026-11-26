@@ -404,21 +404,29 @@ object Backup {
                 .writeText(AutoTaskImport.exportJson(rules), Charsets.UTF_8)
         }
         exportVisualResourcePackages()
-        GSON.toJson(appDb.serverDao.all).let { json ->
-            aes.runCatching {
-                encryptBase64(json)
-            }.getOrDefault(json).let {
-                FileUtils.createFileIfNotExist(backupPath + File.separator + "servers.json")
-                    .writeText(it)
+        // 未设备份密码时跳过含凭据的服务器配置与 Cookie，避免以空密码或明文导出
+        if (aes.hasPassword) {
+            appDb.serverDao.all.takeIf { it.isNotEmpty() }?.let { servers ->
+                val json = GSON.toJson(servers)
+                aes.runCatching {
+                    encryptBase64(json)
+                }.onSuccess { encrypted ->
+                    FileUtils.createFileIfNotExist(backupPath + File.separator + "servers.json")
+                        .writeText(encrypted)
+                }.onFailure {
+                    AppLog.put("备份加密 servers.json 失败，已跳过", it)
+                }
             }
-        }
-        appDb.cookieDao.all.takeIf { it.isNotEmpty() }?.let { cookies ->
-            val json = GSON.toJson(cookies)
-            aes.runCatching {
-                encryptBase64(json)
-            }.getOrDefault(json).let {
-                FileUtils.createFileIfNotExist(backupPath + File.separator + "cookies.json")
-                    .writeText(it)
+            appDb.cookieDao.all.takeIf { it.isNotEmpty() }?.let { cookies ->
+                val json = GSON.toJson(cookies)
+                aes.runCatching {
+                    encryptBase64(json)
+                }.onSuccess { encrypted ->
+                    FileUtils.createFileIfNotExist(backupPath + File.separator + "cookies.json")
+                        .writeText(encrypted)
+                }.onFailure {
+                    AppLog.put("备份加密 cookies.json 失败，已跳过", it)
+                }
             }
         }
         currentCoroutineContext().ensureActive()
@@ -454,7 +462,7 @@ object Backup {
             FileUtils.createFileIfNotExist(backupPath + File.separator + BookCover.configFileName)
                 .writeText(GSON.toJson(it))
         }
-        exportSourceRuntime()
+        exportSourceRuntime(aes)
         currentCoroutineContext().ensureActive()
         // 直接以文件形式写入 config.xml：SharedPreferences 进程级缓存只在首次
         // 创建时读盘，且会残留上次备份的键（如后来开启「忽略阅读配置」前的键），
@@ -465,6 +473,8 @@ object Backup {
                 when (key) {
                     PreferKey.webDavPassword, PreferKey.s3SecretKey, PreferKey.s3SessionToken,
                     PreferKey.webServiceToken, PreferKey.aiTavilyApiKey -> {
+                        // 未设备份密码时省略敏感凭据键，禁止用空密码派生密钥加密导出
+                        if (!aes.hasPassword) return@forEach
                         // SecurePrefs 本地存储值可能是密文 blob：备份包里必须放
                         // 「明文的二次加密」，否则跨设备恢复时本机 KeyStore 密钥解不开。
                         // read 兼容明文（未迁移数据），解密失败按空处理即跳过该键。
@@ -478,13 +488,23 @@ object Backup {
                     }
 
                     PreferKey.s3Containers -> {
-                        configValues[key] = S3ContainerManager.toEncryptedBackupJson(aes) ?: value?.toString()
+                        // 未设备份密码时省略含 S3 密钥的容器配置，避免明文或空密码导出
+                        if (aes.hasPassword) {
+                            S3ContainerManager.toEncryptedBackupJson(aes)?.let {
+                                configValues[key] = it
+                            }
+                        }
                     }
 
                     PreferKey.aiProviderList, PreferKey.aiImageProviderList, PreferKey.aiMcpServerList -> {
-                        val rawJson = value?.toString().orEmpty()
-                        if (rawJson.isNotEmpty()) {
-                            configValues[key] = encodeAiSecretsForBackup(key, rawJson, aes)
+                        // 未设备份密码时省略含 AI API 密钥的配置键，避免空密码加密导出
+                        if (aes.hasPassword) {
+                            val rawJson = value?.toString().orEmpty()
+                            if (rawJson.isNotEmpty()) {
+                                encodeAiSecretsForBackup(key, rawJson, aes).takeIf { it.isNotEmpty() }?.let {
+                                    configValues[key] = it
+                                }
+                            }
                         }
                     }
 
@@ -566,8 +586,10 @@ object Backup {
         return backupSuccess
     }
 
-    private fun exportSourceRuntime() {
+    private fun exportSourceRuntime(aes: BackupAES) {
         if (BackupConfig.ignoreSourceRuntime) return
+        // 未设备份密码时跳过含源登录态的 sourceRuntime.json，避免明文导出凭据
+        if (!aes.hasPassword) return
         val sourceCaches = appDb.cacheDao.getSourceRuntimeCaches()
         val items = arrayListOf<SourceRuntimeBackupItem>()
         appDb.bookSourceDao.all.forEach { source ->
@@ -580,8 +602,15 @@ object Backup {
             buildSourceRuntimeItem("httpTts", source, sourceCaches)?.let(items::add)
         }
         if (items.isNotEmpty()) {
-            FileUtils.createFileIfNotExist(backupPath + File.separator + "sourceRuntime.json")
-                .writeText(GSON.toJson(SourceRuntimeBackup(items = items)))
+            val json = GSON.toJson(SourceRuntimeBackup(items = items))
+            aes.runCatching {
+                encryptBase64(json)
+            }.onSuccess { encrypted ->
+                FileUtils.createFileIfNotExist(backupPath + File.separator + "sourceRuntime.json")
+                    .writeText(encrypted)
+            }.onFailure {
+                AppLog.put("备份加密 sourceRuntime.json 失败，已跳过", it)
+            }
         }
     }
 
@@ -645,7 +674,7 @@ object Backup {
     }
 
     internal fun encodeAiSecretsForBackup(key: String, rawJson: String, aes: BackupAES): String {
-        if (rawJson.isBlank()) return rawJson
+        if (rawJson.isBlank() || !aes.hasPassword) return ""
         return runCatching {
             when (key) {
                 PreferKey.aiProviderList -> {
@@ -678,8 +707,8 @@ object Backup {
                 else -> rawJson
             }
         }.getOrElse {
-            AppLog.put("备份加密 AI 凭据失败($key)，保留原值\n${it.localizedMessage}", it)
-            rawJson
+            AppLog.put("备份加密 AI 凭据失败($key)，已跳过\n${it.localizedMessage}", it)
+            ""
         }
     }
 

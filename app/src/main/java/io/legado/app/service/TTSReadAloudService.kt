@@ -99,11 +99,9 @@ class TTSReadAloudService : BaseReadAloudService(), TextToSpeech.OnInitListener 
     }
 
     private fun resolveSystemTtsEngine(engineValue: String): String? {
-        val value = engineValue.trim()
-        if (value.isBlank()) return null
-        return runCatching {
-            JSONObject(value).optString("value").takeIf { it.isNotBlank() }
-        }.getOrNull() ?: value
+        return io.legado.app.help.readaloud.speech.SpeechRoute
+            .normalizeSystemEnginePackage(engineValue)
+            .takeIf { it.isNotBlank() }
     }
 
     @Synchronized

@@ -12,9 +12,14 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.webkit.RenderProcessGoneDetail
+import android.view.View
+import androidx.annotation.RequiresApi
 import com.google.gson.stream.JsonReader
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.AppLog
+import io.legado.app.constant.BookType
+import io.legado.app.data.entities.BaseSource
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
 import io.legado.app.data.entities.BookSource
@@ -25,21 +30,23 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.http.CookieManager as AppCookieManager
 import io.legado.app.help.http.okHttpClient
 import io.legado.app.help.webView.WebJsExtensions
-import io.legado.app.help.webView.WebJsExtensions.Companion.JS_INJECTION
 import io.legado.app.help.webView.WebJsExtensions.Companion.JS_URL
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameJava
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameUrl
 import io.legado.app.help.webView.WebViewPool
+import io.legado.app.help.webView.WebViewRequestLifecycle
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.GSON
 import io.legado.app.utils.configureOfflineResourceLoading
 import io.legado.app.utils.runOnUI
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
@@ -88,8 +95,13 @@ object ReviewSnapshotCapture {
         Thread(runnable, "ReviewSnapshotWorkerReaper").apply { isDaemon = true }
     }
 
+    private val bridgeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** 页面加载与评论展开共享的执行预算；不包含重内存阶段的排队或执行。 */
     private val PAGE_EXECUTION_TIMEOUT_MS get() = ReviewDownloadConfig.Number.PAGE_TIMEOUT.value.toLong()
+    /** 重内存/资源下载阶段独立看门狗，防止 evaluateJavascript 回调丢失或异常导致信号量永久卡死。 */
+    private val HEAVY_STAGE_TIMEOUT_MS get() = maxOf(PAGE_EXECUTION_TIMEOUT_MS, 90_000L)
+    private const val HEADLESS_VIEWPORT_WIDTH = 1080
+    private const val HEADLESS_VIEWPORT_HEIGHT = 1920
     /** 每轮之间的等待 */
     private val EXPAND_ROUND_INTERVAL_MS get() = ReviewDownloadConfig.Number.STABLE_INTERVAL.value.toLong()
     /** 连续几轮稳定才判定完成（含慢加载评论） */
@@ -176,6 +188,42 @@ object ReviewSnapshotCapture {
     }
 
     /**
+     * showBrowser 只给了 preloadJs、没给 html 时，先按书源规则取回页面文档作为初始 HTML。
+     *
+     * 为什么要取而不是直接 loadUrl：loadUrl 路径没有 `JS_URL` 注入，页面里的
+     * `run/ajaxAwait/postAwait` 等桥函数不存在，依赖它们的评论页会一直拉不到评论。
+     * 取回后与 showBrowser 的 html 走同一条 `loadDataWithBaseURL + spliceJsUrl` 链路。
+     *
+     * 取回内容与 showBrowser 的 html 用同一套 [isValidCommentHtml] 校验：
+     * 错误页/反爬页宁可明确失败并留日志，也不要渲染出“成功但无评论”的快照。
+     * 取消异常必须原样抛出，否则取消要等到下一个挂起点才生效。
+     */
+    private suspend fun prefetchCommentHtml(
+        url: String,
+        source: BaseSource,
+        preloadJs: String?,
+    ): String? {
+        if (preloadJs.isNullOrBlank()) return null
+        val fetched = try {
+            AnalyzeUrl(url, source = source, coroutineContext = currentCoroutineContext())
+                .getStrResponseAwait()
+                .body
+                ?.takeIf { it.isNotBlank() }
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Throwable) {
+            AppLog.put("评论页预取失败，按失败处理: URL=$url", error)
+            return null
+        }
+        if (fetched != null && !isValidCommentHtml(fetched)) {
+            throw NoStackTraceException(
+                "评论页预取内容非有效评论页（${fetched.length} 字符，疑似错误页/反爬页）"
+            )
+        }
+        return fetched
+    }
+
+    /**
      * 抓取真实评论页快照并序列化。
      * @param url 真实评论页地址（由调度器经与用户点击共用的执行逻辑解析）
      * @param initialHtml 书源 showBrowser 已用 ajax 取回的渲染 HTML；
@@ -184,7 +232,7 @@ object ReviewSnapshotCapture {
      * @param preloadJs 书源 showBrowser 传入的 preloadJs：随初始页面注入 JS bridge 环境
      */
     internal suspend fun capture(
-        bookSource: BookSource,
+        source: BaseSource,
         book: Book,
         chapter: BookChapter,
         buttonSrc: String,
@@ -196,7 +244,7 @@ object ReviewSnapshotCapture {
         incremental: Boolean = false,
     ): CaptureOutcome {
         return captureImpl(
-            bookSource,
+            source,
             book,
             url,
             initialHtml,
@@ -229,7 +277,7 @@ object ReviewSnapshotCapture {
      * 主键 = (章节 url, [ReviewSnapshotStore.CHAPTER_TAB_SRC])。
      */
     internal suspend fun captureChapterTab(
-        bookSource: BookSource,
+        source: BaseSource,
         book: Book,
         chapter: BookChapter,
         url: String,
@@ -240,7 +288,7 @@ object ReviewSnapshotCapture {
         incremental: Boolean = false,
     ): CaptureOutcome {
         return captureImpl(
-            bookSource,
+            source,
             book,
             url,
             initialHtml,
@@ -272,7 +320,7 @@ object ReviewSnapshotCapture {
      * 主键 = ([ReviewSnapshotStore.BOOK_TAB_CHAPTER_URL], [ReviewSnapshotStore.BOOK_TAB_SRC])。
      */
     internal suspend fun captureBookTab(
-        bookSource: BookSource,
+        source: BaseSource,
         book: Book,
         url: String,
         initialHtml: String?,
@@ -282,7 +330,7 @@ object ReviewSnapshotCapture {
         incremental: Boolean = false,
     ): CaptureOutcome {
         return captureImpl(
-            bookSource,
+            source,
             book,
             url,
             initialHtml,
@@ -316,7 +364,7 @@ object ReviewSnapshotCapture {
     }
 
     private suspend fun captureImpl(
-        bookSource: BookSource,
+        source: BaseSource,
         book: Book,
         url: String,
         initialHtml: String?,
@@ -328,18 +376,19 @@ object ReviewSnapshotCapture {
         incremental: Boolean = false,
         buildSnapshot: (SnapshotPageResult) -> ReviewSnapshot,
     ): CaptureOutcome {
+        val effectiveInitialHtml = initialHtml?.takeIf { it.isNotBlank() }
         val trace = diagnostics?.let {
             CacheOperationDiagnostics.begin(
                 it.forChapter(traceChapterIndex),
                 "CAPTURE",
-                CacheOperationDiagnostics.Metrics(inputChars = initialHtml?.length),
+                CacheOperationDiagnostics.Metrics(inputChars = effectiveInitialHtml?.length),
                 startAlways = true,
             )
         }
         return try {
-            val protocol = bookSource.ruleReview?.snapshotProtocol?.trim().orEmpty()
+            val protocol = (source as? BookSource)?.ruleReview?.snapshotProtocol?.trim().orEmpty()
             val engine = ReviewDownloadConfig.engine
-            val supported = ReviewDataCapture.supports(url, initialHtml, tab, protocol)
+            val supported = ReviewDataCapture.supports(url, effectiveInitialHtml, tab, protocol)
             var useData = when (engine) {
                 ReviewDownloadConfig.Engine.WEB -> false
                 ReviewDownloadConfig.Engine.AUTO -> supported
@@ -349,11 +398,11 @@ object ReviewSnapshotCapture {
                     if (!ok) AppLog.put("评论引擎=数据接口，但当前评论类型/书源不支持，已回退网页快照")
                 }
             }
-            var preparedHtml = initialHtml
+            var preparedHtml = effectiveInitialHtml
             if (useData) {
                 preparedHtml = try {
                     ReviewDataCapture.capture(
-                        url, AnalyzeUrl(url, source = bookSource).headerMap, initialHtml, trace
+                        url, AnalyzeUrl(url, source = source).headerMap, effectiveInitialHtml, trace
                     )
                 } catch (error: Throwable) {
                     if (error is CancellationException) throw error
@@ -361,14 +410,14 @@ object ReviewSnapshotCapture {
                     if (engine != ReviewDownloadConfig.Engine.AUTO) throw error
                     AppLog.put("评论数据接口抓取失败，自动模式回退网页快照", error)
                     useData = false
-                    initialHtml
+                    effectiveInitialHtml
                 }
             }
             trace?.mark(if (useData) "ENGINE_DATA" else "ENGINE_WEB", force = true)
-            if (!useData && initialHtml != null && !isValidCommentHtml(initialHtml)) {
+            if (!useData && effectiveInitialHtml != null && !isValidCommentHtml(effectiveInitialHtml)) {
                 throw NoStackTraceException(
                     "showBrowser 带回的 HTML 非有效评论页（疑似 ajax 错误/异常文本，" +
-                        "${initialHtml.length} 字符，已按失败处理）"
+                        "${effectiveInitialHtml.length} 字符，已按失败处理）"
                 )
             }
             val page = if (useData) {
@@ -380,12 +429,15 @@ object ReviewSnapshotCapture {
                     commitIfLeaseActive = commitIfLeaseActive,
                 )
             } else {
+                // 预取放在 pages 许可之外：网络请求不属于“无头 WebView 页面执行”，
+                // 不能占用抓取并发名额，也不该被页面阶段计时器统计。
+                val pageHtml = preparedHtml ?: prefetchCommentHtml(url, source, preloadJs)
                 ReviewDownloadScheduler.pages.withPermit {
                     snapshotPage(
                         url,
-                        bookSource,
+                        source,
                         book,
-                        preparedHtml,
+                        pageHtml,
                         preloadJs,
                         tab,
                         trace,
@@ -433,7 +485,7 @@ object ReviewSnapshotCapture {
      */
     private suspend fun snapshotPage(
         url: String,
-        bookSource: BookSource,
+        source: BaseSource,
         book: Book,
         initialHtml: String? = null,
         preloadJs: String? = null,
@@ -442,15 +494,18 @@ object ReviewSnapshotCapture {
         commitIfLeaseActive: ((() -> Unit) -> Boolean),
         paginationEnabled: Boolean = true,
     ): SnapshotPageResult {
-        val analyzeUrl = AnalyzeUrl(url, source = bookSource)
+        val analyzeUrl = AnalyzeUrl(url, source = source, coroutineContext = currentCoroutineContext())
         val headerMap = analyzeUrl.headerMap
+        val effectiveHtml = initialHtml?.takeIf { it.isNotBlank() }
         val resourceFailures = java.util.Collections.synchronizedList(mutableListOf<String>())
         return suspendCancellableCoroutine { block ->
             val pooledRef = AtomicReference<io.legado.app.help.webView.PooledWebView?>()
             val sessionRef = AtomicReference<SnapshotSession?>()
+            val webViewLifecycle = WebViewRequestLifecycle(bridgeScope)
             val released = java.util.concurrent.atomic.AtomicBoolean(false)
             // 唯一释放点：重复调用被 AtomicBoolean 挡住
             fun releaseOnce(discard: Boolean = false) {
+                webViewLifecycle.close()
                 val pooled = pooledRef.getAndSet(null) ?: return
                 if (released.compareAndSet(false, true)) {
                     runOnUI {
@@ -474,13 +529,27 @@ object ReviewSnapshotCapture {
                     val webView = pooled.realWebView
                     webView.onResume()
                     webView.setBackgroundColor(android.graphics.Color.WHITE)
+                    if (webView.width <= 0 || webView.height <= 0) {
+                        val widthSpec = View.MeasureSpec.makeMeasureSpec(
+                            HEADLESS_VIEWPORT_WIDTH,
+                            View.MeasureSpec.EXACTLY,
+                        )
+                        val heightSpec = View.MeasureSpec.makeMeasureSpec(
+                            HEADLESS_VIEWPORT_HEIGHT,
+                            View.MeasureSpec.EXACTLY,
+                        )
+                        webView.measure(widthSpec, heightSpec)
+                        webView.layout(0, 0, HEADLESS_VIEWPORT_WIDTH, HEADLESS_VIEWPORT_HEIGHT)
+                    }
                     webView.settings.apply {
                         configureOfflineResourceLoading(false)
                         headerMap[AppConst.UA_NAME]?.let { userAgentString = it }
                     }
                     AppCookieManager.applyToWebView(url)
-                    val jsBridge = if (!initialHtml.isNullOrBlank()) {
-                        PageJsBridge(preloadJs)
+                    val bridgeToken = WebJsExtensions.newBridgeToken()
+                    val hasInitialHtml = !effectiveHtml.isNullOrBlank()
+                    val jsBridge = if (hasInitialHtml || !preloadJs.isNullOrBlank()) {
+                        PageJsBridge(preloadJs, bridgeToken)
                     } else {
                         null
                     }
@@ -489,6 +558,7 @@ object ReviewSnapshotCapture {
                         url,
                         book,
                         jsBridge,
+                        webViewLifecycle,
                         tab,
                         diagnostics,
                         commitIfLeaseActive,
@@ -513,18 +583,37 @@ object ReviewSnapshotCapture {
                         }
                     }
                     sessionRef.set(session)
+                    if (!block.isActive) {
+                        // 取消落在 acquire 与 session 建好之间：invokeOnCancellation 当时 session 还不存在，
+                        // 只释放了 WebView；这里补一次 destroy，避免用已取消的 lease 继续驱动页面。
+                        session.destroy()
+                        return@runOnUI
+                    }
                     webView.webViewClient = session.client
-                    if (!initialHtml.isNullOrBlank()) {
-                        // 书源 showBrowser 已取回渲染 HTML：作为初始页面并注入 JS bridge 环境
-                        // （真实评论页可能依赖 window.java/run/ajaxAwait 等），
-                        // 仍走 onPageFinished → 展开/内联/序列化全流程
+                    if (hasInitialHtml) {
                         webView.addJavascriptInterface(WebCacheManager, nameCache)
-                        webView.addJavascriptInterface(bookSource, nameSource)
-                        webView.addJavascriptInterface(WebJsExtensions(bookSource, null, webView), nameJava)
+                        webView.addJavascriptInterface(source, nameSource)
+                        webView.addJavascriptInterface(
+                            WebJsExtensions(
+                                source,
+                                null,
+                                webView,
+                                BookType.text,
+                                requestLifecycle = webViewLifecycle,
+                                bridgeToken = bridgeToken,
+                            ),
+                            nameJava,
+                        )
+                        // 书源 showBrowser 已取回渲染 HTML（或带 preloadJs 预取）：
+                        // 作为初始页面并注入 JS bridge 环境（run/ajaxAwait 等），
+                        // 仍走 onPageFinished → 展开/内联/序列化全流程
                         webView.loadDataWithBaseURL(
-                            url, spliceJsUrl(initialHtml), "text/html", "utf-8", url
+                            url, spliceJsUrl(effectiveHtml!!), "text/html", "utf-8", url
                         )
                     } else {
+                        webView.removeJavascriptInterface(nameJava)
+                        webView.removeJavascriptInterface(nameSource)
+                        webView.removeJavascriptInterface(nameCache)
                         webView.loadUrl(url, headerMap)
                     }
                 } catch (e: Throwable) {
@@ -1159,13 +1248,14 @@ object ReviewSnapshotCapture {
      * 再收集图片/样式资源内联，最后序列化 HTML。
      * jsBridge 非空时（初始 HTML 模式）拦截 nameUrl 注入书源 preloadJs 桥。
      */
-    private class PageJsBridge(val preloadJs: String?)
+    private class PageJsBridge(val preloadJs: String?, val bridgeToken: String)
 
     private class SnapshotSession(
         private val webView: WebView,
         private val url: String,
         private val book: Book,
         private val jsBridge: PageJsBridge?,
+        private val webViewLifecycle: WebViewRequestLifecycle,
         private val tab: ReviewTab?,
         private val diagnostics: CacheOperationDiagnostics.Operation?,
         private val commitIfLeaseActive: ((() -> Unit) -> Boolean),
@@ -1356,16 +1446,29 @@ object ReviewSnapshotCapture {
                     request.url.toString() == nameUrl
                 ) {
                     jsInjectedForPage = true
+                    val injection = WebJsExtensions.buildInjectionScript(bridge.bridgeToken)
                     return WebResourceResponse(
                         "text/javascript",
                         "utf-8",
                         ByteArrayInputStream(
-                            ("(() => {$JS_INJECTION\n${bridge.preloadJs.orEmpty()}\n})();")
+                            ("(() => {$injection\n${bridge.preloadJs.orEmpty()}\n})();")
                                 .toByteArray()
                         )
                     )
                 }
                 return super.shouldInterceptRequest(view, request)
+            }
+
+            @RequiresApi(android.os.Build.VERSION_CODES.O)
+            override fun onRenderProcessGone(
+                view: WebView?,
+                detail: RenderProcessGoneDetail?
+            ): Boolean {
+                fail(
+                    NoStackTraceException("评论页 WebView 渲染进程已退出"),
+                    discardWebView = true,
+                )
+                return true
             }
         }
 
@@ -1443,6 +1546,7 @@ object ReviewSnapshotCapture {
 
         private fun cancelOutstandingWork(cleanup: CleanupHandles) {
             clearStageTimeout()
+            webViewLifecycle.close()
             queueWaitThread.get()?.interrupt()
             cleanup.calls.forEach { it.cancel() }
             cleanup.worker?.interrupt()
@@ -1701,12 +1805,11 @@ object ReviewSnapshotCapture {
                                 releaseHeavyStagePermit()
                             } else {
                                 diagnostics?.mark("HEAVY_STAGE_ACQUIRED")
-                                completeActiveStage()
-                                synchronized(lifecycleLock) {
-                                    activeStage = CaptureStage.HEAVY_STAGE_WORK
-                                }
-                                diagnostics?.stageStart(CaptureStage.HEAVY_STAGE_WORK.diagnosticsStage)
-                                // 网络请求各自超时；完整资源集不共享一个随数量增长必然耗尽的总时限。
+                                startTimedStage(
+                                    CaptureStage.HEAVY_STAGE_WORK,
+                                    HEAVY_STAGE_TIMEOUT_MS,
+                                    "评论快照资源与序列化",
+                                )
                                 collectAndInlineResources()
                             }
                         }
@@ -1730,7 +1833,10 @@ object ReviewSnapshotCapture {
             ) { json ->
                 mHandler.post {
                     if (destroyed) return@post
-                    val urls = parseResourceUrls(json)
+                    val urls = runCatching { parseResourceUrls(json) }.getOrElse { error ->
+                        fail(error)
+                        return@post
+                    }
                     diagnostics?.mark(
                         "RESOURCE_LIST_READY",
                         CacheOperationDiagnostics.Metrics(resourceCount = urls.resourceCount),

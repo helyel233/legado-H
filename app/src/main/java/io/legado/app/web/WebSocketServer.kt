@@ -9,9 +9,14 @@ import io.legado.app.web.socket.*
  *   与 HttpServer 的回环约束保持一致（该端口上有远程执行面的调试端点）。
  */
 class WebSocketServer(port: Int, hostname: String? = null) : NanoWSD(hostname, port) {
+    private val serverPort = port
 
     override fun openWebSocket(handshake: IHTTPSession): WebSocket? {
         WebService.serve()
+        // Reject cross-origin WebSocket handshakes from untrusted websites (CSWSH).
+        if (!WebServiceGuard.isAllowedWebSocketOrigin(handshake, serverPort)) {
+            return null
+        }
         // WebSocket 握手本质是 HTTP 升级请求，同样要走口令校验。
         // 这三个端点里 /bookSourceDebug 会让手机执行外部提供的书源规则脚本，
         // 不设防等于把远程代码执行面暴露给同网段所有人。

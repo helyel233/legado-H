@@ -99,13 +99,7 @@ android {
                 signingConfig signingConfigs.myConfig
             }
             applicationIdSuffix '.LegadoH'
-            if (getApplicationIdSuffix() == '.releaseA') {
-                manifestPlaceholders.put("app_name", "@string/app_name_a")
-            } else if (getApplicationIdSuffix() == '.releaseS') {
-                manifestPlaceholders.put("app_name", "@string/app_name_s")
-            } else {
-                manifestPlaceholders.put("app_name", "@string/app_launcher_name")
-            }
+            manifestPlaceholders.put("app_name", "@string/app_launcher_name")
 
             minifyEnabled true
             shrinkResources = true
@@ -214,9 +208,6 @@ dependencies {
     //kotlin
     //noinspection GradleDependency,DifferentStdlibGradleVersion
     implementation(libs.kotlin.stdlib)
-    //Kotlin鍙嶅皠
-    //noinspection GradleDependency,DifferentStdlibGradleVersion
-    //implementation(libs.kotlin.reflect)
 
 
     //鍗忕▼

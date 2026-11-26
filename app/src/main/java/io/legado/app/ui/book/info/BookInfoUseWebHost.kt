@@ -18,7 +18,6 @@ import io.legado.app.R
 import io.legado.app.data.entities.BaseSource
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.webView.WebJsExtensions
-import io.legado.app.help.webView.WebJsExtensions.Companion.getInjectionString
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameJava
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
@@ -37,12 +36,11 @@ internal object BookInfoUseWebHost {
             javaScriptCanOpenWindowsAutomatically = true
             setSupportMultipleWindows(true)
             mediaPlaybackRequiresUserGesture = false
-            // 同 WebViewPool：禁 content:// 读取面；file:// 保留（本地封面等资源）
             allowContentAccess = false
-            allowFileAccess = true
+            allowFileAccess = false
             textZoom = 100
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+                mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
             }
         }
     }
@@ -54,17 +52,32 @@ internal object BookInfoUseWebHost {
         if (binding == null) {
             webView.addJavascriptInterface(WebCacheManager, nameCache)
         }
-        if (source != null) {
+        val injectionScript = if (source != null) {
+            val webJsExtensions = WebJsExtensions(
+                source,
+                null,
+                webView,
+                bridgeToken = WebJsExtensions.newBridgeToken()
+            )
             webView.addJavascriptInterface(source, nameSource)
-            webView.addJavascriptInterface(WebJsExtensions(source, null, webView), nameJava)
+            webView.addJavascriptInterface(webJsExtensions, nameJava)
+            webJsExtensions.buildInjectionString()
         } else {
             webView.removeJavascriptInterface(nameSource)
             webView.removeJavascriptInterface(nameJava)
+            null
         }
-        webView.setTag(R.id.book_info_useweb_source_binding, SourceBinding(source))
+        webView.setTag(R.id.book_info_useweb_source_binding, SourceBinding(source, injectionScript))
     }
 
-    private class SourceBinding(val source: BaseSource?)
+    fun injectBridge(webView: WebView?) {
+        val script = (webView?.getTag(R.id.book_info_useweb_source_binding) as? SourceBinding)
+            ?.injectionScript
+            ?: return
+        runCatching { webView.evaluateJavascript(script, null) }
+    }
+
+    private class SourceBinding(val source: BaseSource?, val injectionScript: String?)
 
     fun attachPopupSupport(
         container: ViewGroup,
@@ -207,8 +220,6 @@ internal object BookInfoUseWebHost {
         private val context: Context
     ) : WebViewClient() {
 
-        private val jsStr = getInjectionString
-
         override fun shouldOverrideUrlLoading(
             view: WebView?,
             request: WebResourceRequest?
@@ -235,12 +246,12 @@ internal object BookInfoUseWebHost {
 
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
-            runCatching { view?.evaluateJavascript(jsStr, null) }
+            injectBridge(view)
         }
 
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
-            runCatching { view?.evaluateJavascript(jsStr, null) }
+            injectBridge(view)
         }
     }
 }

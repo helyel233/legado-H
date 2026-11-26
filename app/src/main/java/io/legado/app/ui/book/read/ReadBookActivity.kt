@@ -2,41 +2,29 @@ package io.legado.app.ui.book.read
 
 import android.annotation.SuppressLint
 import android.app.ActivityManager
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Rect
 import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.os.Build
 import android.os.Bundle
-import android.os.Handler
-import android.os.HandlerThread
 import android.os.SystemClock
-import android.util.TypedValue
 import android.view.Gravity
 import android.view.InputDevice
 import android.view.KeyEvent
 import android.view.Menu
 import android.view.MenuItem
 import android.view.MotionEvent
-import android.view.PixelCopy
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowInsets
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import android.widget.CheckBox
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.ScrollView
-import android.widget.TextView
 import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.activity.addCallback
@@ -51,7 +39,6 @@ import androidx.core.view.doOnLayout
 import androidx.core.view.doOnPreDraw
 import androidx.core.view.size
 import androidx.core.view.updateLayoutParams
-import androidx.core.widget.NestedScrollView
 import androidx.lifecycle.lifecycleScope
 import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import io.legado.app.BuildConfig
@@ -78,25 +65,13 @@ import io.legado.app.help.IntentData
 import io.legado.app.help.TTS
 import io.legado.app.help.ai.AiImageGalleryManager
 import io.legado.app.help.ai.AiReadAloudRoleState
-import io.legado.app.help.book.BookCloudEntryMode
-import io.legado.app.help.book.BookCloudEntryModeStore
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.BookImgClick
 import io.legado.app.help.book.ContentProcessor
 import io.legado.app.help.book.ParagraphRuleProcessor
 import io.legado.app.help.book.ReadMenuCustomButtonExecutor
 import io.legado.app.help.book.SourceSwitchQualityPolicy
-import io.legado.app.help.book.library.LibraryChapterManifestV3
-import io.legado.app.help.book.library.LibraryChapterPayloadV3
-import io.legado.app.help.book.library.LibraryCloudBackend
-import io.legado.app.help.book.library.LibraryCloudChapterVersion
-import io.legado.app.help.book.library.LibraryCloudCrypto
-import io.legado.app.help.book.library.LibraryCloudKeys
-import io.legado.app.help.book.library.LibraryCloudPaths
-import io.legado.app.help.book.library.LibraryCloudSession
 import io.legado.app.help.book.library.LibraryCloudState
-import io.legado.app.help.book.library.LibraryCloudSync
-import io.legado.app.help.book.library.LibraryContainerManager
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isEpub
 import io.legado.app.help.book.usesDirectReader
@@ -107,7 +82,6 @@ import io.legado.app.help.book.isLocal
 import io.legado.app.help.book.isLocalTxt
 import io.legado.app.help.book.isMobi
 import io.legado.app.help.book.removeType
-import io.legado.app.help.book.simulatedTotalChapterNum
 import io.legado.app.help.book.update
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.illustration.AudioBlockPlayer
@@ -115,7 +89,6 @@ import io.legado.app.help.illustration.IllustrationAnchor
 import io.legado.app.help.config.BubblePackageManager
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ReadTipConfig
-import io.legado.app.help.config.ShareNoteTemplateManager
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.help.readaloud.ReadAloudPlaybackState
@@ -128,12 +101,9 @@ import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
-import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
-import io.legado.app.lib.theme.applyUiTitleTypeface
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.themeCardColorOrDefault
-import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.model.ReadAloud
 import io.legado.app.model.ReadBook
 import io.legado.app.model.inheritNotShelfStateFrom
@@ -167,7 +137,6 @@ import io.legado.app.model.localBook.epubcore.template.EpubTemplateLayoutPolicy
 import io.legado.app.model.localBook.MobiFile
 import io.legado.app.receiver.NetworkChangedListener
 import io.legado.app.receiver.TimeBatteryReceiver
-import io.legado.app.ui.about.ReadRecordWidgetStore
 import io.legado.app.service.BaseReadAloudService
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.book.bookmark.BookmarkDialog
@@ -253,7 +222,6 @@ import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.dialog.BottomWebViewDialog
 import io.legado.app.ui.widget.dialog.CommentWebViewSession
 import io.legado.app.utils.ACache
-import io.legado.app.utils.BookIntroUtils
 import io.legado.app.utils.Debounce
 import io.legado.app.utils.LogUtils
 import io.legado.app.utils.NetworkUtils
@@ -274,13 +242,11 @@ import io.legado.app.utils.observeEvent
 import io.legado.app.utils.openUrl
 import io.legado.app.utils.postEvent
 import io.legado.app.utils.setLightStatusBar
-import io.legado.app.utils.share
 import io.legado.app.utils.showDialogFragment
 import io.legado.app.utils.showHelp
 import io.legado.app.utils.startActivity
 import io.legado.app.utils.startActivityForBook
 import io.legado.app.utils.spToPx
-import io.legado.app.utils.stackBlurSoftware
 import io.legado.app.utils.sysScreenOffTime
 import io.legado.app.utils.throttle
 import io.legado.app.utils.toastOnUi
@@ -301,11 +267,7 @@ import androidx.lifecycle.Lifecycle
 import com.script.rhino.runScriptWithContext
 import io.legado.app.model.analyzeRule.AnalyzeUrl.Companion.paramPattern
 import io.legado.app.ui.login.SourceLoginJsExtensions
-import java.text.DateFormat
 import java.util.Date
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
-import java.io.File
 import java.util.regex.Matcher
 import splitties.init.appCtx
 
@@ -372,56 +334,11 @@ class ReadBookActivity : BaseReadBookActivity(),
         targetWidth: Int,
         targetHeight: Int,
         blurRadius: Int
-    ): Bitmap? {
-        // EPUB 直连模式的正文是硬件加速的 ReaderWebView（EpubDirectWebLayer.kt:224
-        // currentWebView），软件 Canvas 的 draw() 拿不到 WebView 的合成结果，截出来是空白
-        // → 模糊后是纯色，面板会变成「半透明但完全平」，与本函数的目的相反。这里直接判否，
-        // 让面板逐值回落到不透明实底（= 改动前的观感，不是回归）。
-        //
-        // TODO(下一批)：改用 PixelCopy.request(window, srcRect, bitmap, listener, handler)
-        // 拿硬件合成结果（API 26+），再回到同一套降采样 + 模糊流程。
-        if (epubCoreActive) return null
-        // 用户把「玻璃模糊强度」滑杆拖到 0 时 blurRadius 也是 0。此时**不能**交回未模糊的快照：
-        // 面板会变成「26% 透出的清晰正文」（只是被 3 倍上采样软化了笔画），
-        // 与本函数要解决的「半透明但字看得见」是同一个观感缺陷。
-        // 判否 → 调用方回落实底，与全 App「模糊=0 时玻璃就是平的」一致。
-        if (blurRadius <= 0) return null
-        if (targetWidth <= 0 || targetHeight <= 0) return null
-        val source: View = binding.readView
-        if (source.width <= 0 || source.height <= 0) return null
-        val raw = runCatching {
-            Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-        }.getOrNull() ?: return null
-        val scale = targetWidth.toFloat() / source.width
-        val sampledHeight = targetHeight / scale
-        var captureError: Throwable? = null
-        val drawn = runCatching {
-            val canvas = Canvas(raw)
-            canvas.scale(scale, scale)
-            canvas.translate(0f, sampledHeight - source.height)
-            source.draw(canvas)
-        }.onFailure { captureError = it }.isSuccess
-        if (!drawn) {
-            raw.recycle()
-            // 正文快照截取失败此前被静默吞掉：用户侧只表现为「更多设置面板没有磨砂」，
-            // 代码侧没有任何痕迹（第二轮排查只能靠像素比对反推哪条分支画的）。
-            // 落一条 AppLog，下一轮直接看「我的-关于-日志」即可定位。
-            AppLog.put(
-                "readerPanelBackdrop: 捕获阅读正文失败，面板回退实底",
-                captureError
-            )
-            return null
-        }
-        val blurred = runCatching { raw.stackBlurSoftware(blurRadius) }.getOrNull()
-        if (blurred == null || blurred === raw) {
-            raw.recycle()
-            return null
-        }
-        // 模糊结果是新位图，原图不再需要。这里不跨调用缓存（每次打开面板都重截），
-        // 显式回收不会撞上「已回收位图仍被某张 drawable 引用」——那份底图只属于本次面板。
-        raw.recycle()
-        return blurred
-    }
+    ): Bitmap? = selectionShareCoordinator.captureContentBackdrop(
+        targetWidth = targetWidth,
+        targetHeight = targetHeight,
+        blurRadius = blurRadius
+    )
 
     /**
      * [captureReaderContentBackdrop] 的窗口级兜底：EPUB 直连模式（`readView` 被 GONE）
@@ -448,65 +365,11 @@ class ReadBookActivity : BaseReadBookActivity(),
         targetWidth: Int,
         targetHeight: Int,
         blurRadius: Int
-    ): Bitmap? {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
-        if (blurRadius <= 0 || targetWidth <= 0 || targetHeight <= 0) return null
-        val window = window
-        val decor = window.decorView
-        val sourceWidth = decor.width
-        val sourceHeight = decor.height
-        if (sourceWidth <= 0 || sourceHeight <= 0) return null
-
-        val raw = runCatching {
-            Bitmap.createBitmap(sourceWidth, sourceHeight, Bitmap.Config.ARGB_8888)
-        }.getOrNull() ?: return null
-        val cropped = runCatching {
-            Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-        }.getOrNull() ?: run {
-            raw.recycle()
-            return null
-        }
-
-        val worker = HandlerThread("reader-window-backdrop").apply { start() }
-        val latch = CountDownLatch(1)
-        var copyStatus = PixelCopy.ERROR_UNKNOWN
-        var result: Bitmap? = null
-        try {
-            PixelCopy.request(
-                window,
-                Rect(0, 0, sourceWidth, sourceHeight),
-                raw,
-                { status ->
-                    copyStatus = status
-                    latch.countDown()
-                },
-                Handler(worker.looper)
-            )
-            if (!latch.await(50, TimeUnit.MILLISECONDS) ||
-                copyStatus != PixelCopy.SUCCESS
-            ) {
-                AppLog.put("readerPanelBackdrop: PixelCopy 失败(status=$copyStatus)，面板回退实底")
-                return null
-            }
-            val scale = targetWidth.toFloat() / sourceWidth
-            val sampledHeight = targetHeight / scale
-            val canvas = Canvas(cropped)
-            canvas.scale(scale, scale)
-            canvas.translate(0f, sampledHeight - sourceHeight)
-            canvas.drawBitmap(raw, 0f, 0f, null)
-            val blurred = runCatching { cropped.stackBlurSoftware(blurRadius) }.getOrNull()
-            if (blurred == null || blurred === cropped) return null
-            result = blurred
-            return blurred
-        } catch (t: Throwable) {
-            AppLog.put("readerPanelBackdrop: PixelCopy 兜底异常，面板回退实底", t)
-            return null
-        } finally {
-            worker.quitSafely()
-            raw.recycle()
-            if (result !== cropped) cropped.recycle()
-        }
-    }
+    ): Bitmap? = selectionShareCoordinator.captureWindowBackdrop(
+        targetWidth = targetWidth,
+        targetHeight = targetHeight,
+        blurRadius = blurRadius
+    )
 
     private val tocActivity =
         registerForActivityResult(TocActivityResult()) {
@@ -616,7 +479,16 @@ class ReadBookActivity : BaseReadBookActivity(),
     private var tts: TTS? = null
     private var commentWebViewSession: CommentWebViewSession? = null
     private var warmUpCommentWebViewJob: Job? = null
-    private var shareNotePreviewOverlay: ShareNotePreviewOverlay? = null
+    private val selectionShareCoordinator by lazy {
+        ReaderSelectionShareCoordinator(
+            activity = this,
+            readViewProvider = { binding.readView },
+            epubReadViewProvider = { binding.epubReadView },
+            rootViewProvider = { binding.root },
+            isEpubCoreActive = { epubCoreActive },
+            epubCoreChapterTitle = { epubCoreChapterTitle() }
+        )
+    }
     @Volatile
     private var commentBrowserOpening = false
     @Volatile
@@ -758,8 +630,19 @@ class ReadBookActivity : BaseReadBookActivity(),
         )
     }
     private var epubHostOverlaySettleRunnable: Runnable? = null
-    private var libraryCloudSession: LibraryCloudSession? = null
-    private var libraryCloudState: LibraryCloudState = LibraryCloudState.DISABLED
+    private val libraryCloudController by lazy {
+        ReaderLibraryCloudController(
+            activity = this,
+            onStateChanged = { state -> binding.readMenu.updateCloudLibraryState(state) },
+            onOpenChapter = { chapterIndex ->
+                if (isEpubCoreMode()) {
+                    skipToChapter(chapterIndex)
+                } else {
+                    viewModel.openChapter(chapterIndex)
+                }
+            }
+        )
+    }
     private var lastReaderNightMode = AppConfig.isNightTheme
     private var epubLoadingWindow: EpubLoadingWindowOverlay? = null
     private var recoveryDismissedForErrorMsg: String? = null
@@ -2197,7 +2080,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 return true
             }
             R.id.menu_share_image -> {
-                showShareNotePreviewOverlay(selectedText)
+                selectionShareCoordinator.showShareNotePreviewOverlay(selectedText)
                 return true
             }
         }
@@ -2267,248 +2150,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         )
     }
 
-
-    private fun showShareNotePreviewOverlay(selection: String) {
-        val text = selection.trim()
-        if (text.isBlank()) return
-        val payload = buildShareNotePayload(text)
-        lifecycleScope.launch {
-            val entries = runCatching {
-                withContext(IO) {
-                    ShareNoteTemplateManager.loadEntries()
-                }
-            }.getOrElse {
-                AppLog.put("摘录分享模板加载失败\n${it.localizedMessage}", it, true)
-                toastOnUi(it.localizedMessage ?: getString(R.string.error))
-                return@launch
-            }
-            val entry = entries.firstOrNull { it.dirName == ShareNoteTemplateManager.lastDirName() }
-                ?: entries.firstOrNull()
-            if (entry == null) {
-                toastOnUi(R.string.share_note_no_template)
-                return@launch
-            }
-            shareNotePreviewOverlay?.dismiss()
-            shareNotePreviewOverlay = ShareNotePreviewOverlay.show(
-                activity = this@ReadBookActivity,
-                parent = binding.root,
-                entry = entry,
-                payload = payload
-            )
-        }
-    }
-
-    private fun buildShareNotePayload(text: String): ShareNoteImageRenderer.Payload {
-        val book = ReadBook.book
-        val now = Date()
-        val goalConfig = ReadRecordWidgetStore.loadGoalConfig()
-        val readTimeMs = book?.let { currentShareNoteReadTime(it, now.time) } ?: 0L
-        val readTimeText = readTimeMs.takeIf { it > 0L }?.let(::formatShareNoteDuration).orEmpty()
-        val progressText = currentShareNoteProgressText()
-        val tags = book?.shareNoteTags().orEmpty()
-        return ShareNoteImageRenderer.Payload(
-            generatedAt = DateFormat.getDateTimeInstance().format(now),
-            profile = ShareNoteImageRenderer.Profile(
-                name = goalConfig.userName.orEmpty().ifBlank { appCtx.getString(R.string.ui_book_reader) },
-                avatar = goalConfig.avatar
-            ),
-            book = ShareNoteImageRenderer.Book(
-                title = book?.name.orEmpty().ifBlank { getString(R.string.book_name) },
-                author = book?.getRealAuthor().orEmpty(),
-                description = BookIntroUtils.listIntro(book?.getDisplayIntro()).orEmpty(),
-                cover = book?.getDisplayCover()?.let(::normalizeShareNoteCoverUrl),
-                type = tags,
-                kind = tags,
-                tags = tags,
-                wordCountText = book?.wordCount.orEmpty(),
-                readTimeText = readTimeText,
-                readStatusText = readTimeText.takeIf { it.isNotBlank() }?.let { appCtx.getString(R.string.ui_book_reading, it) }.orEmpty(),
-                readProgressText = progressText,
-                readProgressPercent = parseShareNoteProgressPercent(progressText),
-                lastReadTime = book?.durChapterTime?.takeIf { it > 0L }?.let {
-                    DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
-                }.orEmpty()
-            ),
-            note = ShareNoteImageRenderer.Note(
-                createAt = DateFormat.getDateInstance().format(now),
-                sectionName = currentShareNoteChapterTitle(),
-                description = text
-            )
-        )
-    }
-
-    private fun currentShareNoteReadTime(book: Book, now: Long): Long {
-        val saved = appDb.readRecordDao.getReadTime(book.name) ?: 0L
-        val live = if (AppConfig.enableReadRecord && ReadBook.book?.bookUrl == book.bookUrl) {
-            (now - ReadBook.readStartTime).coerceAtLeast(0L)
-        } else {
-            0L
-        }
-        return saved + live
-    }
-
-    private fun formatShareNoteDuration(mss: Long): String {
-        val days = mss / (1000 * 60 * 60 * 24)
-        val hours = mss % (1000 * 60 * 60 * 24) / (1000 * 60 * 60)
-        val minutes = mss % (1000 * 60 * 60) / (1000 * 60)
-        val seconds = mss % (1000 * 60) / 1000
-        val d = if (days > 0) getString(R.string.duration_day, days) else ""
-        val h = if (hours > 0) getString(R.string.duration_hour, hours) else ""
-        val m = if (minutes > 0) getString(R.string.duration_minute, minutes) else ""
-        val s = if (seconds > 0 && days == 0L && hours == 0L) {
-            getString(R.string.duration_second, seconds)
-        } else {
-            ""
-        }
-        return "$d$h$m$s".ifBlank { getString(R.string.duration_zero) }
-    }
-
-    private fun currentShareNoteProgressText(): String {
-        return runCatching {
-            if (epubCoreActive) {
-                val page = binding.epubReadView.currentPage() ?: return@runCatching ""
-                val chapterSize = currentShareNoteChapterSize()
-                val chapterPageIndex = binding.epubReadView.currentChapterPageIndex()
-                val chapterPageCount = binding.epubReadView.currentChapterPageCount()
-                shareNoteProgressText(
-                    chapterIndex = page.chapterIndex,
-                    chapterSize = chapterSize,
-                    pageIndex = chapterPageIndex,
-                    pageSize = chapterPageCount
-                )
-            } else {
-                currentTextShareNoteProgressText()
-            }
-        }.getOrDefault("")
-    }
-
-    private fun currentTextShareNoteProgressText(): String {
-        val chapterSize = currentShareNoteChapterSize()
-        if (chapterSize <= 0) return ""
-        val textChapter = ReadBook.curTextChapter
-        val currentPage = runCatching { binding.readView.curPage.textPage }.getOrNull()
-        val chapterIndex = firstValidChapterIndex(
-            chapterSize,
-            textChapter?.chapter?.index,
-            ReadBook.durChapterIndex,
-            ReadBook.book?.durChapterIndex,
-            currentPage?.takeIf { it.chapterSize > 0 }?.chapterIndex
-        )
-        val pageSize = textChapter?.pageSize?.takeIf { it > 0 }
-            ?: currentPage?.pageSize?.takeIf { it > 0 }
-            ?: 0
-        val pageIndex = textChapter
-            ?.getPageIndexByCharIndex(ReadBook.durChapterPos)
-            ?.takeIf { it >= 0 }
-            ?: currentPage?.index?.takeIf { it >= 0 }
-            ?: 0
-        return shareNoteProgressText(chapterIndex, chapterSize, pageIndex, pageSize)
-    }
-
-    private fun currentShareNoteChapterSize(): Int {
-        return ReadBook.simulatedChapterSize.takeIf { it > 0 }
-            ?: ReadBook.chapterSize.takeIf { it > 0 }
-            ?: ReadBook.book?.simulatedTotalChapterNum()?.takeIf { it > 0 }
-            ?: ReadBook.book?.totalChapterNum?.takeIf { it > 0 }
-            ?: 0
-    }
-
-    private fun firstValidChapterIndex(chapterSize: Int, vararg candidates: Int?): Int {
-        return candidates.firstOrNull { it != null && it in 0 until chapterSize } ?: 0
-    }
-
-    private fun parseShareNoteProgressPercent(progressText: String): Float? {
-        val valueText = shareNoteProgressPercentRegex.find(progressText)
-            ?.groupValues
-            ?.getOrNull(1)
-            ?: progressText.trim()
-        return valueText.replace(',', '.')
-            .toFloatOrNull()
-            ?.div(100f)
-            ?.coerceIn(0f, 1f)
-    }
-
-    private fun shareNoteProgressText(
-        chapterIndex: Int,
-        chapterSize: Int,
-        pageIndex: Int,
-        pageSize: Int
-    ): String {
-        if (chapterSize <= 0) return ""
-        val safeChapterIndex = chapterIndex.coerceIn(0, chapterSize - 1)
-        val safePageSize = pageSize.coerceAtLeast(0)
-        val safePageIndex = if (safePageSize > 0) {
-            pageIndex.coerceIn(0, safePageSize - 1)
-        } else {
-            0
-        }
-        val progress = if (safePageSize <= 0) {
-            (safeChapterIndex + 1.0) / chapterSize.toDouble()
-        } else {
-            safeChapterIndex.toDouble() / chapterSize.toDouble() +
-                (safePageIndex + 1.0) / safePageSize.toDouble() / chapterSize.toDouble()
-        }.coerceIn(0.0, 1.0)
-        return java.text.DecimalFormat("0.0%").format(progress)
-    }
-
-    private fun Book.shareNoteTags(): String {
-        return customTag?.trim()?.takeIf { it.isNotBlank() }
-            ?: kind?.trim()?.takeIf { it.isNotBlank() }
-            ?: when {
-                isAudio -> appCtx.getString(R.string.audio)
-                isEpub -> "EPUB"
-                isMobi -> "MOBI"
-                isLocalTxt -> "TXT"
-                isLocal -> getString(R.string.local)
-                else -> ""
-            }
-    }
-
-    private fun shareSelectionAsNoteImage(
-        text: String,
-        entry: ShareNoteTemplateManager.Entry
-    ) {
-        val payload = buildShareNotePayload(text)
-        lifecycleScope.launch {
-            toastOnUi(appCtx.getString(R.string.ui_book_generating_share_image))
-            kotlin.runCatching {
-                ShareNoteImageRenderer.renderShareImage(this@ReadBookActivity, entry, payload)
-            }.onSuccess { file ->
-                kotlin.runCatching {
-                    share(file, "image/png")
-                }.onFailure {
-                    toastOnUi(it.localizedMessage ?: getString(R.string.error))
-                }
-            }.onFailure {
-                AppLog.put("摘录分享图片生成失败\n${it.localizedMessage}", it, true)
-                toastOnUi(it.localizedMessage ?: getString(R.string.error))
-            }
-        }
-    }
-
-    private fun currentShareNoteChapterTitle(): String {
-        if (epubCoreActive) {
-            epubCoreChapterTitle()?.takeIf { it.isNotBlank() }?.let { return it }
-        }
-        return ReadBook.curTextChapter?.chapter?.title
-            ?: ReadBook.book?.durChapterTitle
-            ?: ""
-    }
-
-    private fun normalizeShareNoteCoverUrl(raw: String): String? {
-        val value = raw.trim()
-        if (value.isBlank()) return null
-        if (value.startsWith("http", ignoreCase = true) ||
-            value.startsWith("file:", ignoreCase = true) ||
-            value.startsWith("content:", ignoreCase = true) ||
-            value.startsWith("data:", ignoreCase = true)
-        ) {
-            return value
-        }
-        return runCatching {
-            File(value).takeIf { it.exists() }?.toURI()?.toString()
-        }.getOrNull() ?: value
-    }
 
     private fun currentSelectedParagraphForImage(): SelectedParagraphForImage? {
         val textChapter = ReadBook.curTextChapter ?: return null
@@ -2708,13 +2349,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             upMenu()
             binding.readMenu.upBookView()
             binding.readAloudPlayerPanel.onChapterContentChanged()
-            if (BookCloudEntryModeStore.get(ReadBook.book?.bookUrl.orEmpty()) == BookCloudEntryMode.LIBRARY_CHAPTER) {
-                refreshLibraryCloudSession(refresh = false, silent = true)
-            } else {
-                libraryCloudSession = null
-                libraryCloudState = LibraryCloudState.DISABLED
-                binding.readMenu.updateCloudLibraryState(libraryCloudState)
-            }
+            libraryCloudController.onMenuViewUpdated()
         }
     }
 
@@ -3487,7 +3122,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 timeLabel = AppConst.timeFormat.format(Date(System.currentTimeMillis())),
                 batteryLabel = "${epubReaderBatteryLevel.coerceIn(0, 100)}%",
                 batteryPercentageLabel = "${epubReaderBatteryLevel.coerceIn(0, 100)}%",
-                chapterCount = currentShareNoteChapterSize()))
+                chapterCount = selectionShareCoordinator.currentChapterSize()))
     }
 
     private fun scheduleEpubCoreLoadTimeout(
@@ -4076,7 +3711,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 timeLabel = AppConst.timeFormat.format(Date(System.currentTimeMillis())),
                 batteryLabel = batteryLabel,
                 batteryPercentageLabel = batteryLabel,
-                chapterCount = currentShareNoteChapterSize(),
+                chapterCount = selectionShareCoordinator.currentChapterSize(),
                 contentRevision = ++epubReaderChromeContentRevision
             )
         )
@@ -4685,8 +4320,16 @@ class ReadBookActivity : BaseReadBookActivity(),
                     oldBook?.migrateTo(book, toc)
                     book.inheritNotShelfStateFrom(oldBook)
                     book.removeType(BookType.updateError)
-                    oldBook?.delete()
-                    appDb.bookDao.insert(book)
+                    appDb.runInTransaction {
+                        if (oldBook != null) {
+                            if (ReadBook.book?.bookUrl == oldBook.bookUrl) {
+                                ReadBook.book = null
+                            }
+                            appDb.bookDao.replace(oldBook, book)
+                        } else {
+                            appDb.bookDao.upsertWithoutCascade(book)
+                        }
+                    }
                 }
                 startActivityForBook(book) {
                     putExtra("inBookshelf", resolveStoredBookshelfState(book))
@@ -4998,507 +4641,16 @@ class ReadBookActivity : BaseReadBookActivity(),
         showDialogFragment<MoreConfigDialog>()
     }
 
-    override fun isLibraryCloudEnabled(): Boolean {
-        val book = ReadBook.book ?: return false
-        if (book.isLocal) return false
-        return when (BookCloudEntryModeStore.get(book.bookUrl)) {
-            BookCloudEntryMode.CACHE_PACKAGE -> false
-            BookCloudEntryMode.LIBRARY_CHAPTER ->
-                LibraryContainerManager.readContainer() != null
-        }
-    }
+    override fun isLibraryCloudEnabled(): Boolean = libraryCloudController.isEnabled()
 
-    override fun libraryCloudState(): LibraryCloudState = libraryCloudState
+    override fun libraryCloudState(): LibraryCloudState = libraryCloudController.state
 
     override fun showLibraryCloudChapters(refresh: Boolean) {
-        val book = ReadBook.book ?: return
-        if (BookCloudEntryModeStore.get(book.bookUrl) == BookCloudEntryMode.CACHE_PACKAGE) {
-            return
-        }
-        val chapterIndex = ReadBook.durChapterIndex
-        lifecycleScope.launch {
-            val session = withContext(IO) {
-                if (refresh) {
-                    LibraryCloudSync.refreshSession(book)
-                } else {
-                    currentLibraryCloudSession() ?: LibraryCloudSync.openSession(book)
-                }
-            }
-            libraryCloudSession = session
-            libraryCloudState = session.state
-            binding.readMenu.updateCloudLibraryState(session.state)
-            if (session.state != LibraryCloudState.READY) {
-                toastOnUi(libraryCloudStateMessage(session))
-                return@launch
-            }
-            val currentChapter = withContext(IO) {
-                appDb.bookChapterDao.getChapter(book.bookUrl, chapterIndex)
-            } ?: run {
-                toastOnUi(appCtx.getString(R.string.ui_book_current_chapter_not_found))
-                return@launch
-            }
-            val versions = withContext(IO) {
-                session.listChapterVersions(currentChapter)
-            }
-            if (versions.isEmpty()) {
-                toastOnUi(appCtx.getString(R.string.ui_book_no_cloud_cache_matches_current))
-                return@launch
-            }
-            showLibraryCloudChapterDialog(book, session, currentChapter, versions)
-        }
+        libraryCloudController.showChapters(refresh)
     }
 
     override fun showLibraryCloudDebug() {
-        if (!BuildConfig.DEBUG) return
-        val book = ReadBook.book ?: return
-        val chapterIndex = ReadBook.durChapterIndex
-        lifecycleScope.launch {
-            val chapter = withContext(IO) {
-                appDb.bookChapterDao.getChapter(book.bookUrl, chapterIndex)
-            }
-            val container = LibraryContainerManager.readContainer()
-            val v3Debug = if (chapter != null && container != null) {
-                withContext(IO) {
-                    val v3SharedBookKey = LibraryCloudKeys.sharedBookKey(book)
-                    val v3ExactBookKey = LibraryCloudKeys.bookKey(book)
-                    val v3ChapterKey = LibraryCloudKeys.libraryChapterKey(chapter)
-                    val currentPaths = listOf(
-                        LibraryCloudPaths.v3CurrentPath(v3SharedBookKey, v3ChapterKey),
-                        LibraryCloudPaths.v3CurrentPath(v3ExactBookKey, v3ChapterKey)
-                    ).distinct()
-                    val manifestPaths = listOf(
-                        LibraryCloudPaths.v3ManifestPath(v3ExactBookKey, v3ChapterKey),
-                        LibraryCloudPaths.v3ManifestPath(v3SharedBookKey, v3ChapterKey)
-                    ).distinct()
-                    val backend = LibraryCloudBackend(container)
-                    suspend fun currentState(path: String): String {
-                        return runCatching {
-                            val bytes = backend.downloadOrNull(path)
-                                ?: return@runCatching "$path = missing"
-                            val json = LibraryCloudCrypto.decodeString(bytes, container.password)
-                            val payload = GSON.fromJsonObject<LibraryChapterPayloadV3>(json).getOrThrow()
-                            "$path = exists source=${payload.sourceName.ifBlank { payload.sourceUrl }} hash=${payload.contentHash}"
-                        }.getOrElse {
-                            "$path = error ${it.localizedMessage}"
-                        }
-                    }
-                    suspend fun manifestState(path: String): String {
-                        return runCatching {
-                            val bytes = backend.downloadOrNull(path)
-                                ?: return@runCatching "$path = missing"
-                            val json = LibraryCloudCrypto.decodeString(bytes, container.password)
-                            val manifest = GSON.fromJsonObject<LibraryChapterManifestV3>(json).getOrThrow()
-                            "$path = exists variants=${manifest.variants.size}"
-                        }.getOrElse {
-                            "$path = error ${it.localizedMessage}"
-                        }
-                    }
-                    runCatching {
-                        val currentLines = currentPaths.map { currentState(it) }
-                        val manifestLines = manifestPaths.map { manifestState(it) }
-                        buildString {
-                            appendLine("v3CurrentState:")
-                            currentLines.forEach { appendLine(it) }
-                            appendLine("v3ManifestState:")
-                            manifestLines.forEach { appendLine(it) }
-                        }.trimEnd()
-                    }.getOrElse {
-                        "v3State=error ${it.localizedMessage}"
-                    }
-                }
-            } else {
-                "v3State=not_checked"
-            }
-            val message = buildString {
-                appendLine("book.name=${book.name}")
-                appendLine("book.author=${book.getRealAuthor()}")
-                appendLine("book.bookUrl=${book.bookUrl}")
-                appendLine("book.origin=${book.origin}")
-                appendLine("book.originName=${book.originName}")
-                appendLine()
-                appendLine("exactBookKey=${LibraryCloudKeys.bookKey(book)}")
-                appendLine("sharedBookKey=${LibraryCloudKeys.sharedBookKey(book)}")
-                appendLine("allBookKeys=${LibraryCloudKeys.bookKeys(book).joinToString()}")
-                appendLine("normalizedBookName=${LibraryCloudKeys.normalizeBookName(book.name)}")
-                appendLine()
-                appendLine("container=${LibraryContainerManager.displayLabel(container)}")
-                appendLine("containerId=${container?.id.orEmpty()}")
-                appendLine("containerPrefix=${container?.container?.prefix.orEmpty()}")
-                appendLine()
-                if (chapter == null) {
-                    appendLine("chapter=null")
-                } else {
-                    appendLine("chapter.index=${chapter.index}")
-                    appendLine("chapter.title=${chapter.title}")
-                    appendLine("chapter.url=${chapter.url}")
-                    appendLine("chapter.identity=${chapter.contentCacheIdentity()}")
-                    appendLine("canonicalTitle=${LibraryCloudKeys.canonicalTextForKey(chapter.title)}")
-                    appendLine("titleCodePoints=${LibraryCloudKeys.debugCodePoints(chapter.title)}")
-                    appendLine("chapterKey=${LibraryCloudKeys.chapterKey(chapter)}")
-                    appendLine("titleKey=${LibraryCloudKeys.titleKey(chapter)}")
-                    appendLine("relaxedTitle=${LibraryCloudKeys.relaxedTitle(chapter.title)}")
-                    appendLine("relaxedTitleKey=${LibraryCloudKeys.relaxedTitleKey(chapter)}")
-                    appendLine("ordinalTitle=${LibraryCloudKeys.chapterOrdinal(chapter.title).orEmpty()}")
-                    appendLine("ordinalTitleKey=${LibraryCloudKeys.ordinalTitleKey(chapter).orEmpty()}")
-                    appendLine("matchKeys=${LibraryCloudKeys.matchKeys(chapter).joinToString { "${it.kind}:${it.key}" }}")
-                    appendLine("sourceKey=${LibraryCloudKeys.sourceKey(book.origin)}")
-                    appendLine()
-                    val v3SharedBookKey = LibraryCloudKeys.sharedBookKey(book)
-                    val v3ExactBookKey = LibraryCloudKeys.bookKey(book)
-                    val v3ChapterKey = LibraryCloudKeys.libraryChapterKey(chapter)
-                    val sourceKey = LibraryCloudKeys.sourceKey(book.origin)
-                    appendLine("v3SharedBookKey=$v3SharedBookKey")
-                    appendLine("v3ExactBookKey=$v3ExactBookKey")
-                    appendLine("v3ChapterKey=$v3ChapterKey")
-                    appendLine("v3SharedCurrentPath=${LibraryCloudPaths.v3CurrentPath(v3SharedBookKey, v3ChapterKey)}")
-                    appendLine("v3ExactCurrentPath=${LibraryCloudPaths.v3CurrentPath(v3ExactBookKey, v3ChapterKey)}")
-                    appendLine("v3LegacyManifestPath=${LibraryCloudPaths.v3ManifestPath(v3ExactBookKey, v3ChapterKey)}")
-                    appendLine("v3LegacyPayloadPath=${LibraryCloudPaths.v3PayloadPath(v3ExactBookKey, v3ChapterKey, sourceKey)}")
-                    appendLine(v3Debug)
-                    appendLine("v3RequestEstimate.uploadNew=1B+1A")
-                    appendLine("v3RequestEstimate.uploadDuplicate=1B")
-                    appendLine("v3RequestEstimate.readHit=1B")
-                    appendLine("v3RequestEstimate.readLegacyFallback<=4B")
-                    appendLine("v3RequestEstimate.listVersions<=4B")
-                    appendLine()
-                    appendLine("listPrefixes:")
-                    LibraryCloudKeys.bookKeys(book).forEach { bookKey ->
-                        LibraryCloudKeys.matchKeys(chapter).forEach { matchKey ->
-                            appendLine(LibraryCloudPaths.variantsPrefix(bookKey, matchKey))
-                        }
-                    }
-                    appendLine()
-                    appendLine("currentPaths:")
-                    LibraryCloudKeys.bookKeys(book).forEach { bookKey ->
-                        LibraryCloudKeys.matchKeys(chapter).forEach { matchKey ->
-                            appendLine(LibraryCloudPaths.currentChapterPath(bookKey, matchKey))
-                        }
-                    }
-                }
-            }
-            val debugTextView = TextView(this@ReadBookActivity).apply {
-                text = message
-                setTextIsSelectable(true)
-                setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
-                setPadding(20.dpToPx(), 12.dpToPx(), 20.dpToPx(), 12.dpToPx())
-            }
-            val debugScrollView = ScrollView(this@ReadBookActivity).apply {
-                addView(
-                    debugTextView,
-                    ViewGroup.LayoutParams(
-                        ViewGroup.LayoutParams.MATCH_PARENT,
-                        ViewGroup.LayoutParams.WRAP_CONTENT
-                    )
-                )
-            }
-            AlertDialog.Builder(this@ReadBookActivity)
-                .setTitle(appCtx.getString(R.string.ui_book_library_debug))
-                .setView(debugScrollView)
-                .setNegativeButton(appCtx.getString(R.string.ra_cfg_copy)) { _, _ ->
-                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText(appCtx.getString(R.string.ui_book_library_debug), message))
-                    toastOnUi(appCtx.getString(R.string.review_error_copied))
-                }
-                .setPositiveButton(android.R.string.ok, null)
-                .show()
-        }
-    }
-
-    private fun refreshLibraryCloudSession(refresh: Boolean, silent: Boolean) {
-        val book = ReadBook.book
-        if (book == null || !isLibraryCloudEnabled()) {
-            libraryCloudSession = null
-            libraryCloudState = LibraryCloudState.DISABLED
-            binding.readMenu.updateCloudLibraryState(libraryCloudState)
-            return
-        }
-        lifecycleScope.launch {
-            val session = withContext(IO) {
-                if (refresh) {
-                    LibraryCloudSync.refreshSession(book)
-                } else {
-                    currentLibraryCloudSession() ?: LibraryCloudSync.openSession(book)
-                }
-            }
-            if (ReadBook.book?.bookUrl != book.bookUrl) return@launch
-            libraryCloudSession = session
-            libraryCloudState = session.state
-            binding.readMenu.updateCloudLibraryState(session.state)
-            if (!silent && session.state != LibraryCloudState.READY) {
-                toastOnUi(libraryCloudStateMessage(session))
-            }
-        }
-    }
-
-    private fun currentLibraryCloudSession(): LibraryCloudSession? {
-        val currentContainerId = LibraryContainerManager.readContainer()?.id
-        return libraryCloudSession?.takeIf { it.config?.id == currentContainerId }
-    }
-
-    private fun downloadLibraryCloudChapter(
-        book: Book,
-        session: LibraryCloudSession,
-        localChapter: BookChapter,
-        item: LibraryCloudChapterVersion
-    ) {
-        lifecycleScope.launch {
-            ReadBook.upMsg(appCtx.getString(R.string.ui_book_read_cloud_chapter))
-            val result = withContext(IO) {
-                runCatching {
-                    val content = session.downloadChapter(item)
-                        ?: throw NoStackTraceException("云端章节内容不存在")
-                    BookHelp.saveText(book, localChapter, content)
-                    localChapter
-                }
-            }
-            ReadBook.upMsg(null)
-            result.onSuccess { chapter ->
-                if (ReadBook.book?.bookUrl != book.bookUrl) return@onSuccess
-                LibraryCloudSync.setCloudReadingActive(book, true)
-                libraryCloudState = LibraryCloudState.READY
-                binding.readMenu.updateCloudLibraryState(libraryCloudState)
-                if (isEpubCoreMode()) {
-                    skipToChapter(chapter.index)
-                } else {
-                    viewModel.openChapter(chapter.index)
-                }
-            }.onFailure {
-                toastOnUi(appCtx.getString(R.string.ui_book_failed_read_cloud_chapter_n, it.localizedMessage))
-            }
-        }
-    }
-
-    private fun showLibraryCloudChapterDialog(
-        book: Book,
-        session: LibraryCloudSession,
-        currentChapter: BookChapter,
-        items: List<LibraryCloudChapterVersion>
-    ) {
-        val content = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(4.dpToPx(), 0, 4.dpToPx(), 0)
-        }
-        val summaryView = TextView(this).apply {
-            text = appCtx.getString(R.string.ui_book_current_chapter, currentChapter.title)
-            textSize = 13f
-            setTextColor(secondaryTextColor)
-            setPadding(0, 0, 0, 8.dpToPx())
-            applyUiBodyTypefaceDeep(this@ReadBookActivity.uiTypeface())
-        }
-        val listLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-        }
-        var dialog: AlertDialog? = null
-        items.groupBy { libraryCloudSourceGroupKey(it) }.forEach { (_, sourceItems) ->
-            val sourceLabel = libraryCloudSourceLabel(sourceItems.first())
-            listLayout.addView(TextView(this).apply {
-                text = sourceLabel
-                textSize = 14f
-                setTextColor(secondaryTextColor)
-                setPadding(2.dpToPx(), 12.dpToPx(), 2.dpToPx(), 6.dpToPx())
-                applyUiTitleTypeface(this@ReadBookActivity)
-            })
-            sourceItems.forEach { item ->
-                listLayout.addView(createLibraryCloudChapterRow(book, session, currentChapter, item) {
-                    dialog?.dismiss()
-                })
-            }
-        }
-        val scrollView = NestedScrollView(this).apply {
-            overScrollMode = View.OVER_SCROLL_IF_CONTENT_SCROLLS
-            addView(
-                listLayout,
-                ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT
-                )
-            )
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                (resources.displayMetrics.heightPixels * 0.55f).toInt()
-            )
-        }
-        content.addView(summaryView)
-        content.addView(scrollView)
-        dialog = AndroidAlertBuilder(this).apply {
-            setTitle(appCtx.getString(R.string.ui_book_select_library_chapter))
-            setCustomView(content)
-            negativeButton(android.R.string.cancel)
-        }.show()
-    }
-
-    private fun createLibraryCloudChapterRow(
-        book: Book,
-        session: LibraryCloudSession,
-        currentChapter: BookChapter,
-        item: LibraryCloudChapterVersion,
-        dismissParent: () -> Unit
-    ): View {
-        val cardColor = themeCardColorOrDefault()
-        return LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(14.dpToPx(), 10.dpToPx(), 14.dpToPx(), 10.dpToPx())
-            background = UiCorner.opaqueRounded(
-                cardColor,
-                UiCorner.panelRadius(this@ReadBookActivity)
-            )
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            ).apply {
-                bottomMargin = 10.dpToPx()
-            }
-            addView(TextView(this@ReadBookActivity).apply {
-                text = libraryCloudChapterTitle(item)
-                setTextColor(primaryTextColor)
-                textSize = 15f
-                applyUiTitleTypeface(this@ReadBookActivity)
-            })
-            libraryCloudChapterTime(item)?.let { time ->
-                addView(TextView(this@ReadBookActivity).apply {
-                    text = time
-                    textSize = 13f
-                    setTextColor(secondaryTextColor)
-                    setPadding(0, 4.dpToPx(), 0, 8.dpToPx())
-                    applyUiBodyTypefaceDeep(this@ReadBookActivity.uiTypeface())
-                })
-            }
-            addView(LinearLayout(this@ReadBookActivity).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                addView(libraryCloudActionText(appCtx.getString(R.string.ui_book_read), accentColor) {
-                    dismissParent()
-                    downloadLibraryCloudChapter(book, session, currentChapter, item)
-                })
-                addView(libraryCloudActionText(appCtx.getString(R.string.delete), 0xFFD32F2F.toInt()) {
-                    confirmDeleteLibraryCloudChapter(book, session, currentChapter, item, dismissParent)
-                })
-            })
-            setOnClickListener {
-                dismissParent()
-                downloadLibraryCloudChapter(book, session, currentChapter, item)
-            }
-        }
-    }
-
-    private fun libraryCloudActionText(
-        text: String,
-        textColor: Int,
-        onClick: () -> Unit
-    ): TextView {
-        return TextView(this).apply {
-            this.text = text
-            setTextColor(textColor)
-            textSize = 14f
-            setPadding(0, 4.dpToPx(), 14.dpToPx(), 4.dpToPx())
-            applyUiBodyTypefaceDeep(this@ReadBookActivity.uiTypeface())
-            layoutParams = LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            setOnClickListener { onClick() }
-        }
-    }
-
-    private fun confirmDeleteLibraryCloudChapter(
-        book: Book,
-        session: LibraryCloudSession,
-        currentChapter: BookChapter,
-        item: LibraryCloudChapterVersion,
-        dismissParent: () -> Unit
-    ) {
-        val input = EditText(this).apply {
-            hint = appCtx.getString(R.string.lib_cloud_delete_hint, appCtx.getString(R.string.delete))
-            setSingleLine(true)
-            typeface = uiTypeface()
-            setPadding(20.dpToPx(), 8.dpToPx(), 20.dpToPx(), 8.dpToPx())
-        }
-        val confirmDialog = AndroidAlertBuilder(this).apply {
-            setTitle(appCtx.getString(R.string.ui_book_delete_cloud_chapter))
-            setMessage(
-                appCtx.getString(
-                    R.string.lib_cloud_delete_message,
-                    item.payload.title.ifBlank { currentChapter.title },
-                    appCtx.getString(R.string.delete)
-                )
-            )
-            setCustomView(input)
-            negativeButton(android.R.string.cancel)
-            positiveButton(appCtx.getString(R.string.delete))
-        }.show()
-        confirmDialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-            if (input.text?.toString()?.trim() != appCtx.getString(R.string.delete)) {
-                toastOnUi(appCtx.getString(R.string.lib_cloud_delete_retry, appCtx.getString(R.string.delete)))
-                return@setOnClickListener
-            }
-            confirmDialog.dismiss()
-            dismissParent()
-            deleteLibraryCloudChapter(book, session, currentChapter, item)
-        }
-    }
-
-    private fun deleteLibraryCloudChapter(
-        book: Book,
-        session: LibraryCloudSession,
-        currentChapter: BookChapter,
-        item: LibraryCloudChapterVersion
-    ) {
-        lifecycleScope.launch {
-            ReadBook.upMsg(appCtx.getString(R.string.ui_book_delete_cloud_chapter))
-            val result = withContext(IO) {
-                runCatching {
-                    if (!session.deleteChapter(item)) {
-                        throw NoStackTraceException("云端章节不存在或删除失败")
-                    }
-                    LibraryCloudSync.refreshSession(book)
-                }
-            }
-            ReadBook.upMsg(null)
-            val refreshedSession = result.getOrNull()
-            if (refreshedSession != null) {
-                if (ReadBook.book?.bookUrl != book.bookUrl) return@launch
-                libraryCloudSession = refreshedSession
-                libraryCloudState = refreshedSession.state
-                binding.readMenu.updateCloudLibraryState(refreshedSession.state)
-                toastOnUi(appCtx.getString(R.string.ui_book_cloud_chapter_deleted))
-                showLibraryCloudChapters(refresh = false)
-            } else {
-                toastOnUi(appCtx.getString(R.string.ui_book_failed_delete_cloud_chapter_n, result.exceptionOrNull()?.localizedMessage.orEmpty()))
-            }
-        }
-    }
-
-    private fun libraryCloudSourceGroupKey(item: LibraryCloudChapterVersion): String {
-        val payload = item.payload
-        return listOf(payload.sourceUrl, payload.sourceBookUrl, payload.sourceName).joinToString("\u001F")
-    }
-
-    private fun libraryCloudSourceLabel(item: LibraryCloudChapterVersion): String {
-        return item.payload.sourceName
-            .ifBlank { item.payload.sourceUrl }
-            .ifBlank { appCtx.getString(R.string.ui_book_old_cache_unknown_source) }
-    }
-
-    private fun libraryCloudChapterTitle(item: LibraryCloudChapterVersion): String {
-        val payload = item.payload
-        val title = payload.title.ifBlank { payload.normalizedTitle.ifBlank { payload.chapterKey } }
-        val prefix = if (payload.chapterIndex >= 0) "${payload.chapterIndex + 1}. " else ""
-        return "$prefix$title"
-    }
-
-    private fun libraryCloudChapterTime(item: LibraryCloudChapterVersion): String? {
-        return item.payload.updatedAt.takeIf { it > 0L }?.let {
-            DateFormat.getDateTimeInstance(DateFormat.SHORT, DateFormat.SHORT).format(Date(it))
-        }
-    }
-
-    private fun libraryCloudStateMessage(session: LibraryCloudSession): String {
-        return when (session.state) {
-            LibraryCloudState.DISABLED -> appCtx.getString(R.string.ui_book_no_library_container_configured)
-            LibraryCloudState.READY -> appCtx.getString(R.string.ui_book_cloud_library_available)
-            LibraryCloudState.ERROR -> session.errorMessage?.let { appCtx.getString(R.string.ui_book_failed_read_cloud_library_n, it) }
-                ?: appCtx.getString(R.string.ui_book_failed_read_cloud_library)
-        }
+        libraryCloudController.showDebug()
     }
 
     /**
@@ -5802,7 +4954,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                         baseCallback.showBrowser(url, html, preloadJs, config, sourceKey)
                     if (handled) {
                         ReviewPreheatCoordinator.captureFromClick(
-                            book, chapter, src, url, html, preloadJs
+                            book, chapter, src, url, html, preloadJs, sourceKey = sourceKey
                         )
                     }
                     return handled
@@ -7032,8 +6184,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         tts?.clearTts()
         textActionMenu.dismiss()
         popupAction.dismiss()
-        shareNotePreviewOverlay?.dismiss()
-        shareNotePreviewOverlay = null
+        selectionShareCoordinator.dismissPreview()
         binding.readView.onDestroy()
         // 退出阅读时停止音频块播放并释放 ExoPlayer
         AudioBlockPlayer.stop()
@@ -7115,15 +6266,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             handleReadConfigUpdate(it)
         }
         observeEvent<Boolean>(EventBus.LIBRARY_CONTAINER_CHANGED) {
-            val bookUrl = ReadBook.book?.bookUrl.orEmpty()
-            if (BookCloudEntryModeStore.get(bookUrl) == BookCloudEntryMode.LIBRARY_CHAPTER) {
-                libraryCloudSession = null
-                refreshLibraryCloudSession(refresh = true, silent = true)
-            } else {
-                libraryCloudSession = null
-                libraryCloudState = LibraryCloudState.DISABLED
-                readMenu.updateCloudLibraryState(libraryCloudState)
-            }
+            libraryCloudController.onLibraryContainerChanged()
         }
         observeEvent<Bundle>(EventBus.READ_ALOUD_CONFIG_CHANGED) {
             readAloudPlayerPanel.onReadAloudConfigChanged(
@@ -7275,7 +6418,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         private const val EPUB_PREPARE_TIMEOUT_MS = 15_000L
         private const val HOST_OVERLAY_SETTLE_TIMEOUT_MS = 500L
         private const val COMMENT_WEB_VIEW_WARM_UP_DELAY_MS = 1_200L
-        private val shareNoteProgressPercentRegex = Regex("""(\d+(?:[,.]\d+)?)\s*%""")
     }
 
 }

@@ -67,61 +67,69 @@ internal object ReviewCaptureHost {
 
     private suspend fun consumeLoop() {
         var seenVersion = requestVersion.get()
-        coroutineScope {
-            repeat(CHAPTER_CONSUMER_COUNT) {
-                launch {
-                    while (isActive) {
-                        var task = runCatching { ReviewSnapshotManager.tryTakeTask() }
-                            .onFailure {
-                                ensureActive()
-                                AppLog.put("评论任务出队失败\n${it.localizedMessage}", it)
-                            }
-                            .getOrNull()
-                        if (task == null) {
-                            delay(IDLE_POLL_DELAY_MS)
-                            task = ReviewSnapshotManager.tryTakeTask()
-                            if (task == null) {
-                                if (activeCount.get() > 0) continue
-                                // 退出前确认没有新的派发请求到达，避免任务滞留无人消费
-                                val latest = requestVersion.get()
-                                if (latest != seenVersion) {
-                                    seenVersion = latest
-                                    continue
-                                }
-                                break
-                            }
-                        }
-                        activeCount.incrementAndGet()
-                        try {
-                            val result = runCatching { ReviewSnapshotManager.processTask(task) }
+        try {
+            coroutineScope {
+                repeat(CHAPTER_CONSUMER_COUNT) {
+                    launch {
+                        while (isActive) {
+                            var task = runCatching { ReviewSnapshotManager.tryTakeTask() }
                                 .onFailure {
                                     ensureActive()
-                                    AppLog.put(
-                                        "评论快照任务处理失败 ${task.key}\n${it.localizedMessage}",
-                                        it,
-                                    )
+                                    AppLog.put("评论任务出队失败\n${it.localizedMessage}", it)
                                 }
-                                .getOrElse { ReviewSnapshotManager.TaskResult.FAILED }
-                            val chapterIndex = task.key.substringAfter('|').toIntOrNull()
-                            if (chapterIndex != null &&
-                                result != ReviewSnapshotManager.TaskResult.STOPPED
-                            ) {
-                                task.executionLease.let { lease ->
-                                    CacheReviewWorkerRegistry.onChapterFinished(
-                                        lease,
-                                        chapterIndex,
-                                        result == ReviewSnapshotManager.TaskResult.SUCCEEDED,
-                                    )
+                                .getOrNull()
+                            if (task == null) {
+                                delay(IDLE_POLL_DELAY_MS)
+                                task = runCatching { ReviewSnapshotManager.tryTakeTask() }
+                                    .onFailure {
+                                        ensureActive()
+                                        AppLog.put("评论任务出队失败\n${it.localizedMessage}", it)
+                                    }
+                                    .getOrNull()
+                                if (task == null) {
+                                    if (activeCount.get() > 0) continue
+                                    // 退出前确认没有新的派发请求到达，避免任务滞留无人消费
+                                    val latest = requestVersion.get()
+                                    if (latest != seenVersion) {
+                                        seenVersion = latest
+                                        continue
+                                    }
+                                    break
                                 }
                             }
-                        } finally {
-                            activeCount.decrementAndGet()
+                            activeCount.incrementAndGet()
+                            try {
+                                val result = runCatching { ReviewSnapshotManager.processTask(task) }
+                                    .onFailure {
+                                        ensureActive()
+                                        AppLog.put(
+                                            "评论快照任务处理失败 ${task.key}\n${it.localizedMessage}",
+                                            it,
+                                        )
+                                    }
+                                    .getOrElse { ReviewSnapshotManager.TaskResult.FAILED }
+                                val chapterIndex = task.key.substringAfter('|').toIntOrNull()
+                                if (chapterIndex != null &&
+                                    result != ReviewSnapshotManager.TaskResult.STOPPED
+                                ) {
+                                    task.executionLease.let { lease ->
+                                        CacheReviewWorkerRegistry.onChapterFinished(
+                                            lease,
+                                            chapterIndex,
+                                            result == ReviewSnapshotManager.TaskResult.SUCCEEDED,
+                                        )
+                                    }
+                                }
+                            } finally {
+                                activeCount.decrementAndGet()
+                            }
                         }
                     }
                 }
             }
+        } finally {
+            onWorkerStopped(seenVersion)
         }
-        onWorkerStopped(seenVersion)
     }
 
     /** 抓取循环结束：释放宿主引用；退出期间来了新请求就立刻重新拉起。 */

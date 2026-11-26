@@ -640,9 +640,12 @@ class ReadBookViewModel(application: Application) : BaseViewModel(application) {
             pendingSourceValidation = book.bookUrl to book.durChapterIndex
             sourceSwitchRecoveryLiveData.postValue(null)
             appDb.runInTransaction {
-                oldBook?.delete()
-                appDb.bookDao.insert(book)
-                appDb.bookChapterDao.insert(*toc.toTypedArray())
+                if (oldBook != null) {
+                    appDb.bookDao.replace(oldBook, book)
+                } else {
+                    appDb.bookDao.upsertWithoutCascade(book)
+                }
+                appDb.bookChapterDao.replaceByBook(book.bookUrl, toc)
             }
             if (oldBook != null &&
                 oldBook.bookUrl != book.bookUrl &&

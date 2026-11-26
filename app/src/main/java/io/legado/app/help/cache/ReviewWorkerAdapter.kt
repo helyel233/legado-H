@@ -5,7 +5,6 @@ import io.legado.app.help.review.ReviewSnapshotManager
 import io.legado.app.data.appDb
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isVideo
-import kotlinx.coroutines.CancellationException
 import java.util.concurrent.ConcurrentHashMap
 
 /** Coordinator adapter for the review queue hosted by ReviewCaptureHost. */
@@ -127,10 +126,10 @@ internal class ReviewWorkerAdapter(
             // 抓取在应用进程内完成：不再启动前台服务，评论缓存不会产生任何通知。
             ReviewCaptureHost.ensureStarted()
         } catch (e: Throwable) {
-            if (e is CancellationException) throw e
-            // 半途失败：dispatcher 会把任务置 FAILED 并终结 binding；这里清掉
-            // 已入队的章节，避免队列里滞留绑定终态 lease、无人认领的任务
+            // 半途失败：dispatcher 会把任务置 FAILED；这里清掉已入队的章节与 registry 绑定，
+            // 避免队列与注册表永久滞留终态任务
             ReviewSnapshotManager.stopTask(task.sessionId, task.taskId) { }
+            CacheReviewWorkerRegistry.remove(task.sessionId, task.taskId)
             throw e
         }
     }
@@ -167,6 +166,9 @@ internal object CacheReviewWorkerRegistry {
     }
 
     fun hasCoordinatorTasks(): Boolean = bindings.isNotEmpty()
+
+    fun hasActiveBinding(sessionId: String, taskId: String): Boolean =
+        bindings.containsKey("$sessionId/$taskId")
 
     fun register(
         task: CacheTaskState,

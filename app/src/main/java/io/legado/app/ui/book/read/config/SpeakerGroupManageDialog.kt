@@ -619,16 +619,22 @@ private fun SpeakerItemRow(
         border = BorderStroke(1.dp, colors.stroke)
     ) {
         val blocked = SpeechVoiceGroupRepository.isBlockedItem(item)
+        val isSystemDefault = SpeechRoute.isSystemDefaultEngine(item.engineType, item.engineValue)
+        val displayName = if (isSystemDefault) {
+            appCtx.getString(R.string.ra_cfg_system_default)
+        } else {
+            item.displayName()
+        }
         Row(
             modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(item.displayName(), color = colors.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(displayName, color = colors.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
                     listOf(
                         appCtx.getString(R.string.ra_cfg_invalid).takeIf { blocked },
-                        item.engineName,
+                        item.engineName.takeUnless { isSystemDefault },
                         item.sourceGroupName,
                         item.toneID
                     ).filterNotNull().filter { it.isNotBlank() }.joinToString(" · "),
@@ -1070,7 +1076,7 @@ private fun speakerItemKey(
     toneID: String,
     speakerName: String
 ): String {
-    return "$engineType|$engineValue|$toneID|$speakerName"
+    return SpeechRoute.routeIdentityKey(engineType, engineValue, toneID, speakerName)
 }
 
 private fun buildSpeakerSourceGroups(

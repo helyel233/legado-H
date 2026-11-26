@@ -47,7 +47,19 @@ data class SpeechRoute(
     val source: String = ""
 ) {
     val isConfigured: Boolean
-        get() = engineValue.isNotBlank() || toneID.isNotBlank() || speakerName.isNotBlank()
+        get() = engineType == ENGINE_SYSTEM ||
+            engineValue.isNotBlank() ||
+            toneID.isNotBlank() ||
+            speakerName.isNotBlank()
+
+    val isSystemDefault: Boolean
+        get() = isSystemDefaultEngine(engineType, engineValue)
+
+    fun displaySpeakerName(
+        systemDefaultLabel: String = appCtx.getString(R.string.ra_cfg_system_default)
+    ): String = if (isSystemDefault) systemDefaultLabel else speakerName
+
+    fun identityKey(): String = routeIdentityKey(engineType, engineValue, toneID, speakerName)
 
     fun withEmotion(emotion: SpeechEmotion?): SpeechRoute {
         return if (emotion?.valid == true) {
@@ -79,6 +91,40 @@ data class SpeechRoute(
         const val SOURCE_AUTO = "auto"
         const val SOURCE_MANUAL = "manual"
 
+        fun normalizeSystemEnginePackage(engineValue: String): String {
+            val raw = engineValue.trim()
+            if (raw.isBlank()) return ""
+            return runCatching {
+                val obj = JSONObject(raw)
+                if (obj.has("value")) obj.optString("value").trim() else raw
+            }.getOrDefault(raw)
+        }
+
+        fun isSystemDefaultEngine(engineType: String, engineValue: String): Boolean {
+            return engineType == ENGINE_SYSTEM && normalizeSystemEnginePackage(engineValue).isBlank()
+        }
+
+        fun canonicalEngineIdentity(engineType: String, engineValue: String): String {
+            return if (engineType == ENGINE_SYSTEM) {
+                normalizeSystemEnginePackage(engineValue)
+            } else {
+                engineValue.trim()
+            }
+        }
+
+        fun routeIdentityKey(
+            engineType: String,
+            engineValue: String,
+            toneID: String = "",
+            speakerName: String = ""
+        ): String {
+            return if (engineType == ENGINE_SYSTEM) {
+                "$ENGINE_SYSTEM|${normalizeSystemEnginePackage(engineValue)}"
+            } else {
+                "$engineType|$engineValue|$toneID|$speakerName"
+            }
+        }
+
         fun fromJson(json: String?): SpeechRoute {
             if (json.isNullOrBlank()) return SpeechRoute()
             return runCatching {
@@ -103,7 +149,7 @@ data class SpeechRoute(
                 return SpeechRoute(
                     engineType = ENGINE_SYSTEM,
                     engineValue = "",
-                    speakerName = appCtx.getString(R.string.ra_cfg_system_default),
+                    speakerName = "",
                     source = SOURCE_MANUAL
                 )
             }
@@ -125,18 +171,28 @@ data class SpeechRoute(
                 ) {
                     fromJson(raw)
                 } else {
-                    SpeechRoute(
-                        engineType = ENGINE_SYSTEM,
-                        engineValue = raw,
-                        speakerName = obj.optString("title").ifBlank { appCtx.getString(R.string.ra_cfg_system_default) },
-                        source = SOURCE_MANUAL
-                    )
+                    val pkg = obj.optString("value").trim()
+                    if (pkg.isBlank()) {
+                        SpeechRoute(
+                            engineType = ENGINE_SYSTEM,
+                            engineValue = "",
+                            speakerName = "",
+                            source = SOURCE_MANUAL
+                        )
+                    } else {
+                        SpeechRoute(
+                            engineType = ENGINE_SYSTEM,
+                            engineValue = raw,
+                            speakerName = obj.optString("title"),
+                            source = SOURCE_MANUAL
+                        )
+                    }
                 }
             }.getOrDefault(
                 SpeechRoute(
                     engineType = ENGINE_SYSTEM,
                     engineValue = raw,
-                    speakerName = appCtx.getString(R.string.ra_cfg_system_default),
+                    speakerName = "",
                     source = SOURCE_MANUAL
                 )
             )

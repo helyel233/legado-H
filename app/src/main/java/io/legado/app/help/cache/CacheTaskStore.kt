@@ -640,6 +640,7 @@ internal class CacheTaskStore(
                 updatedAt = System.currentTimeMillis(),
             ))
             artifactCommitGates.remove(ArtifactCommitKey(sessionId, taskId))
+            pruneFinishedSessionsLocked()
             publishLocked()
             return true
         }
@@ -1022,7 +1023,30 @@ internal class CacheTaskStore(
                     detail = "tasks=${recovered.tasks.size} status=${recovered.status}",
                 )
             }
+            pruneFinishedSessionsLocked()
             publishLocked(persist = true)
+        }
+    }
+
+    private fun pruneFinishedSessionsLocked() {
+        val finished = sessions.values
+            .filter { session ->
+                CacheLifecycleRules.isTerminal(session.status) &&
+                    session.tasks.all { task ->
+                        CacheLifecycleRules.isTerminal(task.status) && !task.terminalEffectsPending
+                    }
+            }
+            .sortedByDescending { it.updatedAt }
+        if (finished.size <= MAX_FINISHED_SESSIONS) return
+        val toRemove = finished.drop(MAX_FINISHED_SESSIONS).map { it.sessionId }.toSet()
+        toRemove.forEach { sessionId ->
+            sessions.remove(sessionId)
+            progressByKey.keys.removeAll { it.sessionId == sessionId }
+            artifactCommitGates.keys.removeAll { it.sessionId == sessionId }
+            if (displaySessionId == sessionId) {
+                displaySessionId = null
+                displayProgressKey = null
+            }
         }
     }
 
@@ -1048,7 +1072,9 @@ internal class CacheTaskStore(
             } else {
                 pendingCheckpoint?.cancel(false)
                 pendingCheckpoint = null
-                saveSnapshot(published)
+                persistenceExecutor.execute {
+                    saveSnapshot(published)
+                }
             }
             trace.done(
                 CacheOperationDiagnostics.Metrics(
@@ -1067,8 +1093,11 @@ internal class CacheTaskStore(
         pendingCheckpoint?.cancel(false)
         pendingCheckpoint = persistenceExecutor.schedule(
             {
-                synchronized(lock) {
-                    if (version == persistenceVersion) saveSnapshot(_snapshot.value)
+                val toSave = synchronized(lock) {
+                    if (version == persistenceVersion) _snapshot.value else null
+                }
+                if (toSave != null) {
+                    saveSnapshot(toSave)
                 }
             },
             500,
@@ -1083,5 +1112,9 @@ internal class CacheTaskStore(
                 detail = error.localizedMessage,
             )
         }
+    }
+
+    private companion object {
+        const val MAX_FINISHED_SESSIONS = 30
     }
 }

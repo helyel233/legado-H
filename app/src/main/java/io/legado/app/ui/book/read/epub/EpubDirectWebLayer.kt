@@ -53,9 +53,6 @@ import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.epubcore.direct.EpubDirectChapter
 import io.legado.app.model.localBook.epubcore.direct.EpubDirectLayoutMode
 import io.legado.app.model.localBook.epubcore.direct.EpubDirectPosition
-import io.legado.app.model.localBook.epubcore.direct.EpubDirectReaderChromePolicy
-import io.legado.app.model.localBook.epubcore.direct.EpubDirectReaderTypographyPolicy
-import io.legado.app.model.localBook.epubcore.direct.EpubDirectResource
 import io.legado.app.model.localBook.epubcore.direct.EpubDirectSession
 import io.legado.app.model.localBook.epubcore.direct.TextReaderImageActionGate
 import io.legado.app.model.localBook.epubcore.direct.TextReaderImageActionRequest
@@ -63,21 +60,14 @@ import io.legado.app.model.localBook.epubcore.direct.TextReaderImageClickPolicy
 import io.legado.app.model.localBook.epubcore.layout.EpubCoreLayoutConfig
 import io.legado.app.model.localBook.epubcore.layout.EpubReaderChromeConfig
 import io.legado.app.model.localBook.epubcore.layout.EpubReaderChromeData
-import io.legado.app.model.localBook.epubcore.layout.EpubReaderChromeDataPolicy
 import io.legado.app.model.localBook.epubcore.template.EpubTemplateBridgePolicy
 import io.legado.app.model.localBook.epubcore.template.EpubTemplateActiveClock
-import io.legado.app.model.localBook.epubcore.template.EpubTemplateDocument
 import io.legado.app.model.localBook.epubcore.template.EpubTemplateException
 import io.legado.app.model.localBook.epubcore.template.EpubTemplateTapGate
-import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplate
-import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplateStore
 import io.legado.app.model.localBook.epubcore.web.EpubWebDocumentLoadMarker
 import io.legado.app.model.localBook.epubcore.web.EpubWebMainDocumentUrlMatcher
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayInputStream
-import java.io.File
-import java.io.FileInputStream
 import java.lang.ref.WeakReference
 import java.util.LinkedHashSet
 import java.util.UUID
@@ -335,14 +325,11 @@ class EpubDirectWebLayer @JvmOverloads constructor(
     private var startupInputCount = 0
     private var startupInputAt = 0L
     private var startupMotionReported = false
-    private var reviewedFieldTemplate: EpubReaderTemplate? = null
-    private var reviewedFieldReference: EpubReaderTemplate? = null
+    private val resourceInterceptor = EpubWebResourceInterceptor(context)
+    private val templateInjector = EpubWebTemplateInjector()
     private var animationMaterialWait: AnimationMaterialWait? = null
     private var animationMaterialTimeoutRunnable: Runnable? = null
     private var legacySnapshotBackendReported = false
-    private val reportedResourceFailures = LinkedHashSet<String>()
-    private var readerChromeTemplate = EpubReaderChromeData()
-    private var readerChromeContentRevision = 0L
     private var hostOverlayCaptureBlocked = false
     private var textPositionToken = -1L
     private var textPositionPage = -1
@@ -449,17 +436,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
      * pagination or chapter activation and is safe to call before any WebView is ready.
      */
     fun updateReaderChromeData(template: EpubReaderChromeData) {
-        val contentChanged = renderedChromeFields(chapter, readerChromeTemplate).copy(contentRevision = 0L) !=
-            renderedChromeFields(chapter, template).copy(contentRevision = 0L)
-        readerChromeTemplate = if (contentChanged) {
-            template
-        } else {
-            template.copy(contentRevision = readerChromeTemplate.contentRevision)
-        }
-        readerChromeContentRevision = maxOf(
-            readerChromeContentRevision,
-            readerChromeTemplate.contentRevision
-        )
+        val contentChanged = templateInjector.updateChromeData(chapter, template)
         val activeChromeEnabled = chapter?.let { activeChapter ->
             config?.let { activeConfig ->
                 EpubPageFrameTarget.readerChromeEnabled(activeChapter, activeConfig)
@@ -468,23 +445,6 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         if (contentChanged && activeChromeEnabled) invalidateCommittedPageSnapshot()
         if (contentChanged && (config?.readerChrome?.enabled == true || chapter?.readerTemplate != null)) syncAdjacentPageFrames()
         forEachReaderWebView(::applyReaderChromeToView)
-    }
-
-    private fun reviewedFrameReference(template: EpubReaderTemplate): EpubReaderTemplate? {
-        if (reviewedFieldTemplate !== template) {
-            reviewedFieldTemplate = template
-            reviewedFieldReference = EpubReaderTemplateStore.reviewedFrameTemplate(template)
-        }
-        return reviewedFieldReference
-    }
-
-    private fun renderedChromeFields(
-        prepared: EpubDirectChapter?,
-        data: EpubReaderChromeData
-    ): EpubReaderChromeData {
-        val template = prepared?.readerTemplate ?: return data
-        if (template.javascript.isBlank()) return data
-        return EpubTemplateFieldPolicy.renderedFields(template, reviewedFrameReference(template), data)
     }
 
     private fun forEachReaderWebView(action: (ReaderWebView) -> Unit) {
@@ -496,33 +456,22 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         views.forEach(action)
     }
 
-    private data class ReaderChromePayload(
-        val config: EpubReaderChromeConfig,
-        val data: EpubReaderChromeData
-    )
-
     private fun readerChromePayload(
         view: ReaderWebView,
         preparedChapter: EpubDirectChapter? = view.preparedChapter,
         preparedConfig: EpubCoreLayoutConfig? = view.preparedConfig,
         pageIndexOverride: Int? = null,
         pageCountOverride: Int? = null
-    ): ReaderChromePayload {
+    ): EpubWebTemplateInjector.ReaderChromePayload {
         if (preparedChapter == null || preparedConfig == null) {
-            return ReaderChromePayload(EpubReaderChromeConfig.DISABLED, readerChromeTemplate)
+            return templateInjector.resolveChromePayload(
+                preparedChapter = null,
+                preparedConfig = null,
+                preparedIndex = 0,
+                preparedCount = 1,
+                previousData = view.appliedReaderChromeData
+            )
         }
-        val resolvedConfig = EpubDirectReaderChromePolicy.resolve(
-            requested = preparedConfig.readerChrome,
-            input = EpubDirectReaderChromePolicy.Input(
-                layoutMode = preparedChapter.layoutMode,
-                fullPageArtwork = preparedChapter.fullPageArtwork,
-                implicitSinglePage = preparedChapter.implicitSinglePage,
-                duokanGallery = preparedChapter.duokanGallery,
-                scripted = preparedChapter.scripted,
-                scrollMode = preparedConfig.scrollMode
-            ),
-            pageHeightPx = preparedConfig.pageHeightPx
-        )
         val preparedCount = pageCountOverride?.coerceAtLeast(1) ?: when {
             view === currentWebView && documentReady && chapter?.chapterIndex == preparedChapter.chapterIndex ->
                 pageCount
@@ -547,23 +496,13 @@ class EpubDirectWebLayer @JvmOverloads constructor(
             target != null -> EpubDirectActivationTargetPolicy.resolve(target, preparedCount)
             else -> 0
         }.coerceIn(0, preparedCount - 1)
-        val unresolvedRevisionData = EpubReaderChromeDataPolicy.resolve(
-            config = resolvedConfig,
-            template = renderedChromeFields(preparedChapter, readerChromeTemplate).copy(contentRevision = 0L),
-            page = EpubReaderChromeDataPolicy.Page(
-                chapterIndex = preparedChapter.chapterIndex,
-                chapterTitle = preparedChapter.title,
-                pageIndex = preparedIndex,
-                pageCount = preparedCount
-            )
+        return templateInjector.resolveChromePayload(
+            preparedChapter = preparedChapter,
+            preparedConfig = preparedConfig,
+            preparedIndex = preparedIndex,
+            preparedCount = preparedCount,
+            previousData = view.appliedReaderChromeData
         )
-        val previousData = view.appliedReaderChromeData
-        val data = if (previousData?.copy(contentRevision = 0L) == unresolvedRevisionData) {
-            previousData
-        } else {
-            unresolvedRevisionData.copy(contentRevision = ++readerChromeContentRevision)
-        }
-        return ReaderChromePayload(resolvedConfig, data)
     }
 
     private fun applyReaderChromeToView(view: ReaderWebView) {
@@ -582,7 +521,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
 
     private fun applyReaderChromePayloadToView(
         view: ReaderWebView,
-        payload: ReaderChromePayload,
+        payload: EpubWebTemplateInjector.ReaderChromePayload,
         onApplied: (Boolean) -> Unit
     ) {
         if (destroyed || !view.loadComplete || !view.runtimeInstalled) {
@@ -595,7 +534,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         view.readerChromeApplyInFlight = true
         view.appliedReaderChromeConfig = payload.config
         view.appliedReaderChromeData = payload.data
-        evaluateReaderCommand(view, readerChromeApplyScript(token, payload)) { raw ->
+        evaluateReaderCommand(view, templateInjector.readerChromeApplyScript(token, payload)) { raw ->
             if (view.readerChromeApplySequence != applySequence) {
                 onApplied(false)
                 return@evaluateReaderCommand
@@ -620,18 +559,13 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         scheduleCommittedPageSnapshotRefresh(reason)
     }
 
-    private fun readerChromePayloadMatches(view: ReaderWebView, payload: ReaderChromePayload): Boolean {
+    private fun readerChromePayloadMatches(
+        view: ReaderWebView,
+        payload: EpubWebTemplateInjector.ReaderChromePayload
+    ): Boolean {
         return !view.readerChromeApplyInFlight &&
             view.appliedReaderChromeConfig == payload.config &&
             view.appliedReaderChromeData == payload.data
-    }
-
-    private fun readerChromeApplyScript(token: Long, payload: ReaderChromePayload): String {
-        return "(function(){var api=window.__legadoEpub;" +
-            "if(!api||api.token!==$token)return false;" +
-            "api.setReaderChrome(${readerChromeConfigJson(payload.config)});" +
-            "api.setReaderChromeData(${readerChromeDataJson(payload.data)});" +
-            "return true;})()"
     }
 
     private fun commitPageAndReaderChrome(
@@ -660,16 +594,13 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         view.readerChromeApplyInFlight = true
         view.appliedReaderChromeConfig = payload.config
         view.appliedReaderChromeData = payload.data
-        val pageCommand = boundary?.let {
-            "api.setActivationPage(${JSONObject.quote(it)},$safePageIndex);"
-        } ?: "api.setPage($safePageIndex,0,'$behavior');"
-        val script = "(function(){var api=window.__legadoEpub;" +
-            "if(!api||api.token!==$token)return null;" +
-            "api.setReaderChrome(${readerChromeConfigJson(payload.config)});" +
-            "if(api.commitPage){api.commitPage($safePageIndex,'$behavior'," +
-            "${readerChromeDataJson(payload.data)},${boundary?.let(JSONObject::quote) ?: "null"});}" +
-            "else{api.setReaderChromeData(${readerChromeDataJson(payload.data)});$pageCommand}" +
-            "return JSON.stringify(api.metrics(true));})()"
+        val script = templateInjector.commitPageAndReaderChromeScript(
+            token = token,
+            safePageIndex = safePageIndex,
+            behavior = behavior,
+            payload = payload,
+            boundary = boundary
+        )
         evaluateReaderCommand(view, script, returnMetrics = true) { raw ->
             val ownsChromeApply = view.readerChromeApplySequence == chromeApplySequence
             if (ownsChromeApply) view.readerChromeApplyInFlight = false
@@ -808,52 +739,6 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         return true
     }
 
-    private fun readerChromeConfigJson(config: EpubReaderChromeConfig): String {
-        return JSONObject().apply {
-            put("enabled", config.enabled)
-            put("headerEnabled", config.headerEnabled)
-            put("footerEnabled", config.footerEnabled)
-            put("hideHeaderOnChapterFirstPage", config.hideHeaderOnChapterFirstPage)
-            put("headerHeightPx", config.headerHeightPx)
-            put("footerHeightPx", config.footerHeightPx)
-            put("headerPaddingLeftPx", config.headerPaddingLeftPx)
-            put("headerPaddingTopPx", config.headerPaddingTopPx)
-            put("headerPaddingRightPx", config.headerPaddingRightPx)
-            put("headerPaddingBottomPx", config.headerPaddingBottomPx)
-            put("footerPaddingLeftPx", config.footerPaddingLeftPx)
-            put("footerPaddingTopPx", config.footerPaddingTopPx)
-            put("footerPaddingRightPx", config.footerPaddingRightPx)
-            put("footerPaddingBottomPx", config.footerPaddingBottomPx)
-            put("textSizePx", config.textSizePx.toDouble())
-            put("textColor", config.textColor)
-            put("dividerColor", config.dividerColor)
-            put("headerDividerEnabled", config.headerDividerEnabled)
-            put("footerDividerEnabled", config.footerDividerEnabled)
-        }.toString()
-    }
-
-    private fun readerChromeDataJson(data: EpubReaderChromeData): String {
-        return JSONObject().apply {
-            put("bookName", data.bookName)
-            put("chapterTitle", data.chapterTitle)
-            put("page", data.pageLabel)
-            put("progress", data.progressLabel)
-            put("chapterProgress", data.chapterProgressLabel)
-            put("time", data.timeLabel)
-            put("battery", data.batteryLabel)
-            put("batteryPercentage", data.batteryPercentageLabel)
-            put("chapterCount", data.chapterCount)
-            put("headerLeft", data.headerLeft)
-            put("headerCenter", data.headerCenter)
-            put("headerRight", data.headerRight)
-            put("footerLeft", data.footerLeft)
-            put("footerCenter", data.footerCenter)
-            put("footerRight", data.footerRight)
-            put("chapterFirstPage", data.chapterFirstPage)
-            put("contentRevision", data.contentRevision)
-        }.toString()
-    }
-
     fun bindSession(value: EpubDirectSession) {
         bindSession(value, ownsSession = true)
     }
@@ -883,7 +768,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         if (session?.bookUrl != value.bookUrl || session?.resourceHost != value.resourceHost) {
             chapter = null
             documentReady = false
-            synchronized(reportedResourceFailures) { reportedResourceFailures.clear() }
+            resourceInterceptor.clearFailures()
         }
         session = value
         ownsBoundSession = ownsSession
@@ -5135,7 +5020,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
             EpubPageFrameTarget.readerChromeContentRevision(
                 activeChapter,
                 activeConfig,
-                readerChromeTemplate
+                templateInjector.chromeTemplate
             )
     }
 
@@ -5169,7 +5054,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
             EpubPageFrameTarget.readerChromeContentRevision(
                 activeChapter,
                 activeConfig,
-                readerChromeTemplate
+                templateInjector.chromeTemplate
             )
         if (matchesCurrentPage) {
             val bitmap = frame.takeBitmap() ?: run {
@@ -5223,7 +5108,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
             readerChromeContentRevision = EpubPageFrameTarget.readerChromeContentRevision(
                 chapter,
                 config,
-                readerChromeTemplate
+                templateInjector.chromeTemplate
             )
         )
     }
@@ -6239,7 +6124,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
             sourceReaderChromeContentRevision = EpubPageFrameTarget.readerChromeContentRevision(
                 sourceChapter,
                 sourceConfig,
-                readerChromeTemplate
+                templateInjector.chromeTemplate
             ),
             sourceView = currentWebView,
             sourceBitmap = sourceBitmap,
@@ -6408,7 +6293,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         // Ordinary books and static templates do not depend on any bundled
         // template asset. Load the reference only to verify a scripted theme.
         val reference = if (template?.javascript?.isNotBlank() == true) {
-            reviewedFrameReference(template)
+            templateInjector.reviewedFrameReference(template)
         } else null
         return EpubTemplateFramePolicy.supports(template, reference)
     }
@@ -6478,7 +6363,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
             activeChapter,
             activeConfig,
             activePosition,
-            renderedChromeFields(activeChapter, readerChromeTemplate)
+            templateInjector.renderedChromeFields(activeChapter)
         )
 
         fun offer(view: ReaderWebView?) {
@@ -6580,7 +6465,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
                 frame.chapterHref != activeChapter.href || frame.pageIndex != pageIndex || frame.pageCount != pageCount ||
                 frame.layoutSignature != EpubPageFrameTarget.layoutSignature(activeConfig, width, height) ||
                 frame.readerChromeContentRevision != EpubPageFrameTarget.readerChromeContentRevision(
-                    activeChapter, activeConfig, readerChromeTemplate)
+                    activeChapter, activeConfig, templateInjector.chromeTemplate)
             ) return
             val bitmap = frame.takeBitmap() ?: return
             // The pipeline verified the stable content identity and the freshly measured page count.
@@ -6849,200 +6734,6 @@ class EpubDirectWebLayer @JvmOverloads constructor(
             activationTargetSatisfied = obj.optBoolean("activationTargetSatisfied", false),
             hasRenderableContent = obj.optBoolean("renderable", false),
             hasViewportContent = obj.optBoolean("viewportRenderable", false)
-        )
-    }
-
-    private fun resourceResponse(
-        request: WebResourceRequest,
-        boundSession: EpubDirectSession?,
-        preparedConfig: EpubCoreLayoutConfig?
-    ): WebResourceResponse? {
-        return resourceResponse(
-            uri = request.url,
-            method = request.method,
-            requestHeaders = request.requestHeaders,
-            boundSession = boundSession,
-            preparedConfig = preparedConfig
-        )
-    }
-
-    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
-    private fun resourceResponse(
-        url: String?,
-        boundSession: EpubDirectSession?,
-        preparedConfig: EpubCoreLayoutConfig?
-    ): WebResourceResponse? {
-        val uri = runCatching { Uri.parse(url) }.getOrNull() ?: return null
-        return resourceResponse(
-            uri = uri,
-            method = "GET",
-            requestHeaders = emptyMap(),
-            boundSession = boundSession,
-            preparedConfig = preparedConfig
-        )
-    }
-
-    private fun resourceResponse(
-        uri: Uri,
-        method: String,
-        requestHeaders: Map<String, String>,
-        boundSession: EpubDirectSession?,
-        preparedConfig: EpubCoreLayoutConfig?
-    ): WebResourceResponse? {
-        if (uri.host.equals(io.legado.app.help.reader.ReaderAssetReferences.HOST, true)) {
-            if (method != "GET" && method != "HEAD") return methodNotAllowedResponse()
-            return runCatching {
-                io.legado.app.help.reader.ReaderAssets.resource(uri.toString(), method == "HEAD")
-                    ?.toWebResponse(withBody = method != "HEAD", crossOrigin = true)
-            }.getOrNull() ?: errorResponse(404, "Not Found")
-        }
-        if (uri.scheme.equals(EpubDirectSession.SCHEME, true) &&
-            uri.host.equals(boundSession?.resourceHost, true)
-        ) {
-            val normalizedMethod = method.uppercase()
-            if (normalizedMethod != "GET" && normalizedMethod != "HEAD") {
-                return methodNotAllowedResponse()
-            }
-            if (preparedConfig?.readerTemplate != null && uri.path?.startsWith("/__reader_template__/") == true) {
-                val asset = when (uri.path) {
-                    "/__reader_template__/paged.js" -> "epub/vendor/paged.js"
-                    "/__reader_template__/source-map.js" -> "epub/template-source-map.js"
-                    "/__reader_template__/page-alignment.js" -> "epub/page-alignment.js"
-                    "/__reader_template__/browser-flow.js" -> "epub/template-browser-flow.js"
-                    "/__reader_template__/runtime.js" -> "epub/template-runtime.js"
-                    else -> return errorResponse(404, "Not Found")
-                }
-                return WebResourceResponse("application/javascript", "UTF-8", 200, "OK",
-                    mapOf("Access-Control-Allow-Origin" to "*", "Cache-Control" to "no-store"),
-                    if (normalizedMethod == "HEAD") ByteArrayInputStream(ByteArray(0)) else context.assets.open(asset))
-            }
-            if (Uri.decode(uri.encodedPath.orEmpty()).endsWith("/__legado_reader_font__")) {
-                if (normalizedMethod == "HEAD") {
-                    return if (preparedConfig?.readerFontPath.isNullOrBlank() ||
-                        preparedConfig?.readerFontLength == null
-                    ) {
-                        errorResponse(404, "Not Found")
-                    } else {
-                        emptyResponse(readerFontHeaders(preparedConfig))
-                    }
-                }
-                return readerFontResponse(preparedConfig)
-            }
-            val rangeHeader = requestHeaders.entries
-                .firstOrNull { it.key.equals("Range", true) }
-                ?.value
-            val result = runCatching {
-                if (normalizedMethod == "HEAD") {
-                    boundSession?.openHeadResource(uri.toString(), rangeHeader)
-                } else {
-                    boundSession?.openResource(uri.toString(), rangeHeader)
-                }
-            }
-            result.exceptionOrNull()?.let { throwable ->
-                reportResourceFailure(uri, 500, throwable.localizedMessage ?: "resource read failed", throwable)
-                return errorResponse(500, "EPUB Resource Error")
-            }
-            val resource = result.getOrNull() ?: run {
-                reportResourceFailure(uri, 404, "entry not found")
-                return errorResponse(404, "Not Found")
-            }
-            return resource.toWebResponse(withBody = normalizedMethod != "HEAD",
-                crossOrigin = preparedConfig?.readerTemplate != null)
-        }
-        return when (uri.scheme?.lowercase()) {
-            "data", "blob", "about" -> null
-            "http", "https" -> if (preparedConfig?.readerTemplate != null) null else errorResponse(403, "Forbidden")
-            else -> errorResponse(403, "Forbidden")
-        }
-    }
-
-    private fun reportResourceFailure(
-        uri: Uri,
-        statusCode: Int,
-        reason: String,
-        throwable: Throwable? = null
-    ) {
-        val path = Uri.decode(uri.encodedPath.orEmpty()).ifBlank { "/" }
-        val key = "$statusCode|${uri.host}|$path"
-        val shouldReport = synchronized(reportedResourceFailures) {
-            if (key in reportedResourceFailures || reportedResourceFailures.size >= MAX_RESOURCE_FAILURE_REPORTS) {
-                false
-            } else {
-                reportedResourceFailures.add(key)
-            }
-        }
-        if (!shouldReport) return
-        val message = "EPUB direct resource failed: status=$statusCode, host=${uri.host}, path=$path, reason=$reason"
-        if (throwable == null) AppLog.putDebug(message) else AppLog.putDebug(message, throwable)
-    }
-
-    private fun readerFontResponse(preparedConfig: EpubCoreLayoutConfig?): WebResourceResponse {
-        val path = preparedConfig?.readerFontPath ?: return errorResponse(404, "Not Found")
-        val expectedLength = preparedConfig.readerFontLength ?: return errorResponse(404, "Not Found")
-        val file = File(path)
-        if (!file.isFile || file.length() != expectedLength) return errorResponse(404, "Not Found")
-        val stream = runCatching { FileInputStream(file) }.getOrNull()
-            ?: return errorResponse(404, "Not Found")
-        return WebResourceResponse(
-            preparedConfig.readerFontMimeType ?: "font/ttf",
-            null,
-            200,
-            "OK",
-            readerFontHeaders(preparedConfig),
-            stream
-        )
-    }
-
-    private fun readerFontHeaders(config: EpubCoreLayoutConfig): Map<String, String> {
-        return mapOf(
-            "Cache-Control" to "public, max-age=31536000, immutable",
-            "Content-Length" to (config.readerFontLength ?: 0L).toString(),
-            "Access-Control-Allow-Origin" to "*",
-            "X-Content-Type-Options" to "nosniff"
-        )
-    }
-
-    private fun EpubDirectResource.toWebResponse(withBody: Boolean, crossOrigin: Boolean = false): WebResourceResponse {
-        val responseStream = if (withBody) stream else {
-            stream.close()
-            ByteArrayInputStream(ByteArray(0))
-        }
-        return WebResourceResponse(mimeType, encoding, statusCode, reasonPhrase,
-            if (crossOrigin) headers + ("Access-Control-Allow-Origin" to "*") else headers, responseStream)
-    }
-
-    private fun methodNotAllowedResponse() = WebResourceResponse(
-        "text/plain",
-        Charsets.UTF_8.name(),
-        405,
-        "Method Not Allowed",
-        nonCacheableResourceHeaders() + mapOf("Allow" to "GET, HEAD"),
-        ByteArrayInputStream(ByteArray(0))
-    )
-
-    private fun emptyResponse(headers: Map<String, String> = emptyMap()) = WebResourceResponse(
-        "text/plain",
-        Charsets.UTF_8.name(),
-        200,
-        "OK",
-        headers,
-        ByteArrayInputStream(ByteArray(0))
-    )
-
-    private fun errorResponse(statusCode: Int, reasonPhrase: String) = WebResourceResponse(
-        "text/plain",
-        Charsets.UTF_8.name(),
-        statusCode,
-        reasonPhrase,
-        nonCacheableResourceHeaders(),
-        ByteArrayInputStream(ByteArray(0))
-    )
-
-    private fun nonCacheableResourceHeaders(): Map<String, String> {
-        return mapOf(
-            "Cache-Control" to "no-store, max-age=0",
-            "Pragma" to "no-cache",
-            "Access-Control-Allow-Origin" to "*"
         )
     }
 
@@ -7609,12 +7300,12 @@ class EpubDirectWebLayer @JvmOverloads constructor(
             val clientToken = token
             webViewClient = object : WebViewClient() {
                 override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest): WebResourceResponse? {
-                    return resourceResponse(request, clientSession, config)
+                    return resourceInterceptor.intercept(request, clientSession, config)
                 }
 
                 @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
                 override fun shouldInterceptRequest(view: WebView?, url: String?): WebResourceResponse? {
-                    return resourceResponse(url, clientSession, config)
+                    return resourceInterceptor.intercept(url, clientSession, config)
                 }
 
                 override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest): Boolean {
@@ -7703,7 +7394,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
                     if (errorResponse.statusCode < 400) return
                     if (!request.isForMainFrame) {
                         if (request.url.host.equals(clientSession?.resourceHost, true)) {
-                            reportResourceFailure(
+                            resourceInterceptor.reportFailure(
                                 request.url,
                                 errorResponse.statusCode,
                                 errorResponse.reasonPhrase.orEmpty()
@@ -7982,13 +7673,13 @@ class EpubDirectWebLayer @JvmOverloads constructor(
             val readerChromePayload = readerChromePayload(this, chapter, config)
             // The runtime's bootstrap handles both a fresh document and a promoted
             // preload. In the latter case it replays stable for the new token.
-            val runtime = if (chapter.readerTemplate != null) {
-                EpubTemplateDocument.runtimeScript(installToken, chapter, config, templateSecret,
-                    readerChromeDataJson(readerChromePayload.data), TEMPLATE_STABLE_TIMEOUT_MS)
-            } else runtimeScript(installToken, chapter, config)
-            val script = runtime +
-                "\n;${readerChromeApplyScript(installToken, readerChromePayload)};" +
-                "\n;!!window.__legadoEpub;"
+            val script = templateInjector.runtimeInstallScript(
+                token = installToken,
+                chapter = chapter,
+                config = config,
+                templateSecret = templateSecret,
+                payload = readerChromePayload
+            )
             evaluateJavascript(script) { installed ->
                 if (token != installToken || loadedChapterKey != installChapterKey) {
                     return@evaluateJavascript
@@ -8637,11 +8328,10 @@ class EpubDirectWebLayer @JvmOverloads constructor(
 
     companion object {
         internal const val DOCUMENT_MIME_TYPE = "text/html"
-        private const val BRIDGE_NAME = "LegadoEpubBridge"
+        private const val BRIDGE_NAME = EpubWebTemplateInjector.BRIDGE_NAME
         private const val TEMPLATE_BRIDGE_NAME = "LegadoTemplateHost"
-        private const val TEMPLATE_STABLE_TIMEOUT_MS = EpubRenderTimeoutPolicy.TEMPLATE_STARTUP_MS
+        private const val TEMPLATE_STABLE_TIMEOUT_MS = EpubWebTemplateInjector.TEMPLATE_STABLE_TIMEOUT_MS
         private const val WebViewBlank = "about:blank"
-        private const val MAX_RESOURCE_FAILURE_REPORTS = 32
         private const val MAX_PAGE_HANDOFF_VERIFY_ATTEMPTS = 16
         private const val PAGE_HANDOFF_RETRY_MS = 48L
         private const val PAGE_HANDOFF_TIMEOUT_MS = 1_800L
@@ -8681,10 +8371,6 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         private const val FOREGROUND_REVEAL_STAGING_ALPHA = 0.001f
         private const val FOREGROUND_REVEAL_TIMEOUT_MS = 250L
         private const val STYLE_RELOAD_DEBOUNCE_MS = 80L
-        private const val LAYOUT_REFRESH_MIN_INTERVAL_MS = 80
-        private const val LAYOUT_REFRESH_IMMEDIATE_MIN_INTERVAL_MS = 40
-        private const val LAYOUT_REFRESH_MAX_INTERVAL_MS = 500
-        private const val LAYOUT_REFRESH_COST_MULTIPLIER = 10
         private const val BOUNDARY_DEBOUNCE_MS = 500L
         private const val CHAPTER_TURN_TIMEOUT_MS = 12_000L
         private const val VERTICAL_SCROLL_SETTLE_MS = 500L
@@ -8712,10 +8398,6 @@ class EpubDirectWebLayer @JvmOverloads constructor(
                 "windowScrollX:Number(window.scrollX)||0," +
                 "documentScrollLeft:Number(document.documentElement&&document.documentElement.scrollLeft)||0," +
                 "bodyScrollLeft:Number(document.body&&document.body.scrollLeft)||0});})();"
-        private val RUNTIME_SCRIPT_TEMPLATE by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-            appCtx.assets.open("epub/page-alignment.js").bufferedReader().use { it.readText() } + "\n" +
-                appCtx.assets.open("epub/direct-runtime.js").bufferedReader().use { it.readText() }
-        }
 
         private data class WebMetrics(
             val pageCount: Int,
@@ -8760,7 +8442,7 @@ class EpubDirectWebLayer @JvmOverloads constructor(
         }
 
         private fun EpubDirectChapter?.isRtlLayout(): Boolean {
-            return (this?.pageLayoutDirection ?: this?.pageProgressionDirection).equals("rtl", true)
+            return EpubWebTemplateInjector.isRtlLayout(this)
         }
 
         private fun EpubDirectChapter?.requiresRenderableContent(): Boolean {
@@ -8770,107 +8452,6 @@ class EpubDirectWebLayer @JvmOverloads constructor(
                 fullPageArtwork = fullPageArtwork,
                 duokanGallery = duokanGallery
             )
-        }
-
-        private fun runtimeScript(
-            token: Long,
-            chapter: EpubDirectChapter,
-            config: EpubCoreLayoutConfig
-        ): String {
-            val vertical = config.scrollMode && !chapter.layoutMode.scalesPublisherViewport
-            val fixed = chapter.layoutMode.singlePage
-            val scaled = chapter.layoutMode.scalesPublisherViewport
-            val publisherStyled = chapter.layoutMode == EpubDirectLayoutMode.PUBLISHER_STYLED
-            val readerTypography = EpubDirectReaderTypographyPolicy.isSupported(
-                EpubDirectReaderTypographyPolicy.Input(
-                    layoutMode = chapter.layoutMode,
-                    fullPageArtwork = chapter.fullPageArtwork,
-                    implicitSinglePage = chapter.implicitSinglePage,
-                    duokanGallery = chapter.duokanGallery,
-                    scripted = chapter.scripted
-                )
-            )
-            val rtl = chapter.isRtlLayout()
-            val startId = chapter.startFragmentId?.let(JSONObject::quote) ?: "null"
-            val endId = chapter.endFragmentId?.let(JSONObject::quote) ?: "null"
-            val sourceWidth = chapter.viewportWidth ?: 0f
-            val sourceHeight = chapter.viewportHeight ?: 0f
-            val readerChrome = EpubDirectReaderChromePolicy.resolve(
-                requested = config.readerChrome,
-                input = EpubDirectReaderChromePolicy.Input(
-                    layoutMode = chapter.layoutMode,
-                    fullPageArtwork = chapter.fullPageArtwork,
-                    implicitSinglePage = chapter.implicitSinglePage,
-                    duokanGallery = chapter.duokanGallery,
-                    scripted = chapter.scripted,
-                    scrollMode = config.scrollMode
-                ),
-                pageHeightPx = config.pageHeightPx
-            )
-            val replacements = mapOf(
-                "__LEGADO_TOKEN__" to token.toString(),
-                "__LEGADO_TEXT_IMAGE_MODE__" to JSONObject.quote(TextReaderImageClickPolicy.mode(AppConfig.clickImgWay, chapter.sourceImages)),
-                "__LEGADO_VERTICAL__" to vertical.toString(),
-                "__LEGADO_FIXED__" to fixed.toString(),
-                "__LEGADO_SCALED__" to scaled.toString(),
-                "__LEGADO_PUBLISHER_STYLED__" to publisherStyled.toString(),
-                "__LEGADO_READER_TYPOGRAPHY__" to readerTypography.toString(),
-                "__LEGADO_BOTTOM_JUSTIFY__" to config.textBottomJustify.toString(),
-                "__LEGADO_PUBLISHER_FULLSCREEN__" to chapter.publisherFullscreen.toString(),
-                "__LEGADO_PADDING_LEFT__" to config.readerPaddingLeftPx.toString(),
-                "__LEGADO_PADDING_TOP__" to config.readerPaddingTopPx.toString(),
-                "__LEGADO_PADDING_RIGHT__" to config.readerPaddingRightPx.toString(),
-                "__LEGADO_PADDING_BOTTOM__" to config.readerPaddingBottomPx.toString(),
-                "__LEGADO_SAFE_INSET_LEFT__" to config.readerSafeInsetLeftPx.toString(),
-                "__LEGADO_SAFE_INSET_TOP__" to config.readerSafeInsetTopPx.toString(),
-                "__LEGADO_SAFE_INSET_RIGHT__" to config.readerSafeInsetRightPx.toString(),
-                "__LEGADO_SAFE_INSET_BOTTOM__" to config.readerSafeInsetBottomPx.toString(),
-                "__LEGADO_RTL__" to rtl.toString(),
-                "__LEGADO_START_ID__" to startId,
-                "__LEGADO_END_ID__" to endId,
-                "__LEGADO_ANNOTATION_TITLE__" to JSONObject.quote(appCtx.getString(R.string.epub_annotation_title)),
-                "__LEGADO_ANNOTATION_CLOSE__" to JSONObject.quote(appCtx.getString(R.string.epub_annotation_close)),
-                "__LEGADO_ANNOTATION_BACK__" to JSONObject.quote(appCtx.getString(R.string.epub_annotation_back)),
-                "__LEGADO_READER_FONT__" to (
-                    !config.readerFontUrl.isNullOrBlank() &&
-                        !config.readerFontPath.isNullOrBlank() &&
-                        !config.readerFontRevision.isNullOrBlank()
-                    ).toString(),
-                "__LEGADO_CHROME_ENABLED__" to readerChrome.enabled.toString(),
-                "__LEGADO_CHROME_HEADER_ENABLED__" to readerChrome.headerEnabled.toString(),
-                "__LEGADO_CHROME_FOOTER_ENABLED__" to readerChrome.footerEnabled.toString(),
-                "__LEGADO_CHROME_HIDE_HEADER_FIRST__" to
-                    readerChrome.hideHeaderOnChapterFirstPage.toString(),
-                "__LEGADO_CHROME_HEADER_HEIGHT__" to readerChrome.headerHeightPx.toString(),
-                "__LEGADO_CHROME_FOOTER_HEIGHT__" to readerChrome.footerHeightPx.toString(),
-                "__LEGADO_CHROME_HEADER_PADDING_LEFT__" to readerChrome.headerPaddingLeftPx.toString(),
-                "__LEGADO_CHROME_HEADER_PADDING_TOP__" to readerChrome.headerPaddingTopPx.toString(),
-                "__LEGADO_CHROME_HEADER_PADDING_RIGHT__" to readerChrome.headerPaddingRightPx.toString(),
-                "__LEGADO_CHROME_HEADER_PADDING_BOTTOM__" to readerChrome.headerPaddingBottomPx.toString(),
-                "__LEGADO_CHROME_FOOTER_PADDING_LEFT__" to readerChrome.footerPaddingLeftPx.toString(),
-                "__LEGADO_CHROME_FOOTER_PADDING_TOP__" to readerChrome.footerPaddingTopPx.toString(),
-                "__LEGADO_CHROME_FOOTER_PADDING_RIGHT__" to readerChrome.footerPaddingRightPx.toString(),
-                "__LEGADO_CHROME_FOOTER_PADDING_BOTTOM__" to readerChrome.footerPaddingBottomPx.toString(),
-                "__LEGADO_CHROME_TEXT_SIZE__" to readerChrome.textSizePx.toString(),
-                "__LEGADO_CHROME_TEXT_COLOR__" to readerChrome.textColor.toString(),
-                "__LEGADO_CHROME_DIVIDER_COLOR__" to readerChrome.dividerColor.toString(),
-                "__LEGADO_CHROME_HEADER_DIVIDER__" to readerChrome.headerDividerEnabled.toString(),
-                "__LEGADO_CHROME_FOOTER_DIVIDER__" to readerChrome.footerDividerEnabled.toString(),
-                "__LEGADO_REFRESH_MIN__" to LAYOUT_REFRESH_MIN_INTERVAL_MS.toString(),
-                "__LEGADO_REFRESH_IMMEDIATE__" to LAYOUT_REFRESH_IMMEDIATE_MIN_INTERVAL_MS.toString(),
-                "__LEGADO_REFRESH_MAX__" to LAYOUT_REFRESH_MAX_INTERVAL_MS.toString(),
-                "__LEGADO_REFRESH_COST_MULTIPLIER__" to LAYOUT_REFRESH_COST_MULTIPLIER.toString(),
-                "__LEGADO_BRIDGE__" to BRIDGE_NAME,
-                "__LEGADO_SOURCE_WIDTH__" to sourceWidth.toString(),
-                "__LEGADO_SOURCE_HEIGHT__" to sourceHeight.toString()
-            )
-            return replacements.entries.fold(RUNTIME_SCRIPT_TEMPLATE) { script, (placeholder, value) ->
-                script.replace(placeholder, value)
-            }.also { script ->
-                check(!script.contains("__LEGADO_")) {
-                    "Unresolved EPUB runtime placeholder"
-                }
-            }
         }
     }
 

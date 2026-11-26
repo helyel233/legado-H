@@ -88,6 +88,9 @@ interface ParagraphRuleDao {
     @Query("DELETE FROM paragraph_rule_vars WHERE ruleId = :ruleId")
     fun deleteVars(ruleId: Long)
 
+    @Query("DELETE FROM paragraph_rule_vars WHERE ruleId = :ruleId AND name IN (:names)")
+    fun deleteVarsByNames(ruleId: Long, names: List<String>)
+
     fun deleteWithRelations(rule: ParagraphRule) {
         deleteBookRulesByRule(rule.id)
         deleteVars(rule.id)

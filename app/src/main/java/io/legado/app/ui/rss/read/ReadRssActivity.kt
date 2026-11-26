@@ -96,7 +96,6 @@ import io.legado.app.help.webView.WebJsExtensions.Companion.nameJava
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
 import io.legado.app.help.http.newCallResponse
 import io.legado.app.help.webView.PooledWebView
-import io.legado.app.help.webView.WebJsExtensions.Companion.JS_INJECTION
 import io.legado.app.help.webView.WebJsExtensions.Companion.JS_URL
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameUrl
 import io.legado.app.help.webView.WebViewPool
@@ -128,6 +127,7 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
     private var wasScreenOff = false
     private var customWebViewCallback: WebChromeClient.CustomViewCallback? = null
     private var interfaceInjected: String? = null
+    private var webJsBridgeToken: String = WebJsExtensions.newBridgeToken()
     private var needClearHistory = true
     private val selectImageDir = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
@@ -518,7 +518,9 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             if (interfaceInjected != it.sourceUrl) {
                 interfaceInjected = it.sourceUrl
                 if (!viewModel.hasPreloadJs) return
-                val webJsExtensions = WebJsExtensions(it, this, currentWebView)
+                val token = WebJsExtensions.newBridgeToken()
+                webJsBridgeToken = token
+                val webJsExtensions = WebJsExtensions(it, this, currentWebView, bridgeToken = token)
                 currentWebView.addJavascriptInterface(webJsExtensions, nameJava)
                 currentWebView.addJavascriptInterface(it, nameSource)
                 currentWebView.addJavascriptInterface(WebCacheManager, nameCache)
@@ -762,10 +764,11 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             } else if (!jsInjected && url == nameUrl) {
                 jsInjected = true
                 val preloadJs = source.preloadJs ?: ""
+                val injection = WebJsExtensions.buildInjectionScript(webJsBridgeToken)
                 return WebResourceResponse(
                     "text/javascript",
                     "utf-8",
-                    ByteArrayInputStream("(() => {$JS_INJECTION\n$preloadJs\n})();".toByteArray())
+                    ByteArrayInputStream("(() => {$injection\n$preloadJs\n})();".toByteArray())
                 )
             }
             val blacklist = source.contentBlacklist?.splitNotBlank(",")

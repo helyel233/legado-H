@@ -25,7 +25,6 @@ import io.legado.app.utils.toastOnUi
 import org.apache.commons.text.StringEscapeUtils
 import java.util.Date
 import io.legado.app.data.entities.BaseSource
-import io.legado.app.help.webView.WebJsExtensions.Companion.JS_INJECTION2
 import io.legado.app.R
 import splitties.init.appCtx
 
@@ -56,20 +55,8 @@ class WebViewModel(application: Application) : BaseViewModel(application) {
             sourceType = intent.getIntExtra("sourceType", SourceType.book)
             sourceVerificationEnable = intent.getBooleanExtra("sourceVerificationEnable", false)
             refetchAfterSuccess = intent.getBooleanExtra("refetchAfterSuccess", true)
-            html = intent.getStringExtra("html")?.let{
+            html = intent.getStringExtra("html")?.also {
                 localHtml = true
-                val headIndex = it.indexOf("<head", ignoreCase = true)
-                if (headIndex >= 0) {
-                    val closingHeadIndex = it.indexOf('>', startIndex = headIndex)
-                    if (closingHeadIndex >= 0) {
-                        val insertPos = closingHeadIndex + 1
-                        StringBuilder(it).insert(insertPos, "<script>$JS_INJECTION2</script>").toString()
-                    } else {
-                        "<head><script>$JS_INJECTION2</script></head>$it"
-                    }
-                } else {
-                    "<head><script>$JS_INJECTION2</script></head>$it"
-                }
             }
             source = SourceHelp.getSource(sourceOrigin, sourceType)
             val analyzeUrl = AnalyzeUrl(url, source = source, coroutineContext = coroutineContext)

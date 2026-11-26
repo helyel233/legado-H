@@ -51,6 +51,7 @@ import io.legado.app.utils.inputStream
 import io.legado.app.utils.isAbsUrl
 import io.legado.app.utils.isContentScheme
 import io.legado.app.utils.isDataUrl
+import io.legado.app.utils.isSameOrSubFileOf
 import io.legado.app.utils.printOnDebug
 import kotlinx.coroutines.runBlocking
 import org.apache.commons.text.StringEscapeUtils
@@ -548,11 +549,12 @@ object LocalBook {
             val defaultBookTreeUri = AppConfig.defaultBookTreeUri
             if (defaultBookTreeUri.isNullOrBlank()) throw NoBooksDirException()
             val treeUri = defaultBookTreeUri.toUri()
+            val safeFileName = sanitizeBookFileName(fileName)
             return if (treeUri.isContentScheme()) {
                 val treeDoc = DocumentFile.fromTreeUri(appCtx, treeUri)
-                var doc = treeDoc!!.findFile(fileName)
+                var doc = treeDoc!!.findFile(safeFileName)
                 if (doc == null) {
-                    doc = treeDoc.createFile(FileUtils.getMimeType(fileName), fileName)
+                    doc = treeDoc.createFile(FileUtils.getMimeType(safeFileName), safeFileName)
                         ?: throw SecurityException("请重新设置书籍保存位置\nPermission Denial")
                 }
                 appCtx.contentResolver.openOutputStream(doc.uri)!!.use { oStream ->
@@ -562,7 +564,10 @@ object LocalBook {
             } else {
                 try {
                     val treeFile = File(treeUri.path!!)
-                    val file = treeFile.getFile(fileName)
+                    val file = File(treeFile, safeFileName)
+                    if (!file.isSameOrSubFileOf(treeFile) || file.canonicalFile == treeFile.canonicalFile) {
+                        throw SecurityException("非法书籍文件名")
+                    }
                     FileOutputStream(file).use { oStream ->
                         it.copyTo(oStream)
                     }
@@ -574,6 +579,17 @@ object LocalBook {
                 }
             }
         }
+    }
+
+    private fun sanitizeBookFileName(rawFileName: String): String {
+        val candidate = File(rawFileName.replace('\\', '/')).name
+            .replace("..", "")
+            .replace("\u0000", "")
+            .trim()
+        if (candidate.isEmpty() || candidate == "." || candidate.contains('/') || candidate.contains('\\')) {
+            throw SecurityException("非法书籍文件名")
+        }
+        return candidate
     }
 
     fun isOnBookShelf(

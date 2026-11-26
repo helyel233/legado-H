@@ -40,7 +40,17 @@ val syncHttpClient: OkHttpClient get() = getHttpClient(DnsScope.SYNC)
 val importHttpClient: OkHttpClient get() = getHttpClient(DnsScope.IMPORT)
 
 fun getHttpClient(scope: DnsScope): OkHttpClient = scopedClients.getOrPut(scope) {
-    baseHttpClient.newBuilder().withDnsScope(scope).build()
+    baseHttpClient.newBuilder()
+        .withDnsScope(scope)
+        .apply {
+            // Only book-source reading keeps relaxed TLS for broken novel sites;
+            // sync, AI, import, media, image, and default/ObsoleteUrlFactory clients enforce standard TLS.
+            if (scope == DnsScope.READING) {
+                sslSocketFactory(SSLHelper.unsafeSSLSocketFactory, SSLHelper.unsafeTrustManager)
+                hostnameVerifier(SSLHelper.unsafeHostnameVerifier)
+            }
+        }
+        .build()
 }
 
 val cookieJar by lazy {
@@ -78,9 +88,7 @@ private val baseHttpClient: OkHttpClient by lazy {
         .readTimeout(60, TimeUnit.SECONDS)
         .callTimeout(60, TimeUnit.SECONDS)
         //.cookieJar(cookieJar = cookieJar)
-        .sslSocketFactory(SSLHelper.unsafeSSLSocketFactory, SSLHelper.unsafeTrustManager)
         .retryOnConnectionFailure(true)
-        .hostnameVerifier(SSLHelper.unsafeHostnameVerifier)
         .connectionSpecs(specs)
         .followRedirects(true)
         .followSslRedirects(true)

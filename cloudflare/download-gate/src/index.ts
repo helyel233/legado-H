@@ -22,13 +22,31 @@ interface ReleaseMetadata {
 const DEFAULT_APK_KEY = "legado-arm64-v8a.apk";
 const DEFAULT_METADATA_KEY = "latest.json";
 const APK_CONTENT_TYPE = "application/vnd.android.package-archive";
+const VERSION_PAIR_REGEX = /(\d+(?:\.\d+)+)_(\d+)/;
 const JSON_HEADERS = {
   "content-type": "application/json; charset=utf-8",
   "cache-control": "no-store",
 };
 
+class GateError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+  }
+}
+
+interface KeyVerificationResult {
+  ok: boolean;
+  status: number;
+  error: string;
+}
+
 let cachedMetadata: { value: ReleaseMetadata; expiresAt: number } | null = null;
 
+// shortcut: Rate limiting for /latest and /download is delegated to Cloudflare WAF
+// Rate Limiting rules configured in the Cloudflare dashboard in front of this Worker.
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const url = new URL(request.url);
@@ -46,7 +64,7 @@ export default {
     }
 
     if (
-      (request.method === "POST" || request.method === "GET") &&
+      (request.method === "POST" || request.method === "GET" || request.method === "HEAD") &&
       url.pathname === "/download"
     ) {
       return handleDownload(request, env);
@@ -61,11 +79,21 @@ async function handleLatest(request: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "Worker secret DOWNLOAD_KEY is required." }, 500);
   }
 
-  if (!(await verifyDownloadKey(request, env))) {
-    return jsonResponse({ error: "Invalid download key." }, 401);
+  const auth = await verifyDownloadKey(request, env);
+  if (!auth.ok) {
+    return jsonResponse({ error: auth.error }, auth.status);
   }
 
-  const metadata = await getReleaseMetadata(env);
+  let metadata: ReleaseMetadata;
+  try {
+    metadata = await getReleaseMetadata(env);
+  } catch (error) {
+    if (error instanceof GateError) {
+      return jsonResponse({ error: error.message }, error.status);
+    }
+    return jsonResponse({ error: "Failed to load release metadata." }, 502);
+  }
+
   const downloadUrl = new URL(request.url);
   downloadUrl.pathname = "/download";
   downloadUrl.search = "";
@@ -81,30 +109,91 @@ async function handleDownload(request: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "Worker secret DOWNLOAD_KEY is required." }, 500);
   }
 
-  if (!(await verifyDownloadKey(request, env))) {
-    return htmlResponse(renderHome(env, "Invalid download key."), 401);
+  const auth = await verifyDownloadKey(request, env);
+  if (!auth.ok) {
+    if (wantsJsonResponse(request)) {
+      return jsonResponse({ error: auth.error }, auth.status);
+    }
+    return htmlResponse(renderHome(env, auth.error), auth.status);
   }
 
   const apkKey = env.R2_APK_KEY?.trim() || DEFAULT_APK_KEY;
-  const object = await env.APK_BUCKET.get(apkKey);
+  const metadata = await getReleaseMetadata(env).catch(() => undefined);
+  const fileName = sanitizeFilename(metadata?.fileName || apkKey.split("/").pop() || DEFAULT_APK_KEY);
+
+  if (request.method === "HEAD") {
+    let headObject: R2Object | null;
+    try {
+      headObject = await env.APK_BUCKET.head(apkKey);
+    } catch {
+      return jsonResponse({ error: "Failed to read APK metadata from R2." }, 502);
+    }
+    if (!headObject) {
+      return jsonResponse({ error: "APK object not found." }, 404);
+    }
+    return new Response(null, {
+      status: 200,
+      headers: {
+        "content-type": headObject.httpMetadata?.contentType || APK_CONTENT_TYPE,
+        "content-disposition": `attachment; filename="${fileName}"`,
+        "accept-ranges": "bytes",
+        "cache-control": "private, no-store",
+        "x-content-type-options": "nosniff",
+        ...(headObject.size > 0 ? { "content-length": String(headObject.size) } : {}),
+      },
+    });
+  }
+
+  const rangeHeader = request.headers.get("range");
+  let object: R2ObjectBody | null;
+  try {
+    object = await env.APK_BUCKET.get(
+      apkKey,
+      rangeHeader ? { range: request.headers } : undefined,
+    );
+  } catch {
+    return jsonResponse({ error: "Failed to read APK object from R2." }, 502);
+  }
   if (!object?.body) {
     return jsonResponse({ error: "APK object not found." }, 404);
   }
 
-  const metadata = await getReleaseMetadata(env).catch(() => undefined);
-  const fileName = sanitizeFilename(metadata?.fileName || apkKey.split("/").pop() || DEFAULT_APK_KEY);
   // Metadata may describe an older release, even if both APKs have the same size.
   // Response framing must describe this object; unbound release hashes/tags cannot.
-  const size = object.size;
+  const totalSize = object.size;
+  let status = 200;
+  let contentLength = totalSize;
+  let contentRange: string | undefined;
+
+  if (rangeHeader && object.range) {
+    const range = object.range as { offset?: number; length?: number; suffix?: number };
+    let start: number | undefined;
+    let length: number | undefined;
+    if (typeof range.offset === "number" && typeof range.length === "number") {
+      start = range.offset;
+      length = range.length;
+    } else if (typeof range.suffix === "number" && totalSize > 0) {
+      length = Math.min(range.suffix, totalSize);
+      start = totalSize - length;
+    }
+    if (start !== undefined && length !== undefined && length > 0 && totalSize > 0) {
+      const end = start + length - 1;
+      status = 206;
+      contentLength = length;
+      contentRange = `bytes ${start}-${end}/${totalSize}`;
+    }
+  }
 
   return new Response(object.body, {
-    status: 200,
+    status,
     headers: {
       "content-type": object.httpMetadata?.contentType || APK_CONTENT_TYPE,
       "content-disposition": `attachment; filename="${fileName}"`,
+      "accept-ranges": "bytes",
       "cache-control": "private, no-store",
       "x-content-type-options": "nosniff",
-      ...(size > 0 ? { "content-length": String(size) } : {}),
+      ...(contentRange ? { "content-range": contentRange } : {}),
+      ...(contentLength > 0 ? { "content-length": String(contentLength) } : {}),
     },
   });
 }
@@ -117,18 +206,37 @@ async function getReleaseMetadata(env: Env): Promise<ReleaseMetadata> {
 
   const apkKey = env.R2_APK_KEY?.trim() || DEFAULT_APK_KEY;
   const metadataKey = env.R2_METADATA_KEY?.trim() || DEFAULT_METADATA_KEY;
-  const metadataObject = await env.APK_BUCKET.get(metadataKey);
+
+  let metadataObject: R2ObjectBody | null;
+  try {
+    metadataObject = await env.APK_BUCKET.get(metadataKey);
+  } catch {
+    throw new GateError(502, "Failed to read release metadata from R2.");
+  }
 
   if (metadataObject) {
-    const metadata = (await metadataObject.json()) as ReleaseMetadata;
+    let metadata: ReleaseMetadata;
+    try {
+      metadata = (await metadataObject.json()) as ReleaseMetadata;
+    } catch {
+      throw new GateError(502, "Invalid release metadata JSON.");
+    }
+    if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+      throw new GateError(502, "Invalid release metadata JSON.");
+    }
     const normalized = normalizeMetadata(metadata, apkKey);
     cachedMetadata = { value: normalized, expiresAt: now + 15_000 };
     return normalized;
   }
 
-  const apkObject = await env.APK_BUCKET.head(apkKey);
+  let apkObject: R2Object | null;
+  try {
+    apkObject = await env.APK_BUCKET.head(apkKey);
+  } catch {
+    throw new GateError(502, "Failed to read APK metadata from R2.");
+  }
   if (!apkObject) {
-    throw new Error(`R2 object not found: ${apkKey}`);
+    throw new GateError(404, `R2 object not found: ${apkKey}`);
   }
 
   const normalized = normalizeMetadata(
@@ -173,22 +281,65 @@ function constantTimeEqual(left: string, right: string): boolean {
   return diff === 0;
 }
 
-async function verifyDownloadKey(request: Request, env: Env): Promise<boolean> {
-  const url = new URL(request.url);
-  let providedKey = request.headers.get("x-download-key") || url.searchParams.get("key") || "";
-  if (!providedKey && request.method === "POST") {
-    const form = await request.formData();
-    providedKey = String(form.get("key") ?? "");
+function wantsJsonResponse(request: Request): boolean {
+  if (request.headers.has("x-download-key")) {
+    return true;
   }
-  return constantTimeEqual(providedKey, env.DOWNLOAD_KEY);
+  const accept = (request.headers.get("accept") || "").toLowerCase();
+  return accept.includes("application/json");
+}
+
+async function verifyDownloadKey(request: Request, env: Env): Promise<KeyVerificationResult> {
+  const headerKey = request.headers.get("x-download-key");
+  if (headerKey !== null) {
+    return constantTimeEqual(headerKey, env.DOWNLOAD_KEY)
+      ? { ok: true, status: 200, error: "" }
+      : { ok: false, status: 401, error: "Invalid download key." };
+  }
+
+  if (request.method !== "POST") {
+    return { ok: false, status: 401, error: "Invalid download key." };
+  }
+
+  const contentType = (request.headers.get("content-type") || "").split(";")[0].trim().toLowerCase();
+  let providedKey = "";
+
+  if (contentType === "application/json") {
+    try {
+      const body = (await request.json()) as { key?: unknown } | null;
+      if (!body || typeof body !== "object" || Array.isArray(body)) {
+        return { ok: false, status: 400, error: "Invalid JSON request body." };
+      }
+      providedKey = typeof body.key === "string" ? body.key : "";
+    } catch {
+      return { ok: false, status: 400, error: "Invalid JSON request body." };
+    }
+  } else if (
+    contentType === "application/x-www-form-urlencoded" ||
+    contentType === "multipart/form-data"
+  ) {
+    try {
+      const form = await request.formData();
+      const rawKey = form.get("key");
+      providedKey = typeof rawKey === "string" ? rawKey : "";
+    } catch {
+      return { ok: false, status: 400, error: "Invalid form request body." };
+    }
+  } else {
+    return { ok: false, status: 400, error: "Unsupported Content-Type." };
+  }
+
+  return constantTimeEqual(providedKey, env.DOWNLOAD_KEY)
+    ? { ok: true, status: 200, error: "" }
+    : { ok: false, status: 401, error: "Invalid download key." };
 }
 
 function versionNameFromFileName(name: string): string | null {
-  return /^.+?_.+?_([^_]+)(?:_(\d+))?\.apk$/i.exec(name)?.[1] ?? null;
+  return VERSION_PAIR_REGEX.exec(name)?.[1] ?? null;
 }
 
 function versionCodeFromFileName(name: string): number {
-  const raw = /^.+?_.+?_([^_]+)(?:_(\d+))?\.apk$/i.exec(name)?.[2];
+  const raw = VERSION_PAIR_REGEX.exec(name)?.[2];
   return raw ? Number.parseInt(raw, 10) || 0 : 0;
 }
 

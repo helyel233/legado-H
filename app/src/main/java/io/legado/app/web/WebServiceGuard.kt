@@ -4,6 +4,7 @@ import fi.iki.elonen.NanoHTTPD
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.SecurePrefs
+import java.net.URI
 import java.security.MessageDigest
 
 /**
@@ -139,4 +140,88 @@ object WebServiceGuard {
         val separator = if (hostAddress.contains("?")) "&" else "?"
         return "$hostAddress${separator}token=$token"
     }
+
+    /**
+     * Validate the HTTP `Origin` header for CORS and cross-origin CSRF protection.
+     *
+     * Returns true when no `Origin` header is sent (same-origin GET or non-browser client),
+     * or when `Origin` is an `http`/`https` origin matching the request's `Host` (and port).
+     */
+    fun isAllowedHttpOrigin(session: NanoHTTPD.IHTTPSession, listeningPort: Int): Boolean {
+        val origin = header(session, "origin")?.trim()
+        if (origin.isNullOrEmpty()) return true
+        return matchesAllowedOrigin(origin, header(session, "host"), setOf(listeningPort))
+    }
+
+    /**
+     * Return the validated `Origin` header value to echo in `Access-Control-Allow-Origin`,
+     * or null when no `Origin` header was present or the origin is untrusted.
+     */
+    fun allowedCorsOrigin(session: NanoHTTPD.IHTTPSession, listeningPort: Int): String? {
+        val origin = header(session, "origin")?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return if (matchesAllowedOrigin(origin, header(session, "host"), setOf(listeningPort))) {
+            origin
+        } else {
+            null
+        }
+    }
+
+    /**
+     * Validate the WebSocket handshake `Origin` header.
+     *
+     * Allows non-browser clients (no `Origin` header) and browser pages hosted on the same host
+     * at either the Web UI HTTP port (`wsPort - 1`) or the WebSocket port (or standard proxy port).
+     */
+    fun isAllowedWebSocketOrigin(handshake: NanoHTTPD.IHTTPSession, wsPort: Int): Boolean {
+        val origin = header(handshake, "origin")?.trim()
+        if (origin.isNullOrEmpty()) return true
+        val allowedPorts = buildSet {
+            if (wsPort > 1) add(wsPort - 1)
+            if (wsPort > 0) add(wsPort)
+        }
+        return matchesAllowedOrigin(origin, header(handshake, "host"), allowedPorts)
+    }
+
+    private fun matchesAllowedOrigin(
+        originHeader: String,
+        hostHeader: String?,
+        allowedPorts: Set<Int>
+    ): Boolean {
+        val originUri = runCatching { URI(originHeader) }.getOrNull() ?: return false
+        val scheme = originUri.scheme?.lowercase() ?: return false
+        if (scheme != "http" && scheme != "https") return false
+        val originHost = normalizeHost(originUri.host) ?: return false
+        val originPort = if (originUri.port > 0) originUri.port else defaultPort(scheme)
+
+        val (requestHost, requestPort) = parseHostHeader(hostHeader) ?: return false
+        if (!hostsMatch(originHost, requestHost)) return false
+
+        return originPort in allowedPorts ||
+            (requestPort != null && originPort == requestPort) ||
+            (requestPort == null && originPort == defaultPort(scheme))
+    }
+
+    private fun parseHostHeader(rawHost: String?): Pair<String, Int?>? {
+        val trimmed = rawHost?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val uri = runCatching { URI("http://$trimmed") }.getOrNull() ?: return null
+        val host = normalizeHost(uri.host) ?: return null
+        val port = uri.port.takeIf { it > 0 }
+        return host to port
+    }
+
+    private fun normalizeHost(host: String?): String? {
+        val cleaned = host?.trim()?.removePrefix("[")?.removeSuffix("]")?.lowercase()
+        return cleaned?.takeIf { it.isNotEmpty() }
+    }
+
+    private fun hostsMatch(originHost: String, requestHost: String): Boolean {
+        if (originHost == requestHost) return true
+        return isLoopbackHost(originHost) && isLoopbackHost(requestHost)
+    }
+
+    private fun isLoopbackHost(host: String): Boolean {
+        return host == "127.0.0.1" || host == "localhost" || host == "::1"
+    }
+
+    private fun defaultPort(scheme: String): Int = if (scheme == "https") 443 else 80
 }

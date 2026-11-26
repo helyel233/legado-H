@@ -47,7 +47,6 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.gsyVideo.VideoPlayer
 import io.legado.app.help.webView.PooledWebView
 import io.legado.app.help.webView.WebJsExtensions
-import io.legado.app.help.webView.WebJsExtensions.Companion.getInjectionString
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameCache
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameJava
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameSource
@@ -128,6 +127,7 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
         view
     }
     private var pooledWebView: PooledWebView? = null
+    private var webJsInjectionScript: String? = null
     private val imgAvailableWidth by lazy {
         val textView = introTextView
         textView.width - textView.paddingLeft - textView.paddingRight - 8.dpToPx()
@@ -417,7 +417,6 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
     }
 
     inner class CustomWebViewClient : WebViewClient() {
-        private val jsStr = getInjectionString
         override fun shouldOverrideUrlLoading(
             view: WebView?,
             request: WebResourceRequest?
@@ -445,10 +444,15 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
         }
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
-            view?.evaluateJavascript(jsStr, null)
+            webJsInjectionScript?.let { script ->
+                runCatching { view?.evaluateJavascript(script, null) }
+            }
         }
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
+            webJsInjectionScript?.let { script ->
+                runCatching { view?.evaluateJavascript(script, null) }
+            }
             view?.post {
                 binding.tvIntroContainer.requestLayout()
             }
@@ -470,10 +474,19 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
                 webView.onResume()
                 webView.webViewClient = CustomWebViewClient()
                 webView.addJavascriptInterface(WebCacheManager, nameCache)
-                VideoPlay.source?.let {
-                    webView.addJavascriptInterface(it, nameSource)
-                    val webJsExtensions = WebJsExtensions(it, null, webView)
+                val source = VideoPlay.source
+                if (source != null) {
+                    webView.addJavascriptInterface(source, nameSource)
+                    val webJsExtensions = WebJsExtensions(
+                        source,
+                        null,
+                        webView,
+                        bridgeToken = WebJsExtensions.newBridgeToken()
+                    )
+                    webJsInjectionScript = webJsExtensions.buildInjectionString()
                     webView.addJavascriptInterface(webJsExtensions, nameJava)
+                } else {
+                    webJsInjectionScript = null
                 }
                 pooledWebView
             }
@@ -987,6 +1000,7 @@ class VideoPlayerActivity : VMBaseActivity<ActivityVideoPlayerBinding, VideoPlay
     }
 
     private fun destroyWeb() {
+        webJsInjectionScript = null
         pooledWebView?.let { WebViewPool.release(it) }
         pooledWebView = null
     }

@@ -161,18 +161,20 @@ object CacheCoordinator : CacheUiPort {
     private val automaticSubmitLock = Any()
     private val resourceGcScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val terminalEffectsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     /** 防止同一本书在短时间内重复排队 GC。 */
     private val resourceGcScheduled = ConcurrentHashMap.newKeySet<String>()
     private val terminalEffectsInProgress = ConcurrentHashMap.newKeySet<String>()
     private val terminalEffectsRetryAttempts = ConcurrentHashMap<String, Int>()
     private val terminalEffectsRetryScheduled = ConcurrentHashMap.newKeySet<String>()
-
-
+    private const val ZOMBIE_REVIEW_GRACE_MS = 10_000L
 
     init {
         ReviewPreheatCoordinator.setActiveReviewTaskChecker(::hasActiveReviewTask)
-        replayPendingTerminalEffects()
-        workerDispatcher.recover(snapshot.value)
+        recoveryScope.launch {
+            replayPendingTerminalEffects()
+            workerDispatcher.recover(snapshot.value)
+        }
     }
 
     override fun submit(request: CacheRequest): CacheSubmission {
@@ -396,6 +398,7 @@ object CacheCoordinator : CacheUiPort {
             }
         }
         synchronized(reviewTaskLock) {
+            cleanupZombieReviewTasks(book.bookUrl, reviewKind)
             val activeIndexes = snapshot.value.sessions.asSequence()
                 .flatMap { it.tasks.asSequence() }
                 .filter {
@@ -440,6 +443,76 @@ object CacheCoordinator : CacheUiPort {
             CacheKind.AUDIO -> AudioOfflineState.isComplete(book, chapter)
             else -> true
         }
+    }
+
+    private fun cleanupZombieReviewTasks(bookUrl: String, reviewKind: CacheKind) {
+        val now = System.currentTimeMillis()
+        snapshot.value.sessions.asSequence()
+            .flatMap { it.tasks.asSequence() }
+            .filter { task ->
+                task.kind == reviewKind &&
+                    task.phase == CachePhase.REVIEW &&
+                    task.bookUrl == bookUrl &&
+                    task.status == CacheLifecycle.RUNNING &&
+                    !CacheReviewWorkerRegistry.hasActiveBinding(task.sessionId, task.taskId) &&
+                    now - task.updatedAt >= ZOMBIE_REVIEW_GRACE_MS
+            }
+            .toList()
+            .forEach { zombie ->
+                AppLog.put("清理失联评论缓存任务: ${zombie.sessionId}/${zombie.taskId}")
+                cancel(CacheSubmission(zombie.sessionId, zombie.taskId))
+            }
+    }
+
+    fun cancelActiveReviewTasks(bookUrl: String): Int {
+        val targets = snapshot.value.sessions.asSequence()
+            .flatMap { it.tasks.asSequence() }
+            .filter { task ->
+                task.phase == CachePhase.REVIEW &&
+                    task.bookUrl == bookUrl &&
+                    !CacheLifecycleRules.isTerminal(task.status)
+            }
+            .map { CacheSubmission(it.sessionId, it.taskId) }
+            .toList()
+        return targets.count(::cancel)
+    }
+
+    fun activeReviewProgress(bookUrl: String): Pair<Int, Int>? {
+        val activeTasks = snapshot.value.sessions.asSequence()
+            .flatMap { it.tasks.asSequence() }
+            .filter { task ->
+                task.phase == CachePhase.REVIEW &&
+                    task.bookUrl == bookUrl &&
+                    !CacheLifecycleRules.isTerminal(task.status) &&
+                    task.status != CacheLifecycle.PAUSED
+            }
+            .toList()
+        if (activeTasks.isEmpty()) return null
+        val total = activeTasks.sumOf { it.units.size }
+        val finished = activeTasks.sumOf { task ->
+            task.units.count { unit ->
+                unit.status != CacheUnitStatus.PENDING &&
+                    unit.status != CacheUnitStatus.RUNNING &&
+                    unit.status != CacheUnitStatus.REVIEW_ELIGIBLE
+            }
+        }
+        return finished to total
+    }
+
+    /**
+     * 等待“取消并重试”把旧任务真正停下。
+     *
+     * `beginCancel` 先把状态置为 CANCELLING，而 CANCELLING 不算终态、它占用的章节也仍被
+     * 视为活跃；此时立刻 retry 会被判成 AlreadyInProgress，弹窗重开、用户再点一次就是死循环。
+     * 这里以 100ms 粒度轮询到没有活跃 REVIEW 任务为止。
+     */
+    suspend fun awaitReviewTasksStopped(bookUrl: String, timeoutMs: Long): Boolean {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (activeReviewProgress(bookUrl) == null) return true
+            kotlinx.coroutines.delay(100L)
+        }
+        return activeReviewProgress(bookUrl) == null
     }
 
     private fun commandAll(command: (CacheSubmission) -> Boolean): Int {

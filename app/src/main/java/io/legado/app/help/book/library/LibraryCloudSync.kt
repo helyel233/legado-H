@@ -16,15 +16,21 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import splitties.init.appCtx
 import java.time.LocalDate
 import java.util.concurrent.ConcurrentHashMap
 
 object LibraryCloudSync {
 
+    private const val MAX_CONCURRENT_UPLOADS = 4
+    private const val UPLOAD_LOCK_STRIPE_COUNT = 64
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val uploadLocks = ConcurrentHashMap<String, Mutex>()
+    private val uploadSemaphore = Semaphore(MAX_CONCURRENT_UPLOADS)
+    private val uploadLockStripes = Array(UPLOAD_LOCK_STRIPE_COUNT) { Mutex() }
     private val dailyUploadLock = Mutex()
     private val sessions = ConcurrentHashMap<String, LibraryCloudSession>()
     private val activeBooks = ConcurrentHashMap<String, Boolean>()
@@ -39,13 +45,15 @@ object LibraryCloudSync {
         val uploadContent = LibraryCloudContent.toUploadText(content)
         if (!shouldUploadContent(config, uploadContent)) return
         val lockKey = "${config.id}\u001F${LibraryCloudKeys.bookKey(book)}\u001F${LibraryCloudKeys.libraryChapterKey(chapter)}"
-        val lock = uploadLocks.getOrPut(lockKey) { Mutex() }
+        val lock = uploadLockStripes[(lockKey.hashCode() and Int.MAX_VALUE) % UPLOAD_LOCK_STRIPE_COUNT]
         scope.launch {
             lock.withLock {
-                runCatching {
-                    uploadChapter(config, book, chapter, uploadContent)
-                }.onFailure {
-                    AppLog.put("上传书库章节失败 ${book.name} ${chapter.title}\n${it.localizedMessage}", it)
+                uploadSemaphore.withPermit {
+                    runCatching {
+                        uploadChapter(config, book, chapter, uploadContent)
+                    }.onFailure {
+                        AppLog.put("上传书库章节失败 ${book.name} ${chapter.title}\n${it.localizedMessage}", it)
+                    }
                 }
             }
         }

@@ -189,14 +189,31 @@ class WebViewActivity : VMBaseActivity<ActivityWebViewBinding, WebViewModel>() {
             if (html.isNullOrEmpty()) {
                 currentWebView.loadUrl(url, headerMap)
             } else {
+                var pageHtml: String = html
                 if (viewModel.localHtml) {
                     viewModel.source?.let {
-                        val webJsExtensions = WebJsExtensions(it, this, currentWebView)
+                        val webJsExtensions = WebJsExtensions(
+                            it, this, currentWebView,
+                            bridgeToken = WebJsExtensions.newBridgeToken()
+                        )
                         currentWebView.addJavascriptInterface(webJsExtensions, nameJava)
+                        currentWebView.addJavascriptInterface(WebCacheManager, nameCache)
+                        val injectionScript = webJsExtensions.buildInjectionScript2()
+                        val headIndex = pageHtml.indexOf("<head", ignoreCase = true)
+                        pageHtml = if (headIndex >= 0) {
+                            val closingHeadIndex = pageHtml.indexOf('>', startIndex = headIndex)
+                            if (closingHeadIndex >= 0) {
+                                val insertPos = closingHeadIndex + 1
+                                StringBuilder(pageHtml).insert(insertPos, "<script>$injectionScript</script>").toString()
+                            } else {
+                                "<head><script>$injectionScript</script></head>$pageHtml"
+                            }
+                        } else {
+                            "<head><script>$injectionScript</script></head>$pageHtml"
+                        }
                     }
-                    currentWebView.addJavascriptInterface(WebCacheManager, nameCache)
                 }
-                currentWebView.loadDataWithBaseURL(url, html, "text/html", "utf-8", url)
+                currentWebView.loadDataWithBaseURL(url, pageHtml, "text/html", "utf-8", url)
                 revealWebViewAfterVisualState()
             }
         }

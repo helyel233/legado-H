@@ -24,7 +24,9 @@ import io.legado.app.model.localBook.LocalBook
 import io.legado.app.model.webBook.WebBook
 import io.legado.app.utils.GSON
 import io.legado.app.utils.cnCompare
+import io.legado.app.utils.externalFiles
 import io.legado.app.utils.fromJsonObject
+import io.legado.app.utils.isSameOrSubFileOf
 import io.legado.app.utils.printOnDebug
 import io.legado.app.utils.stackTraceStr
 import kotlinx.coroutines.delay
@@ -66,11 +68,73 @@ object BookController {
         }
 
     /**
-     * 获取封面
+     * 获取封面：仅允许通过书架书籍记录或应用受控封面缓存目录解析，禁止读取任意路径。
      */
     fun getCover(parameters: Map<String, List<String>>): ReturnData {
+        val bookUrl = parameters["url"]?.firstOrNull()?.takeIf { it.isNotBlank() }
+        if (bookUrl != null) {
+            val book = appDb.bookDao.getBook(bookUrl)
+                ?: return ReturnData().setErrorMsg(appCtx.getString(R.string.svc_bookurl_invalid))
+            return loadCoverBitmap(validateBookCoverPath(book.getDisplayCover()))
+        }
+        val rawPath = parameters["path"]?.firstOrNull()?.trim()
+            ?: return ReturnData().setErrorMsg("invalid cover path")
+        val resolved = resolveAllowedCoverPath(rawPath)
+            ?: return ReturnData().setErrorMsg("invalid cover path")
+        return loadCoverBitmap(resolved)
+    }
+
+    /** Resolve a cover only through an existing bookshelf entry; never accepts a raw file path. */
+    fun getRelayBookCover(parameters: Map<String, List<String>>): ReturnData {
+        val bookUrl = parameters["url"]?.firstOrNull()
+            ?: return ReturnData().setErrorMsg(appCtx.getString(R.string.svc_bookurl_empty))
+        val book = appDb.bookDao.getBook(bookUrl)
+            ?: return ReturnData().setErrorMsg(appCtx.getString(R.string.svc_bookurl_invalid))
+        return loadCoverBitmap(validateBookCoverPath(book.getDisplayCover()))
+    }
+
+    private fun resolveAllowedCoverPath(rawPath: String): String? {
+        if (rawPath.isEmpty()) return null
+        val matchedBookCover = appDb.bookDao.all.any { book ->
+            book.getDisplayCover() == rawPath ||
+                book.coverUrl == rawPath ||
+                book.customCoverUrl == rawPath
+        }
+        if (matchedBookCover) {
+            return validateBookCoverPath(rawPath)
+        }
+        return validateLocalCoverCacheFile(rawPath)
+    }
+
+    private fun validateBookCoverPath(coverPath: String?): String? {
+        val path = coverPath?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        if (path.startsWith("http://", ignoreCase = true) ||
+            path.startsWith("https://", ignoreCase = true)
+        ) {
+            return path
+        }
+        return validateLocalCoverCacheFile(path)
+    }
+
+    private fun validateLocalCoverCacheFile(rawPath: String): String? {
+        val filePath = if (rawPath.startsWith("file://", ignoreCase = true)) {
+            runCatching { java.net.URI(rawPath).path }.getOrNull() ?: return null
+        } else {
+            rawPath
+        }
+        val candidate = File(filePath)
+        val allowedDirs = listOf(
+            File(appCtx.externalFiles, "covers"),
+            File(appCtx.filesDir, "covers"),
+            File(appCtx.cacheDir, "covers")
+        )
+        return candidate.takeIf { file ->
+            file.isFile && allowedDirs.any { dir -> file.isSameOrSubFileOf(dir) }
+        }?.canonicalPath
+    }
+
+    private fun loadCoverBitmap(coverPath: String?): ReturnData {
         val returnData = ReturnData()
-        val coverPath = parameters["path"]?.firstOrNull()
         val ftBitmap = ImageLoader.loadBitmap(appCtx, coverPath)
             .override(84, 112)
             .centerCrop()
@@ -93,15 +157,6 @@ object BookController {
                 returnData.setErrorMsg(e.localizedMessage ?: "getCover error")
             }
         }
-    }
-
-    /** Resolve a cover only through an existing bookshelf entry; never accepts a raw file path. */
-    fun getRelayBookCover(parameters: Map<String, List<String>>): ReturnData {
-        val bookUrl = parameters["url"]?.firstOrNull()
-            ?: return ReturnData().setErrorMsg(appCtx.getString(R.string.svc_bookurl_empty))
-        val book = appDb.bookDao.getBook(bookUrl)
-            ?: return ReturnData().setErrorMsg(appCtx.getString(R.string.svc_bookurl_invalid))
-        return getCover(mapOf("path" to listOf(book.getDisplayCover().orEmpty())))
     }
 
     /**

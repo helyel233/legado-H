@@ -127,9 +127,7 @@ fun speechRouteSummary(
     defaultText: String = appCtx.getString(R.string.ra_cfg_use_default_read_aloud_engine)
 ): String {
     if (!route.isConfigured) return defaultText
-    val group = groups.firstOrNull {
-        it.engineType == route.engineType && it.engineValue == route.engineValue
-    }
+    val group = groups.firstOrNull { routeMatchesGroup(route, it) }
     if (route.engineType == SpeechRoute.ENGINE_HTTP && group == null) return defaultText
     if (route.toneID.isNotBlank() && group?.options?.none { it.toneID == route.toneID } == true) {
         return defaultText
@@ -141,21 +139,27 @@ fun speechRouteSummary(
             SpeechRoute.ENGINE_SYSTEM -> appCtx.getString(R.string.system_tts)
             else -> appCtx.getString(R.string.ra_cfg_default_read_aloud)
         })
-        route.speakerName.takeIf { it.isNotBlank() }?.let(::add)
+        route.displaySpeakerName().takeIf { it.isNotBlank() }?.let(::add)
         route.emotionName.takeIf { it.isNotBlank() }?.let(::add)
     }
     return parts.distinct().joinToString(" · ")
 }
 
 fun routeMatchesGroup(route: SpeechRoute, group: SpeechVoiceEngineGroup): Boolean {
-    return route.engineType == group.engineType && route.engineValue == group.engineValue
+    return route.engineType == group.engineType &&
+        SpeechRoute.canonicalEngineIdentity(route.engineType, route.engineValue) ==
+        SpeechRoute.canonicalEngineIdentity(group.engineType, group.engineValue)
 }
 
 private fun routeMatchesOption(route: SpeechRoute, option: SpeechVoiceOption): Boolean {
-    return route.engineType == option.engineType &&
-            route.engineValue == option.engineValue &&
-            route.toneID == option.toneID &&
-            route.speakerName == option.speakerName
+    if (route.engineType != option.engineType) return false
+    if (SpeechRoute.canonicalEngineIdentity(route.engineType, route.engineValue) !=
+        SpeechRoute.canonicalEngineIdentity(option.engineType, option.engineValue)) {
+        return false
+    }
+    if (route.engineType == SpeechRoute.ENGINE_SYSTEM) return true
+    return route.toneID == option.toneID &&
+        route.speakerName == option.speakerName
 }
 
 @Composable

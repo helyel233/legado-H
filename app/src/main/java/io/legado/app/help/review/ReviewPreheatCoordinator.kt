@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -51,6 +52,9 @@ object ReviewPreheatCoordinator {
 
     /** 点击即缓存的启动延迟：避开评论弹窗创建高峰，错开 WebView 使用 */
     private const val CLICK_CAPTURE_DELAY_MS = 3_000L
+
+    /** 预热/刷新单按钮抓拍硬上限，防止异常页面占死预热协程 */
+    private const val PREHEAT_BUTTON_TIMEOUT_MS = 90_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -155,6 +159,24 @@ object ReviewPreheatCoordinator {
         }
     }
 
+    /** 清理整本书的预热失败退避记录（重试、清空缓存或重新开启缓存开关时调用）。 */
+    fun clearBookFailures(bookUrl: String) {
+        if (bookUrl.isBlank()) return
+        ensureFailuresLoaded()
+        val prefix = "$bookUrl|"
+        var removed = false
+        val iterator = failures.keys.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next().startsWith(prefix)) {
+                iterator.remove()
+                removed = true
+            }
+        }
+        if (removed) {
+            ReviewBackoffStore.save(failures.toMap())
+        }
+    }
+
     /** 退避表超过上限时清掉已过期条目，仍超上限则保留最顽固的 */
     private fun pruneFailures(now: Long) {
         if (!ReviewBackoffPolicy.shouldTrim(failures.size, MAX_BACKOFF_ENTRIES)) return
@@ -203,21 +225,27 @@ object ReviewPreheatCoordinator {
         url: String,
         html: String?,
         preloadJs: String?,
+        sourceKey: String? = null,
     ) {
         if (!AppConfig.syncCacheReview) return
         if (book.isVideo) return
         if (url.isBlank()) return
         if (AppConfig.reviewPreheatWifiOnly && !NetworkUtils.isWifi()) return
+        captureJob?.cancel()
         captureJob = scope.launch {
             delay(CLICK_CAPTURE_DELAY_MS)
             runCatching {
                 if (ReviewSnapshotStore.hasComplete(book, chapter, buttonSrc)) return@launch
-                val bookSource = appDb.bookSourceDao.getBookSource(book.origin) ?: return@launch
+                val captureSource = ParagraphRuleProcessor.resolveSource(sourceKey)
+                    ?: appDb.bookSourceDao.getBookSource(book.origin)
+                    ?: return@launch
                 // put 前置：资源库不存在时 requireDatabase 必抛（同缓存管线 prepareForCapture）
                 ReviewSnapshotResourceStore.prepareForCapture(book)
-                val capture = ReviewSnapshotCapture.capture(
-                    bookSource, book, chapter, buttonSrc, url, html, preloadJs
-                )
+                val capture = withTimeout(PREHEAT_BUTTON_TIMEOUT_MS) {
+                    ReviewSnapshotCapture.capture(
+                        captureSource, book, chapter, buttonSrc, url, html, preloadJs
+                    )
+                }
                 ReviewSnapshotStore.put(book, capture.snapshot)
                 AppLog.putDebug("$TAG 点击即缓存成功：${chapter.title} / ${buttonSrc.take(60)}")
             }.onFailure { error ->
@@ -241,6 +269,7 @@ object ReviewPreheatCoordinator {
         if (!AppConfig.syncCacheReview) return
         if (book.isVideo) return
         if (AppConfig.reviewPreheatWifiOnly && !NetworkUtils.isWifi()) return
+        refreshJob?.cancel()
         refreshJob = scope.launch {
             runCatching {
                 val bookSource = appDb.bookSourceDao.getBookSource(book.origin) ?: return@launch
@@ -256,9 +285,12 @@ object ReviewPreheatCoordinator {
                     book, bookSource, chapter, button
                 )
                 val url = page.url?.takeIf { it.isNotBlank() } ?: return@launch
-                val capture = ReviewSnapshotCapture.capture(
-                    bookSource, book, chapter, buttonSrc, url, page.html, page.preloadJs
-                )
+                val captureSource = ReviewSnapshotManager.resolveCaptureSource(bookSource, page.sourceKey)
+                val capture = withTimeout(PREHEAT_BUTTON_TIMEOUT_MS) {
+                    ReviewSnapshotCapture.capture(
+                        captureSource, book, chapter, buttonSrc, url, page.html, page.preloadJs
+                    )
+                }
                 ReviewSnapshotStore.put(book, capture.snapshot)
             }.onFailure { error ->
                 // 解析/抓取超时按失败记日志，不当协程取消静默吞掉
@@ -315,9 +347,12 @@ object ReviewPreheatCoordinator {
                         failedSources.add(button.src.trim())
                         return@runCatching
                     }
-                    val capture = ReviewSnapshotCapture.capture(
-                        bookSource, book, chapter, button.src, url, page.html, page.preloadJs
-                    )
+                    val captureSource = ReviewSnapshotManager.resolveCaptureSource(bookSource, page.sourceKey)
+                    val capture = withTimeout(PREHEAT_BUTTON_TIMEOUT_MS) {
+                        ReviewSnapshotCapture.capture(
+                            captureSource, book, chapter, button.src, url, page.html, page.preloadJs
+                        )
+                    }
                     ReviewSnapshotStore.put(book, capture.snapshot)
                     if (capture.snapshot.partial) {
                         anyFailure = true

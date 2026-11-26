@@ -62,7 +62,6 @@ import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.StartActivityContract
 import io.legado.app.utils.canScroll
-import io.legado.app.utils.fastBinarySearch
 import io.legado.app.utils.findCenterViewPosition
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.getCompatColor
@@ -973,7 +972,7 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
 
     override fun skipToPage(index: Int) {
         val durChapterIndex = ReadManga.durChapterIndex
-        val itemPos = mAdapter.getItems().fastBinarySearch {
+        val itemPos = mAdapter.getItems().binarySearch {
             val chapterIndex: Int
             val pageIndex: Int
             if (it is BaseMangaPage) {

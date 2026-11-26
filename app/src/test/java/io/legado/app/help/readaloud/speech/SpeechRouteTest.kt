@@ -52,7 +52,9 @@ class SpeechRouteTest {
     fun fromTtsEngineValue_blank_isSystemDefault() {
         val route = SpeechRoute.fromTtsEngineValue("")
         assertEquals(SpeechRoute.ENGINE_SYSTEM, route.engineType)
-        assertEquals("系统默认", route.speakerName)
+        assertTrue(route.isSystemDefault)
+        assertEquals("", route.engineValue)
+        assertEquals("", route.speakerName)
         assertEquals(SpeechRoute.SOURCE_MANUAL, route.source)
     }
 

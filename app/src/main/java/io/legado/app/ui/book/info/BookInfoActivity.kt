@@ -88,7 +88,6 @@ import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.exoplayer.ExoPlayerHelper
 import io.legado.app.help.webView.PooledWebView
-import io.legado.app.help.webView.WebJsExtensions.Companion.getInjectionString
 import io.legado.app.help.webView.WebViewPool
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.AndroidAlertBuilder
@@ -2287,7 +2286,6 @@ class BookInfoActivity :
     }
 
     inner class CustomWebViewClient : WebViewClient() {
-        private val jsStr = getInjectionString
         override fun shouldOverrideUrlLoading(
             view: WebView?,
             request: WebResourceRequest?
@@ -2315,11 +2313,11 @@ class BookInfoActivity :
         }
         override fun onPageStarted(view: WebView?, url: String?, favicon: Bitmap?) {
             super.onPageStarted(view, url, favicon)
-            view?.evaluateJavascript(jsStr, null)
+            BookInfoUseWebHost.injectBridge(view)
         }
         override fun onPageFinished(view: WebView?, url: String?) {
             super.onPageFinished(view, url)
-            view?.evaluateJavascript(jsStr, null)
+            BookInfoUseWebHost.injectBridge(view)
             relayoutUseWebIntro(view)
         }
     }
