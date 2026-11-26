@@ -247,3 +247,11 @@ object CacheLifecycleRules {
             status == CacheLifecycle.CANCELLED
     }
 }
+
+sealed interface ReviewRetryResult {
+    data class Started(val count: Int) : ReviewRetryResult
+    object SwitchDisabled : ReviewRetryResult
+    object UnsupportedBook : ReviewRetryResult
+    object AlreadyInProgress : ReviewRetryResult
+    object NothingToRetry : ReviewRetryResult
+}

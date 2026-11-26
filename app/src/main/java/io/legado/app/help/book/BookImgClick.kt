@@ -841,6 +841,11 @@ object BookImgClick {
                     )
                 )
             }
+            if (chapter != null && !buttonSrc.isNullOrBlank()) {
+                ReviewPreheatCoordinator.captureFromClick(
+                    reviewResourceBook, chapter, buttonSrc, url, html, preloadJs
+                )
+            }
         }
     }
 

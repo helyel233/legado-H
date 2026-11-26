@@ -79,6 +79,13 @@ object ReviewPreheatCoordinator {
     @Volatile
     private var refreshJob: Job? = null
 
+    @Volatile
+    private var activeReviewTaskChecker: ((bookUrl: String) -> Boolean)? = null
+
+    internal fun setActiveReviewTaskChecker(checker: ((bookUrl: String) -> Boolean)?) {
+        activeReviewTaskChecker = checker
+    }
+
     /** 取消在途预热（离开阅读页/换书时调用）；点击即缓存是短任务，不在此列 */
     fun cancelPreheat() {
         preheatJob?.cancel()
@@ -282,6 +289,7 @@ object ReviewPreheatCoordinator {
         ReviewSnapshotResourceStore.prepareForCapture(book)
         val ttlDays = AppConfig.reviewSnapshotTtlDays
         var anyFailure = false
+        val failedSources = ConcurrentHashMap.newKeySet<String>()
         // 当前章的预渲染候选：按钮并发抓取，用「按钮序号 → 快照」收集后取文档序第一个
         val candidates = ConcurrentHashMap<Int, ReviewSnapshot>()
         val concurrency = maxOf(
@@ -302,11 +310,19 @@ object ReviewPreheatCoordinator {
                     val page = ReviewSnapshotManager.resolveReviewPageUrl(
                         book, bookSource, chapter, button
                     )
-                    val url = page.url?.takeIf { it.isNotBlank() } ?: return@runCatching
+                    val url = page.url?.takeIf { it.isNotBlank() } ?: run {
+                        anyFailure = true
+                        failedSources.add(button.src.trim())
+                        return@runCatching
+                    }
                     val capture = ReviewSnapshotCapture.capture(
                         bookSource, book, chapter, button.src, url, page.html, page.preloadJs
                     )
                     ReviewSnapshotStore.put(book, capture.snapshot)
+                    if (capture.snapshot.partial) {
+                        anyFailure = true
+                        failedSources.add(button.src.trim())
+                    }
                     collectPrerenderCandidate(chapter, index, capture.snapshot, candidates)
                 }.onFailure { error ->
                     // 单按钮解析/抓取超时（withTimeout 的 TCE）按失败计入退避，
@@ -314,13 +330,50 @@ object ReviewPreheatCoordinator {
                     // 本章剩余按钮与后续章节永远预热不到。
                     if (error is TimeoutCancellationException) {
                         anyFailure = true
+                        failedSources.add(button.src.trim())
                         return@onFailure
                     }
                     if (error is CancellationException) throw error
                     anyFailure = true
+                    failedSources.add(button.src.trim())
                 }
             }
             .toList()
+        if (chapter.url.isNotBlank() && activeReviewTaskChecker?.invoke(book.bookUrl) != true) {
+            val failedList = failedSources
+                .asSequence()
+                .map(String::trim)
+                .filter(String::isNotBlank)
+                .distinct()
+                .toList()
+            runCatching {
+                val existingStatus = runCatching {
+                    ReviewSnapshotStore.chapterStatus(book, chapter)
+                }.getOrNull()
+                val unchanged = existingStatus != null &&
+                    existingStatus.totalSnapshots == buttons.size &&
+                    existingStatus.failedSnapshots == failedList.size &&
+                    existingStatus.failedButtonSources == failedList
+                if (!unchanged) {
+                    ReviewSnapshotStore.putChapterStatus(
+                        book,
+                        ReviewChapterSnapshotStatus(
+                            bookUrl = book.bookUrl,
+                            chapterUrl = chapter.url,
+                            chapterIndex = chapter.index,
+                            chapterTitle = chapter.title,
+                            totalSnapshots = buttons.size,
+                            failedSnapshots = failedList.size,
+                            failedButtonSources = failedList,
+                            updatedAt = System.currentTimeMillis(),
+                        )
+                    )
+                }
+            }.onFailure { error ->
+                if (error is CancellationException) throw error
+                AppLog.put("$TAG 写入章节快照状态失败\n${error.localizedMessage}", error)
+            }
+        }
         if (anyFailure) {
             recordFailure(key, System.currentTimeMillis())
         } else {

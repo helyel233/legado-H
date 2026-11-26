@@ -45,6 +45,10 @@ internal object ReviewCaptureHost {
     @Volatile
     private var worker: Job? = null
 
+    private fun launchConsumer(): Job = scope.launch(CoroutineExceptionHandler { _, e ->
+        AppLog.put("评论缓存消费循环异常退出\n${e.localizedMessage}", e)
+    }) { consumeLoop() }
+
     /**
      * 保证有一个抓取循环在运行；重复调用是安全的。
      *
@@ -57,9 +61,7 @@ internal object ReviewCaptureHost {
             if (current != null && current.isActive) return
             // CoroutineExceptionHandler 兜底：消费循环里任何未防护的抛出
             // （如 tryTakeTask 的 check/error）都不允许炸掉整个进程
-            worker = scope.launch(CoroutineExceptionHandler { _, e ->
-                AppLog.put("评论缓存消费循环异常退出\n${e.localizedMessage}", e)
-            }) { consumeLoop() }
+            worker = launchConsumer()
         }
     }
 
@@ -124,12 +126,16 @@ internal object ReviewCaptureHost {
 
     /** 抓取循环结束：释放宿主引用；退出期间来了新请求就立刻重新拉起。 */
     private fun onWorkerStopped(exitVersion: Int) {
-        synchronized(lock) {
+        val restarted = synchronized(lock) {
             worker = null
             if (requestVersion.get() != exitVersion) {
-                worker = scope.launch { consumeLoop() }
+                worker = launchConsumer()
+                true
+            } else {
+                false
             }
         }
+        if (restarted) return
         if (CacheReviewWorkerRegistry.hasCoordinatorTasks()) {
             AppLog.put("评论缓存宿主结束：收敛未完成的 Coordinator 任务")
             CacheReviewWorkerRegistry.onServiceFinished(cancelled = true)

@@ -5963,6 +5963,12 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     override fun clickImg(click: String, src: String) {
         if (evalParagraphRuleClick(click, src)) return
+        val hotChapter = ReadBook.curTextChapter?.chapter?.takeIf {
+            it.index == ReadBook.durChapterIndex && it.bookUrl == ReadBook.book?.bookUrl
+        }
+        if (hotChapter != null && BookImgClick.tryOpenCachedSnapshotImmediately(this, src, hotChapter)) {
+            return
+        }
         Coroutine.async(lifecycleScope,IO) {
             val source = ReadBook.bookSource ?: return@async
             val book = ReadBook.book ?: return@async

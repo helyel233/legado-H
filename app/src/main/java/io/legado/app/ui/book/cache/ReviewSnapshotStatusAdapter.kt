@@ -42,20 +42,22 @@ class ReviewSnapshotStatusAdapter(
         payloads: MutableList<Any>,
     ) = binding.run {
         tvChapter.text = context.getString(R.string.cache_manage_review_chapter, item.chapter.index + 1)
-        val processedSnapshots = if (item.statusMissing) item.totalSnapshots else item.processedSnapshots
-        val failedSnapshots = if (item.statusMissing) item.totalSnapshots else item.failedSnapshots
         if (item.statusMissing) {
-            tvStatusMissing.visible()
-        } else {
-            tvStatusMissing.gone()
+            tvProgress.text = context.getString(
+                R.string.cache_manage_review_persisted,
+                item.successfulSnapshots
+            )
+            tvState.setText(R.string.cache_manage_review_preheated)
+            btnRetry.visible()
+            return@run
         }
         tvProgress.text = context.getString(
             R.string.cache_manage_review_progress,
-            processedSnapshots,
+            item.processedSnapshots,
             item.totalSnapshots
         )
-        if (failedSnapshots > 0) {
-            tvState.text = context.getString(R.string.cache_manage_review_failed, failedSnapshots)
+        if (item.failedSnapshots > 0) {
+            tvState.text = context.getString(R.string.cache_manage_review_failed, item.failedSnapshots)
             if (item.canRetryChapter) {
                 btnRetry.visible()
             } else {

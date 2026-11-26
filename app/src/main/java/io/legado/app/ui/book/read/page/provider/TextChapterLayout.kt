@@ -2666,11 +2666,14 @@ class TextChapterLayout(
         tryParseForcedParagraphBubble(src, renderSrc, urlOption, pclick ?: click)?.let {
             return it.also { imageInfo -> imageInfoCache[src] = imageInfo }
         }
+        val style = urlOption.valueIgnoreCase("style")
+        val isReviewButton = style.equals("TEXT", ignoreCase = true)
         val imageInfo = ImageInfo(
             renderSrc = renderSrc,
-            style = urlOption.valueIgnoreCase("style"),
+            style = style,
             width = urlOption.valueIgnoreCase("width"),
-            click = pclick ?: click
+            click = pclick ?: click,
+            rawButtonSrc = src.takeIf { isReviewButton && renderSrc != src }
         )
         if (AppConfig.forceSoftwareParagraphBubble &&
             !ParagraphBubbleRenderer.isBubbleSrc(renderSrc) &&

@@ -78,8 +78,8 @@ class CacheManageViewModel(application: Application) : BaseViewModel(application
                         }
                         return@mapNotNull ReviewSnapshotChapterItem(
                             chapter = chapter,
-                            processedSnapshots = 0,
-                            successfulSnapshots = 0,
+                            processedSnapshots = cachedSnapshots,
+                            successfulSnapshots = cachedSnapshots,
                             totalSnapshots = cachedSnapshots,
                             failedSnapshots = 0,
                             failedButtonSources = emptyList(),

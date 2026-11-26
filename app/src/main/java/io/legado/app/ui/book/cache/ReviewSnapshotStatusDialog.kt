@@ -17,6 +17,7 @@ import io.legado.app.help.cache.CacheKind
 import io.legado.app.help.cache.CacheLifecycle
 import io.legado.app.help.cache.CachePhase
 import io.legado.app.help.cache.CacheSnapshot
+import io.legado.app.help.cache.ReviewRetryResult
 import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.UiCorner
@@ -80,9 +81,9 @@ class ReviewSnapshotStatusDialog :
         if (items.isEmpty()) return
         viewLifecycleOwner.lifecycleScope.launch {
             val retryStartedAt = System.currentTimeMillis()
-            val count = try {
+            val result = try {
                 withContext(Dispatchers.IO) {
-                    CacheCoordinator.retryReviewSnapshots(book, items.map { it.chapter })
+                    CacheCoordinator.retryReviewSnapshotsWithResult(book, items.map { it.chapter })
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -93,14 +94,26 @@ class ReviewSnapshotStatusDialog :
                 toastOnUi(R.string.cache_manage_review_retry_failed)
                 return@launch
             }
-            if (count == 0) {
-                toastOnUi(R.string.cache_manage_review_retry_unavailable)
-            } else {
-                toastOnUi(getString(R.string.cache_manage_review_retry_started, count))
-                observeRetryCompletion(
-                    retryStartedAt,
-                    items.map { it.chapter.index }.toSet(),
-                )
+            when (result) {
+                is ReviewRetryResult.Started -> {
+                    toastOnUi(getString(R.string.cache_manage_review_retry_started, result.count))
+                    observeRetryCompletion(
+                        retryStartedAt,
+                        items.map { it.chapter.index }.toSet(),
+                    )
+                }
+                ReviewRetryResult.SwitchDisabled -> {
+                    toastOnUi(R.string.cache_manage_review_retry_unavailable)
+                }
+                ReviewRetryResult.UnsupportedBook -> {
+                    toastOnUi(R.string.cache_manage_review_retry_unsupported)
+                }
+                ReviewRetryResult.AlreadyInProgress -> {
+                    toastOnUi(R.string.cache_manage_review_retry_in_progress)
+                }
+                ReviewRetryResult.NothingToRetry -> {
+                    toastOnUi(R.string.cache_manage_review_retry_nothing)
+                }
             }
         }
     }

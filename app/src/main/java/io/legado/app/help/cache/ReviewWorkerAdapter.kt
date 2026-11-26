@@ -176,7 +176,9 @@ internal object CacheReviewWorkerRegistry {
         synchronized(lock) {
             val conflict = bindings.values.any { binding ->
                 binding.lease.taskId != lease.taskId &&
-                    binding.expected.any(expected::contains)
+                    binding.expected.any { unitKey ->
+                        unitKey !in binding.completed && unitKey in expected
+                    }
             }
             if (conflict) return false
             bindings[taskKey(lease)] = Binding(

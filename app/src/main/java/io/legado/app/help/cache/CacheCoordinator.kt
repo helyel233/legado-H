@@ -17,6 +17,7 @@ import io.legado.app.help.book.isVideo
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.book.isLocal
 import io.legado.app.help.exoplayer.ExoPlayerHelper
+import io.legado.app.help.review.ReviewPreheatCoordinator
 import io.legado.app.help.review.ReviewResourceEpoch
 import io.legado.app.help.review.ReviewSnapshotManager
 import io.legado.app.help.review.ReviewSnapshotResourceStore
@@ -169,6 +170,7 @@ object CacheCoordinator : CacheUiPort {
 
 
     init {
+        ReviewPreheatCoordinator.setActiveReviewTaskChecker(::hasActiveReviewTask)
         replayPendingTerminalEffects()
         workerDispatcher.recover(snapshot.value)
     }
@@ -343,14 +345,20 @@ object CacheCoordinator : CacheUiPort {
 
     /** Retries recorded failed buttons, or sends status-less/incomplete chapters through the normal cache path. */
     fun retryReviewSnapshots(book: Book, chapters: List<BookChapter>): Int {
-        if (!AppConfig.syncCacheReview || book.isLocal || book.isVideo) return 0
+        return (retryReviewSnapshotsWithResult(book, chapters) as? ReviewRetryResult.Started)?.count ?: 0
+    }
+
+    /** Structured retry entrypoint distinguishing switch-off, unsupported book, active task, and empty targets. */
+    fun retryReviewSnapshotsWithResult(book: Book, chapters: List<BookChapter>): ReviewRetryResult {
+        if (!AppConfig.syncCacheReview) return ReviewRetryResult.SwitchDisabled
+        if (book.isLocal || book.isVideo) return ReviewRetryResult.UnsupportedBook
         val reviewKind = if (book.isAudio) CacheKind.AUDIO else CacheKind.TEXT
         val requested = chapters
             .asSequence()
             .filterNot { it.isVolume }
             .distinctBy { it.index }
             .toList()
-        if (requested.isEmpty()) return 0
+        if (requested.isEmpty()) return ReviewRetryResult.NothingToRetry
         val statusesByChapterUrl = ReviewSnapshotStore.chapterStatuses(book)
             .associateBy { it.chapterUrl.trim() }
         // A chapter takes the ordinary BODY refresh path when it has no sidecar status
@@ -380,7 +388,13 @@ object CacheCoordinator : CacheUiPort {
                 buttonSources = failedButtonSources,
             )
         }
-        if (retryTargets.isEmpty()) return refreshChapters.size
+        if (retryTargets.isEmpty()) {
+            return if (refreshChapters.isNotEmpty()) {
+                ReviewRetryResult.Started(refreshChapters.size)
+            } else {
+                ReviewRetryResult.NothingToRetry
+            }
+        }
         synchronized(reviewTaskLock) {
             val activeIndexes = snapshot.value.sessions.asSequence()
                 .flatMap { it.tasks.asSequence() }
@@ -388,12 +402,18 @@ object CacheCoordinator : CacheUiPort {
                     it.kind == reviewKind &&
                         it.phase == CachePhase.REVIEW &&
                         it.bookUrl == book.bookUrl &&
-                        !CacheLifecycleRules.isTerminal(it.status)
+                        !CacheLifecycleRules.isTerminal(it.status) &&
+                        it.status != CacheLifecycle.PAUSED
                 }
-                .flatMap { task -> task.units.asSequence().map { it.key.chapterIndex } }
+                .flatMap { task ->
+                    task.runnableUnits().asSequence().map { it.key.chapterIndex }
+                }
                 .toHashSet()
             val unownedTargets = retryTargets.filterNot { target ->
                 target.unitKey.chapterIndex in activeIndexes
+            }
+            if (unownedTargets.isEmpty() && refreshChapters.isEmpty()) {
+                return ReviewRetryResult.AlreadyInProgress
             }
             if (unownedTargets.isNotEmpty()) {
                 submit(
@@ -409,7 +429,7 @@ object CacheCoordinator : CacheUiPort {
                     )
                 )
             }
-            return refreshChapters.size + unownedTargets.size
+            return ReviewRetryResult.Started(refreshChapters.size + unownedTargets.size)
         }
     }
 

@@ -660,6 +660,10 @@ object ReviewSnapshotCapture {
                     outputBytes = resourceBytes,
                 ),
             )
+            val requireAvatars = cacheAvatars &&
+                ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_AVATARS)
+            val requireImages = cacheCommentImages &&
+                ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_IMAGES)
             val (finalHtml, dropped) = withContext(Dispatchers.Default) {
                 heavyStagePermits.withPermit {
                     var removedCount = 0
@@ -678,7 +682,9 @@ object ReviewSnapshotCapture {
                             el.attr("src", mapped)
                         } else {
                             el.removeAttr("src")
-                            removedCount++
+                            if (if (isAvatar) requireAvatars else requireImages) {
+                                removedCount++
+                            }
                         }
                     }
                     val requiredDropped = selection.imagesToDownload.count { it.required && imgMap[it.url] == null }
@@ -2404,39 +2410,51 @@ object ReviewSnapshotCapture {
         }
 
         private fun buildSerializeSnapshotJs(inline: InlineResources): String {
+            val requireAvatars = inline.cacheAvatars &&
+                ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_AVATARS)
+            val requireImages = inline.cacheCommentImages &&
+                ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_IMAGES)
+            val requireCss = ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_CSS)
+            val requireFonts = ReviewDownloadConfig.enabled(ReviewDownloadConfig.REQUIRE_FONTS)
             return "(function(){" +
                 "var root=window.__legadoReviewSnapshotRoot;" +
                 "if(!root)return '$SNAPSHOT_ROOT_MISSING';" +
                 "var cacheAvatars=${inline.cacheAvatars};" +
                 "var cacheCommentImages=${inline.cacheCommentImages};" +
+                "var requireAvatars=$requireAvatars;" +
+                "var requireImages=$requireImages;" +
+                "var requireCss=$requireCss;" +
+                "var requireStyleSub=${requireCss || requireFonts};" +
                 IMAGE_CLASSIFIER_HELPER_JS +
                 "var scripts=root.querySelectorAll('script');" +
                 "for(var i=scripts.length-1;i>=0;i--){var e=scripts[i];" +
                 "if(e.parentNode)e.parentNode.removeChild(e);}" +
                 // 部分成功收口：无法入库的外部引用不再判死整份快照，而是剔除或以 #
-                // 占位；剔除数量随结果带出，快照照常落盘渲染，按钮仍计失败等待重试。
+                // 占位；仅当对应资源类别开启完整性要求时计入 dropped，触发 partial/重试。
                 "var dropped=0;" +
                 "function acceptedRef(v){return /^(data:|review-resource:|#|about:blank)/i.test(v);}" +
                 "root.querySelectorAll('img').forEach(function(el){" +
-                "if(!(isAvatarImage(el)?cacheAvatars:cacheCommentImages))return;" +
+                "var isAv=isAvatarImage(el);" +
+                "if(!(isAv?cacheAvatars:cacheCommentImages))return;" +
+                "var req=isAv?requireAvatars:requireImages;" +
                 "var source=el.getAttribute('src');" +
-                "if(source&&/^(https?|blob):/i.test(el.src)){el.removeAttribute('src');dropped++;}" +
+                "if(source&&/^(https?|blob):/i.test(el.src)){el.removeAttribute('src');if(req)dropped++;}" +
                 "var set=el.getAttribute('srcset')||'';" +
                 "if(set){var bad=false;set.split(',').forEach(function(part){" +
                 "var raw=part.trim().split(/\\s+/)[0];if(!raw)return;var resolved=raw;" +
                 "try{resolved=new URL(raw,document.baseURI).href;}catch(e){}" +
                 "if(!acceptedRef(resolved))bad=true;});" +
-                "if(bad){el.removeAttribute('srcset');dropped++;}}});" +
+                "if(bad){el.removeAttribute('srcset');if(req)dropped++;}}});" +
                 "root.querySelectorAll('link[rel=\"stylesheet\"][href]').forEach(function(el){" +
                 "if(!/^(data:|review-resource:|about:blank)/i.test(el.href)){" +
-                "el.parentNode.removeChild(el);dropped++;}});" +
+                "el.parentNode.removeChild(el);if(requireCss)dropped++;}});" +
                 "root.querySelectorAll('style').forEach(function(el){" +
                 "var text=el.textContent||'';var changed=false;" +
                 "text=text.replace(/url\\s*\\(\\s*([\"']?)([^\"'\\)\\s]+)\\1\\s*\\)/ig,function(m,q,v){" +
                 "if(acceptedRef(v))return m;changed=true;return \"url('#')\";});" +
                 "text=text.replace(/@import\\s*[\"']([^\"']+)[\"']/ig,function(m,v){" +
                 "if(acceptedRef(v))return m;changed=true;return '@import \"#\"';});" +
-                "if(changed){el.textContent=text;dropped++;}});" +
+                "if(changed){el.textContent=text;if(requireStyleSub)dropped++;}});" +
                 "return JSON.stringify({h:root.outerHTML,d:dropped});" +
                 "})()"
         }

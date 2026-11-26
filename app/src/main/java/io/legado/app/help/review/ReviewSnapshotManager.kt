@@ -569,12 +569,17 @@ object ReviewSnapshotManager {
             sb.append("开关“缓存评论”已关闭，跳过")
             return
         }
-        val content = reviewContent(book, chapter)
-        if (content == null) {
+        val rawContent = reviewContent(book, chapter)
+        if (rawContent == null) {
             sb.append("1. 读取评论载体：失败（文本正文或音频原始字幕不存在）")
             return
         }
         sb.append("1. 读取评论载体：成功\n")
+        val content = if (book.isAudio) {
+            rawContent
+        } else {
+            ParagraphRuleProcessor.process(book, chapter, rawContent)
+        }
         val extraction = extractReviewButtonsWithStats(content)
         sb.append("2. 找到 style=TEXT 评论按钮：").append(extraction.buttons.size).append(" 个")
         when {

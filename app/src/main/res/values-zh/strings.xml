@@ -2869,6 +2869,10 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="cache_manage_review_progress">%1$d/%2$d</string>
     <string name="cache_manage_review_retry_started">已加入 %1$d 章评论重试</string>
     <string name="cache_manage_review_retry_unavailable">请先开启缓存评论</string>
+    <string name="cache_manage_review_retry_unsupported">当前书籍不支持评论缓存重试</string>
+    <string name="cache_manage_review_retry_in_progress">评论缓存任务正在后台执行，请稍候</string>
+    <string name="cache_manage_review_retry_nothing">当前没有可重试的失败项</string>
+    <string name="cache_manage_review_preheated">已预热</string>
     <string name="cache_manage_review_retry_failed">评论快照重试失败</string>
     <string name="cache_manage_review_success">成功</string>
     <string name="cache_manage_review_stats">已缓存 %1$d 章 · 占用 %2$s</string>
@@ -2934,7 +2938,6 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="cache_manage_review_snapshots">评论快照</string>
     <string name="cache_manage_review_retry">重试</string>
     <string name="cache_manage_review_retry_all">全部重试失败项</string>
-    <string name="cache_manage_review_status_missing">状态异常</string>
     <string name="cache_manage_review_persisted">已有%1$d份快照</string>
 
     <!-- 段评弹窗加载失败页（替代原来直接显示异常堆栈） -->
