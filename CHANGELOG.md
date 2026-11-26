@@ -1,5 +1,31 @@
 # 更新日志
 
+## 3.0.1 版（2026-11-26）
+
+3.0 首个版本：朗读播放器用 Compose 重写，EPUB 直读 Web 层拆分重构，Web 服务与备份加密安全加固，并清理大批死代码与冗余依赖。**重大改版 → +1.0.0，跳过 3.x.0。**
+
+### 新增
+
+- 朗读播放器 Compose 重写：`ReadAloudPlayerUi` / `ReadAloudRoleUi` 提供竖屏与横屏面板、沉浸/歌词/场景舞台、可拖拽胶囊及目录/定时/引擎面板，支持角色预览与按段落指定音色
+- 书库云同步接入阅读页：`ReaderLibraryCloudController` 提供章节版本列表、下载/删除、会话状态与调试查看
+- 选区分享重做：`ReaderSelectionShareCoordinator` 整合分享图片预览/生成、模糊背景与进度标签组装，替换旧模板选择弹窗
+- EPUB 直读 Web 层：新增资源拦截器（章节/模板脚本/字体，HEAD 与 Range 支持、失败日志限流）与模板注入器（chrome 配置/JS 注入），从 `EpubDirectWebLayer` 拆出
+- 下载网关：新增 HEAD 与 Range 断点续传（206 / Content-Range）、JSON 令牌校验、错误分级状态码与版本解析修正，限流移交 WAF
+
+### 修复与稳定性
+
+- 段评缓存重试：清理失联僵尸任务、等待旧任务停稳后再重试，消除「取消并重试」死循环并补齐对应提示文案
+- Web 服务安全：新增 `WebServiceGuard`（Bearer/Cookie/token、常量时间比较、fail-closed）与跨域源拒绝；ReaderProvider 改签名级权限；JS Bridge 全面令牌校验
+- 备份加密升级为 PBKDF2 + AES-256-GCM（v2，兼容旧格式），未设密码时跳过凭据导出
+- 书库搜索索引：FTS4 语法转义与按书事务原子重建，避免中途取消清空整库
+- 段落规则修正 JS vars 持久化并支持 `paragraph_rule_` 源键；段评抓拍增加看门狗超时、评论页预取与无效页校验
+
+### 内部清理
+
+- 删除死代码：`EventMessage`、`ALiYun`、`WelcomeConfigFragment`、粒子动画包、`LockableViewPager`、`RandomColor`、`SyncedRenderer`、`ConstraintModify` 等
+- Rhino 删除 1.4MB 内置 jar，统一走 Maven 依赖；移除冗余依赖与插件（activity/fragment 基础包、media3-session、glide-compiler/avif、kotlin-reflect、kapt 等），简化 release 变体应用名
+- `ReadBookActivity` 将选区分享与书库云会话职责委托给新控制器，自身保留生命周期、翻页、菜单与面板协调
+
 ## 2.0.2 版（2026-11-26）
 
 修复段评快照的重试与展示链路：失败按钮精确记账、重试结果分型提示、阅读页点击优先命中已缓存快照，并校正资源完整性判定与缓存并发保护。**仅修复/优化 → patch+0.1。**
