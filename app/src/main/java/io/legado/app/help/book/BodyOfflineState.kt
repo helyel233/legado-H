@@ -4,8 +4,10 @@ import android.graphics.BitmapFactory
 import io.legado.app.constant.AppPattern
 import io.legado.app.data.entities.Book
 import io.legado.app.data.entities.BookChapter
+import io.legado.app.utils.GSON
 import io.legado.app.utils.NetworkUtils
 import io.legado.app.utils.SvgUtils
+import io.legado.app.utils.fromJsonObject
 import java.io.File
 
 /** Pure BODY-domain completeness projection; it owns no task or manifest state. */
@@ -49,6 +51,9 @@ data class BodyOfflineState(
             val matcher = AppPattern.imgPattern.matcher(content)
             while (matcher.find()) {
                 val source = matcher.group(1)?.takeIf { it.isNotBlank() } ?: continue
+                if (AppPattern.isVirtualImageSrc(source) || isReviewTextButtonSrc(source)) {
+                    continue
+                }
                 imageUrls += NetworkUtils.getAbsoluteURL(chapter.url, source)
             }
             var missing = 0
@@ -81,6 +86,17 @@ data class BodyOfflineState(
 
         internal fun isStoredImageComplete(book: Book, source: String): Boolean =
             isReadableImage(BookHelp.getImage(book, source))
+
+        private fun isReviewTextButtonSrc(src: String): Boolean {
+            val matcher = AppPattern.urlOptionPattern.matcher(src)
+            if (!matcher.find()) return false
+            val optionJson = src.substring(matcher.end())
+            val options = GSON.fromJsonObject<Map<String, String>>(optionJson).getOrNull()
+                ?: return false
+            return options.entries.any { (key, value) ->
+                key.equals("style", ignoreCase = true) && value.equals("TEXT", ignoreCase = true)
+            }
+        }
 
         private fun isReadableImage(file: File): Boolean {
             if (!file.isFile || file.length() <= 0L) return false

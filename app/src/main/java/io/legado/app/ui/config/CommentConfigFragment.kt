@@ -276,19 +276,19 @@ class CommentConfigFragment : ComposeSettingFragment() {
                         key = cfg.REQUIRE_AVATARS,
                         title = str(R.string.review_download_require_avatars),
                         summary = str(R.string.review_download_requirement_summary),
-                        defaultValue = true
+                        defaultValue = cfg.defaultEnabled(cfg.REQUIRE_AVATARS)
                     ),
                     switch(
                         key = cfg.REQUIRE_IMAGES,
                         title = str(R.string.review_download_require_images),
                         summary = str(R.string.review_download_requirement_summary),
-                        defaultValue = true
+                        defaultValue = cfg.defaultEnabled(cfg.REQUIRE_IMAGES)
                     ),
                     switch(
                         key = cfg.REQUIRE_CSS,
                         title = str(R.string.review_download_require_css),
                         summary = str(R.string.review_download_requirement_summary),
-                        defaultValue = true
+                        defaultValue = cfg.defaultEnabled(cfg.REQUIRE_CSS)
                     ),
                     switch(
                         key = cfg.REQUIRE_FONTS,
@@ -297,7 +297,7 @@ class CommentConfigFragment : ComposeSettingFragment() {
                             R.string.review_download_help_requirement_fonts,
                             str(R.string.review_download_requirement_summary)
                         ),
-                        defaultValue = true
+                        defaultValue = cfg.defaultEnabled(cfg.REQUIRE_FONTS)
                     )
                 )
             )

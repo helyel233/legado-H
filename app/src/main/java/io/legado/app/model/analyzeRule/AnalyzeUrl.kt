@@ -736,6 +736,14 @@ class AnalyzeUrl(
     }
 
     /**
+     * 补齐 CookieStore 中的登录态 Cookie 与 CookieJar 标记后返回请求头映射。
+     */
+    internal fun headerMapWithCookie(): LinkedHashMap<String, String> {
+        setCookie()
+        return headerMap
+    }
+
+    /**
      *获取处理过阅读定义的urlOption和cookie的GlideUrl
      */
     fun getGlideUrl(): GlideUrl {

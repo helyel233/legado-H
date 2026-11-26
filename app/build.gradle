@@ -183,6 +183,8 @@ android {
     }
     lint {
         checkDependencies = true
+        // 本地默认关闭提速；CI 传 -PenableLintVital=true 注册并执行 lintVitalAppRelease
+        checkReleaseBuilds = project.hasProperty("enableLintVital")
         disable 'MissingTranslation'
         baseline = file("lint-baseline.xml")
     }

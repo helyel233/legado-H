@@ -631,14 +631,17 @@ object ReviewSnapshotManager {
             }
         }
         val processButtons = if (requestedRetrySources != null) {
-            snapshotButtons.filter { it.src in requestedRetrySources }.also { selected ->
-                require(selected.size == requestedRetrySources.size) {
-                    "review retry button is no longer present in chapter content: ${chapter.url}"
-                }
-                require(selected.none { ReviewSnapshotStore.hasComplete(book, chapter, it.src) }) {
-                    "review retry button already has a complete snapshot: ${chapter.url}"
-                }
+            val selected = snapshotButtons.filter { it.src in requestedRetrySources }
+            require(selected.size == requestedRetrySources.size) {
+                "review retry button is no longer present in chapter content: ${chapter.url}"
             }
+            val pending = selected.filterNot { ReviewSnapshotStore.hasComplete(book, chapter, it.src) }
+            val skippedComplete = selected.size - pending.size
+            if (skippedComplete > 0) {
+                sb.append("   局部重试跳过 ").append(skippedComplete)
+                    .append(" 个已有完整快照的按钮\n")
+            }
+            pending
         } else {
             snapshotButtons
         }
@@ -1472,12 +1475,12 @@ object ReviewSnapshotManager {
                     val js = button.js.orEmpty()
                     val urlNoOption = button.urlNoOption.orEmpty()
                     BookImgClick.executeJs(book, bookSource, chapter, js, urlNoOption) {
-                        onBrowserOpenRequestedHook = { url, _, _ ->
-                            record(url)
+                        onBrowserOpenRequestedHook = { url, _, html ->
+                            record(url, html = html)
                             true
                         }
-                        onBrowserAwaitRequestedHook = { url, _, _ ->
-                            record(url)
+                        onBrowserAwaitRequestedHook = { url, _, html ->
+                            record(url, html = html)
                             StrResponse(url, "")
                         }
                     }

@@ -151,6 +151,7 @@ object ReviewSnapshotStore {
     private const val PRUNE_INTERVAL_MS = 10 * 60 * 1000L
 
     private val lastPruneAt = ConcurrentHashMap<String, Long>()
+    private val chapterStatusLock = Any()
 
     const val BOOK_TAB_CHAPTER_URL = "__book_tab__"
     const val BOOK_TAB_SRC = "__book_tab__"
@@ -802,10 +803,76 @@ object ReviewSnapshotStore {
             }
         }
         ReviewSnapshotResourceStore.requireDatabase(book)
-        val dir = reviewsDir(book)
-        if (!dir.exists()) check(dir.mkdirs()) { "cannot create review status directory: ${dir.absolutePath}" }
-        writeJsonAtomically(File(dir, statusFileName(status.chapterUrl))) { writer ->
-            GSON.toJson(status, writer)
+        synchronized(chapterStatusLock) {
+            val dir = reviewsDir(book)
+            if (!dir.exists()) check(dir.mkdirs()) { "cannot create review status directory: ${dir.absolutePath}" }
+            writeJsonAtomically(File(dir, statusFileName(status.chapterUrl))) { writer ->
+                GSON.toJson(status, writer)
+            }
+        }
+    }
+
+    /**
+     * 预热写回章节状态：在 [chapterStatusLock] 内结合磁盘完整快照（[hasComplete]）过滤
+     * 已被并发「点击即缓存/刷新」补齐的按钮，避免把已消除的失败项重新写回状态文件。
+     */
+    fun putPreheatChapterStatus(
+        book: Book,
+        chapter: BookChapter,
+        status: ReviewChapterSnapshotStatus,
+    ): ReviewChapterSnapshotStatus {
+        require(status.chapterUrl.isNotBlank()) { "review status requires chapterUrl" }
+        require(status.totalSnapshots > 0) { "review status requires totalSnapshots" }
+        ReviewSnapshotResourceStore.requireDatabase(book)
+        synchronized(chapterStatusLock) {
+            val mergedFailed = status.failedButtonSources
+                .orEmpty()
+                .asSequence()
+                .map(String::trim)
+                .filter { it.isNotBlank() && !hasComplete(book, chapter, it) }
+                .distinct()
+                .toList()
+            val mergedStatus = status.copy(
+                failedSnapshots = mergedFailed.size.coerceAtMost(status.totalSnapshots),
+                failedButtonSources = mergedFailed,
+            )
+            val existing = runCatching { chapterStatus(book, chapter) }.getOrNull()
+            val unchanged = existing != null &&
+                existing.totalSnapshots == mergedStatus.totalSnapshots &&
+                existing.failedSnapshots == mergedStatus.failedSnapshots &&
+                existing.failedButtonSources == mergedStatus.failedButtonSources
+            if (unchanged) return existing
+            putChapterStatus(book, mergedStatus)
+            return mergedStatus
+        }
+    }
+
+    /**
+     * 当阅读页点击/刷新补齐某个按钮的完整快照后，从已落盘的章节状态文件（s_*.json）中
+     * 增量移除该按钮的失败记录，消除「已可离线查看但缓存管理仍显示失败」的状态撕裂。
+     */
+    fun clearFailedButtonSource(book: Book, chapter: BookChapter, buttonSrc: String): Boolean {
+        if (chapter.url.isBlank()) return false
+        val target = buttonSrc.trim()
+        if (target.isBlank()) return false
+        synchronized(chapterStatusLock) {
+            val existing = runCatching { chapterStatus(book, chapter) }.getOrNull() ?: return false
+            val failedSources = existing.failedButtonSources ?: return false
+            if (failedSources.none { it.trim() == target }) return false
+            val remaining = failedSources.asSequence()
+                .map(String::trim)
+                .filter { it.isNotBlank() && it != target }
+                .distinct()
+                .toList()
+            putChapterStatus(
+                book,
+                existing.copy(
+                    failedSnapshots = remaining.size.coerceAtMost(existing.totalSnapshots),
+                    failedButtonSources = remaining,
+                    updatedAt = System.currentTimeMillis(),
+                )
+            )
+            return true
         }
     }
 

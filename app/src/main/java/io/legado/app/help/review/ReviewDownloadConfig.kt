@@ -111,7 +111,12 @@ object ReviewDownloadConfig {
     internal fun parseBackoff(raw: String?): Backoff =
         Backoff.entries.firstOrNull { it.value == raw } ?: Backoff.FIXED
 
-    fun enabled(key: String): Boolean = appCtx.getPrefBoolean(key, true)
+    fun defaultEnabled(key: String): Boolean = when (key) {
+        REQUIRE_AVATARS, REQUIRE_IMAGES, REQUIRE_FONTS -> false
+        else -> true
+    }
+
+    fun enabled(key: String): Boolean = appCtx.getPrefBoolean(key, defaultEnabled(key))
 
     /**
      * 第 [attempt] 次重试（从 1 开始）前的等待毫秒数。

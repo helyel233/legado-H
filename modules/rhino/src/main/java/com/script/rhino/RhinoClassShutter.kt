@@ -152,7 +152,15 @@ object RhinoClassShutter : ClassShutter {
         // 这里不能直接引用 FileSystem/Path 类型：API<26 无 java.nio.file，
         // 且 nio desugar 未启用，ART 方法校验会因找不到类而抛 NoClassDefFoundError，
         // 导致书源 JS 在安卓7等低版本上无法运行、书打不开。
-        return visibleToScripts(obj.javaClass.name)
+        val clazz = obj.javaClass
+        val className = clazz.name
+        if (visibleToScripts(className)) {
+            return true
+        }
+        if (className.startsWith(LEGADO_PACKAGE_PREFIX) && !protectedClassNamesMatcher.match(className)) {
+            return isLegadoHostBaseAllowed(clazz)
+        }
+        return false
     }
 
     private const val LEGADO_PACKAGE_PREFIX = "io.legado.app."
@@ -176,6 +184,7 @@ object RhinoClassShutter : ClassShutter {
         "io.legado.app.help.http.CookieStore",
         "io.legado.app.help.http.StrResponse",
         "io.legado.app.help.http.dns.DnsScope",
+        "io.legado.app.ui.login.SourceLoginJsExtensions",
         "io.legado.app.ui.main.ai.AiImageProviderConfig",
         "io.legado.app.ui.rss.read.RssJsExtensions",
         "io.legado.app.utils.ChineseUtils",
@@ -187,6 +196,25 @@ object RhinoClassShutter : ClassShutter {
         "io.legado.app.utils.StringUtils",
         "io.legado.app.utils.UrlUtil",
     )
+
+    private val legadoAllowedHostBaseClasses = setOf(
+        "io.legado.app.ui.login.SourceLoginJsExtensions",
+    )
+
+    private fun isLegadoHostBaseAllowed(clazz: Class<*>): Boolean {
+        var current: Class<*>? = clazz.superclass
+        while (current != null) {
+            val superName = current.name
+            if (protectedClassNamesMatcher.match(superName)) {
+                return false
+            }
+            if (superName in legadoAllowedHostBaseClasses) {
+                return true
+            }
+            current = current.superclass
+        }
+        return false
+    }
 
     private fun isLegadoClassAllowed(fullClassName: String): Boolean {
         if (fullClassName in legadoAllowedClasses) {

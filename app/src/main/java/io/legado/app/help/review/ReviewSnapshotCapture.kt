@@ -40,6 +40,7 @@ import io.legado.app.help.webView.WebViewRequestLifecycle
 import io.legado.app.model.analyzeRule.AnalyzeUrl
 import io.legado.app.utils.GSON
 import io.legado.app.utils.configureOfflineResourceLoading
+import io.legado.app.utils.get
 import io.legado.app.utils.runOnUI
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import kotlinx.coroutines.CancellationException
@@ -187,6 +188,20 @@ object ReviewSnapshotCapture {
         return html.length >= 256
     }
 
+    private val HTML_TAG_REGEX = Regex("<[a-zA-Z!/]")
+
+    /**
+     * 非纯 JSON 负载且含 HTML 标签的初始文档（含短 HTML 壳页）：
+     * 即使长度小于 256 字符，也允许进入 WebView 让 preloadJs/页面脚本继续渲染，
+     * 最终有效性由序列化阶段抓拍到的 DOM 判定。
+     */
+    private fun isRenderableHtmlShell(html: String?): Boolean {
+        if (html.isNullOrBlank()) return false
+        val trimmed = html.trimStart()
+        if (trimmed.startsWith("{") || trimmed.startsWith("[")) return false
+        return HTML_TAG_REGEX.containsMatchIn(html)
+    }
+
     /**
      * showBrowser 只给了 preloadJs、没给 html 时，先按书源规则取回页面文档作为初始 HTML。
      *
@@ -213,9 +228,9 @@ object ReviewSnapshotCapture {
             throw error
         } catch (error: Throwable) {
             AppLog.put("评论页预取失败，按失败处理: URL=$url", error)
-            return null
-        }
-        if (fetched != null && !isValidCommentHtml(fetched)) {
+            throw error
+        } ?: throw NoStackTraceException("评论页预取内容为空（URL=$url）")
+        if (!isValidCommentHtml(fetched) && !isRenderableHtmlShell(fetched)) {
             throw NoStackTraceException(
                 "评论页预取内容非有效评论页（${fetched.length} 字符，疑似错误页/反爬页）"
             )
@@ -402,7 +417,14 @@ object ReviewSnapshotCapture {
             if (useData) {
                 preparedHtml = try {
                     ReviewDataCapture.capture(
-                        url, AnalyzeUrl(url, source = source).headerMap, effectiveInitialHtml, trace
+                        url,
+                        AnalyzeUrl(
+                            url,
+                            source = source,
+                            coroutineContext = currentCoroutineContext(),
+                        ).headerMapWithCookie(),
+                        effectiveInitialHtml,
+                        trace,
                     )
                 } catch (error: Throwable) {
                     if (error is CancellationException) throw error
@@ -414,11 +436,21 @@ object ReviewSnapshotCapture {
                 }
             }
             trace?.mark(if (useData) "ENGINE_DATA" else "ENGINE_WEB", force = true)
-            if (!useData && effectiveInitialHtml != null && !isValidCommentHtml(effectiveInitialHtml)) {
-                throw NoStackTraceException(
-                    "showBrowser 带回的 HTML 非有效评论页（疑似 ajax 错误/异常文本，" +
-                        "${effectiveInitialHtml.length} 字符，已按失败处理）"
-                )
+            if (!useData && effectiveInitialHtml != null &&
+                !isValidCommentHtml(effectiveInitialHtml) &&
+                !isRenderableHtmlShell(effectiveInitialHtml)
+            ) {
+                if (url.toHttpUrlOrNull() != null) {
+                    AppLog.put(
+                        "showBrowser 带回的 HTML 无效（${effectiveInitialHtml.length} 字符），回退 URL 抓取: $url"
+                    )
+                    preparedHtml = null
+                } else {
+                    throw NoStackTraceException(
+                        "showBrowser 带回的 HTML 非有效评论页（疑似 ajax 错误/异常文本，" +
+                            "${effectiveInitialHtml.length} 字符，已按失败处理）"
+                    )
+                }
             }
             val page = if (useData) {
                 inlineDataPageResources(
@@ -543,7 +575,7 @@ object ReviewSnapshotCapture {
                     }
                     webView.settings.apply {
                         configureOfflineResourceLoading(false)
-                        headerMap[AppConst.UA_NAME]?.let { userAgentString = it }
+                        userAgentString = headerMap.get(AppConst.UA_NAME, true)
                     }
                     AppCookieManager.applyToWebView(url)
                     val bridgeToken = WebJsExtensions.newBridgeToken()
@@ -590,7 +622,7 @@ object ReviewSnapshotCapture {
                         return@runOnUI
                     }
                     webView.webViewClient = session.client
-                    if (hasInitialHtml) {
+                    if (hasInitialHtml && jsBridge != null) {
                         webView.addJavascriptInterface(WebCacheManager, nameCache)
                         webView.addJavascriptInterface(source, nameSource)
                         webView.addJavascriptInterface(
@@ -604,17 +636,20 @@ object ReviewSnapshotCapture {
                             ),
                             nameJava,
                         )
+                    } else {
+                        webView.removeJavascriptInterface(nameCache)
+                        webView.removeJavascriptInterface(nameSource)
+                        webView.removeJavascriptInterface(nameJava)
+                    }
+                    if (hasInitialHtml) {
                         // 书源 showBrowser 已取回渲染 HTML（或带 preloadJs 预取）：
                         // 作为初始页面并注入 JS bridge 环境（run/ajaxAwait 等），
                         // 仍走 onPageFinished → 展开/内联/序列化全流程
                         webView.loadDataWithBaseURL(
-                            url, spliceJsUrl(effectiveHtml!!), "text/html", "utf-8", url
+                            url, spliceJsUrl(effectiveHtml), "text/html", "utf-8", url
                         )
                     } else {
-                        webView.removeJavascriptInterface(nameJava)
-                        webView.removeJavascriptInterface(nameSource)
-                        webView.removeJavascriptInterface(nameCache)
-                        webView.loadUrl(url, headerMap)
+                        webView.loadUrl(url, webViewExtraHeaders(headerMap))
                     }
                 } catch (e: Throwable) {
                     val session = sessionRef.get()
@@ -626,6 +661,12 @@ object ReviewSnapshotCapture {
                     }
                 }
             }
+        }
+    }
+
+    private fun webViewExtraHeaders(headerMap: Map<String, String>): Map<String, String> {
+        return HashMap(headerMap).apply {
+            keys.removeAll { it.equals(AppConst.UA_NAME, ignoreCase = true) }
         }
     }
 
@@ -2408,17 +2449,19 @@ object ReviewSnapshotCapture {
                             outcome == null -> "评论页快照序列化为空 $url"
                             outcome.rootMissing -> "评论页快照冻结 DOM 丢失 $url"
                             outcome.html.isBlank() -> "评论页快照序列化为空 $url"
+                            !isValidCommentHtml(outcome.html) ->
+                                "评论页快照抓取 DOM 内容无效或过短（${outcome.html.length} 字符）$url"
                             else -> null
                         }
-                        if (failureMessage != null) {
-                            val error = NoStackTraceException(failureMessage)
+                        if (outcome == null || failureMessage != null) {
+                            val error = NoStackTraceException(failureMessage ?: "评论页快照序列化为空 $url")
                             diagnostics?.stageFail("SANITIZE", error)
                             fail(error)
                         } else {
-                            val completeHtml = outcome!!.html
+                            val completeHtml = outcome.html
                             // 部分成功：页面 HTML 已抓到，下载失败的资源只能剔除或以 #
                             // 占位；快照照常落盘渲染，按钮仍按失败计，等待重试补全。
-                            val dropped = outcome!!.dropped + inline.droppedResources
+                            val dropped = outcome.dropped + inline.droppedResources
                             if (dropped > 0) {
                                 diagnostics?.mark(
                                     "SANITIZE_PARTIAL",

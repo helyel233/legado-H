@@ -154,6 +154,7 @@ object ReviewPreheatCoordinator {
 
     /** 成功一次即解除退避（并落盘），下次翻回来能正常预热 */
     private fun clearFailure(key: String) {
+        ensureFailuresLoaded()
         if (failures.remove(key) != null) {
             ReviewBackoffStore.save(failures.toMap())
         }
@@ -247,6 +248,7 @@ object ReviewPreheatCoordinator {
                     )
                 }
                 ReviewSnapshotStore.put(book, capture.snapshot)
+                onButtonSnapshotPersisted(book, chapter, buttonSrc, capture.snapshot)
                 AppLog.putDebug("$TAG 点击即缓存成功：${chapter.title} / ${buttonSrc.take(60)}")
             }.onFailure { error ->
                 // 解析/抓取超时按失败记日志，不当协程取消静默吞掉
@@ -292,6 +294,7 @@ object ReviewPreheatCoordinator {
                     )
                 }
                 ReviewSnapshotStore.put(book, capture.snapshot)
+                onButtonSnapshotPersisted(book, chapter, buttonSrc, capture.snapshot)
             }.onFailure { error ->
                 // 解析/抓取超时按失败记日志，不当协程取消静默吞掉
                 if (error is TimeoutCancellationException) {
@@ -301,6 +304,26 @@ object ReviewPreheatCoordinator {
                 if (error is CancellationException) throw error
                 AppLog.put("$TAG 快照刷新失败\n${error.localizedMessage}", error)
             }
+        }
+    }
+
+    private fun onButtonSnapshotPersisted(
+        book: Book,
+        chapter: BookChapter,
+        buttonSrc: String,
+        snapshot: ReviewSnapshot,
+    ) {
+        if (snapshot.partial || chapter.url.isBlank()) return
+        if (activeReviewTaskChecker?.invoke(book.bookUrl) == true) return
+        runCatching {
+            if (ReviewSnapshotStore.clearFailedButtonSource(book, chapter, buttonSrc)) {
+                if (ReviewSnapshotStore.chapterStatus(book, chapter)?.failedSnapshots == 0) {
+                    clearFailure(ReviewBackoffPolicy.key(book.bookUrl, chapter.url))
+                }
+            }
+        }.onFailure { error ->
+            if (error is CancellationException) throw error
+            AppLog.put("$TAG 更新章节快照状态失败\n${error.localizedMessage}", error)
         }
     }
 
@@ -374,6 +397,7 @@ object ReviewPreheatCoordinator {
                 }
             }
             .toList()
+        var effectiveAnyFailure = anyFailure
         if (chapter.url.isNotBlank() && activeReviewTaskChecker?.invoke(book.bookUrl) != true) {
             val failedList = failedSources
                 .asSequence()
@@ -382,34 +406,27 @@ object ReviewPreheatCoordinator {
                 .distinct()
                 .toList()
             runCatching {
-                val existingStatus = runCatching {
-                    ReviewSnapshotStore.chapterStatus(book, chapter)
-                }.getOrNull()
-                val unchanged = existingStatus != null &&
-                    existingStatus.totalSnapshots == buttons.size &&
-                    existingStatus.failedSnapshots == failedList.size &&
-                    existingStatus.failedButtonSources == failedList
-                if (!unchanged) {
-                    ReviewSnapshotStore.putChapterStatus(
-                        book,
-                        ReviewChapterSnapshotStatus(
-                            bookUrl = book.bookUrl,
-                            chapterUrl = chapter.url,
-                            chapterIndex = chapter.index,
-                            chapterTitle = chapter.title,
-                            totalSnapshots = buttons.size,
-                            failedSnapshots = failedList.size,
-                            failedButtonSources = failedList,
-                            updatedAt = System.currentTimeMillis(),
-                        )
+                val persisted = ReviewSnapshotStore.putPreheatChapterStatus(
+                    book,
+                    chapter,
+                    ReviewChapterSnapshotStatus(
+                        bookUrl = book.bookUrl,
+                        chapterUrl = chapter.url,
+                        chapterIndex = chapter.index,
+                        chapterTitle = chapter.title,
+                        totalSnapshots = buttons.size,
+                        failedSnapshots = failedList.size,
+                        failedButtonSources = failedList,
+                        updatedAt = System.currentTimeMillis(),
                     )
-                }
+                )
+                effectiveAnyFailure = persisted.failedSnapshots > 0
             }.onFailure { error ->
                 if (error is CancellationException) throw error
                 AppLog.put("$TAG 写入章节快照状态失败\n${error.localizedMessage}", error)
             }
         }
-        if (anyFailure) {
+        if (effectiveAnyFailure) {
             recordFailure(key, System.currentTimeMillis())
         } else {
             clearFailure(key)
