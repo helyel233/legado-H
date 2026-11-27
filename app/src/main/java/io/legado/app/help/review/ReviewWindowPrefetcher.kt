@@ -208,6 +208,7 @@ object ReviewWindowPrefetcher {
     }
 
     private fun canRun(book: Book): Boolean {
+        if (!NetworkUtils.isAvailable()) return false
         if (!AppConfig.syncCacheReview) return false
         if (book.isVideo) return false
         if (AppConfig.reviewPreheatWifiOnly && !NetworkUtils.isWifi()) return false
