@@ -59,6 +59,16 @@ internal object ReviewSnapshotRefreshPolicy {
         return "${commentNodes.size}:$digest"
     }
 
+    /**
+     * 判断后台拉取的在线页面是否为有效评论页。
+     *
+     * shortcut: 只认静态评论卡片节点，JS 驱动型源永不自动切换，出现整站壳页化时升级。
+     */
+    internal fun isCommentPage(html: String?): Boolean {
+        val content = html?.takeIf { it.isNotBlank() } ?: return false
+        return Jsoup.parse(content).select("[data-comment-id], .comment-card").isNotEmpty()
+    }
+
     fun evaluateRefresh(currentHtml: String?, refreshedHtml: String?): RefreshDecision {
         val current = currentHtml?.takeIf { it.isNotBlank() } ?: return RefreshDecision.CONTENT_CHANGED
         val refreshed = refreshedHtml?.takeIf { it.isNotBlank() } ?: return RefreshDecision.NO_CHANGE

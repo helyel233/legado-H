@@ -1042,11 +1042,43 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             }
                             return@launch
                         }
+                        val isValidCommentPage = withContext(Dispatchers.Default) {
+                            ReviewSnapshotRefreshPolicy.isCommentPage(refreshed.second)
+                        }
+                        if (!isValidCommentPage) {
+                            return@launch
+                        }
                         val reloadUrl = refreshed.first.ifBlank { document.first }
-                        withContext(Dispatchers.Main) {
+                        val switched = withContext(Dispatchers.Main) {
                             if (ownsLease(lease) && isAdded && !isHidden && !displayingErrorPage) {
                                 pendingNetworkRefresh = reloadUrl to refreshed.second
-                                showUpdateBanner()
+                                applyPendingNetworkRefresh()
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                        if (switched) {
+                            val book = reviewResourceBook
+                            val chUrl = snapshotChapterUrl
+                            val btnSrc = snapshotButtonSrc
+                            if (book != null && !chUrl.isNullOrBlank() && !btnSrc.isNullOrBlank()) {
+                                runCatching {
+                                    val existing = ReviewSnapshotStore.getByKey(book, chUrl, btnSrc)
+                                    if (existing != null) {
+                                        val now = System.currentTimeMillis()
+                                        ReviewSnapshotStore.put(
+                                            book,
+                                            existing.copy(
+                                                url = reloadUrl,
+                                                html = refreshed.second,
+                                                savedAt = now,
+                                            )
+                                        )
+                                    }
+                                }.onFailure { error ->
+                                    AppLog.put("段评自动切换后回写快照失败：${error.localizedMessage}", error)
+                                }
                             }
                         }
                     }
