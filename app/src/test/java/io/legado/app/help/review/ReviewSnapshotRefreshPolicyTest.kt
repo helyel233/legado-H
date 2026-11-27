@@ -79,6 +79,68 @@ class ReviewSnapshotRefreshPolicyTest {
     }
 
     @Test
+    fun shouldOverwriteSnapshotProtectsExpandedRepliesWhenCacheRepliesEnabled() {
+        val existingWithReplies = """
+            <html><body>
+              <div class="comment-card" data-comment-id="1">
+                first
+                <div class="reply-item">r1</div>
+              </div>
+            </body></html>
+        """.trimIndent()
+        val refreshedWithoutReplies = """
+            <html><body>
+              <div class="comment-card" data-comment-id="1">first updated</div>
+            </body></html>
+        """.trimIndent()
+        val refreshedWithReplies = """
+            <html><body>
+              <div class="comment-card" data-comment-id="1">
+                first updated
+                <div class="reply-item">r1</div>
+                <div class="reply-item">r2</div>
+              </div>
+            </body></html>
+        """.trimIndent()
+
+        val evalNoReplies = ReviewSnapshotRefreshPolicy.evaluateRefreshDetail(
+            existingWithReplies,
+            refreshedWithoutReplies,
+        )
+        assertEquals(0, evalNoReplies.refreshedReplyItemCount)
+        assertFalse(
+            ReviewSnapshotRefreshPolicy.shouldOverwriteSnapshot(
+                existingWithReplies,
+                evalNoReplies.refreshedCardCount,
+                evalNoReplies.refreshedReplyItemCount,
+                cacheReplies = true,
+            )
+        )
+        assertTrue(
+            ReviewSnapshotRefreshPolicy.shouldOverwriteSnapshot(
+                existingWithReplies,
+                evalNoReplies.refreshedCardCount,
+                evalNoReplies.refreshedReplyItemCount,
+                cacheReplies = false,
+            )
+        )
+
+        val evalWithReplies = ReviewSnapshotRefreshPolicy.evaluateRefreshDetail(
+            existingWithReplies,
+            refreshedWithReplies,
+        )
+        assertEquals(2, evalWithReplies.refreshedReplyItemCount)
+        assertTrue(
+            ReviewSnapshotRefreshPolicy.shouldOverwriteSnapshot(
+                existingWithReplies,
+                evalWithReplies.refreshedCardCount,
+                evalWithReplies.refreshedReplyItemCount,
+                cacheReplies = true,
+            )
+        )
+    }
+
+    @Test
     fun sanitizeForSnapshotRemovesScriptsResolvesRelativeImagesAndOptionallyStripsReplies() {
         val doc = Jsoup.parse("<html><head></head><body></body></html>")
         doc.head().appendElement("script").text("void 0;")

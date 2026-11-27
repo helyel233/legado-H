@@ -2902,7 +2902,7 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="menu_review_preheat_wifi_only">仅WiFi预热段评</string>
     <string name="menu_review_open_mode">评论打开方式</string>
     <string name="menu_review_open_mode_network">联网优先（失败用缓存兜底）</string>
-    <string name="menu_review_open_mode_snapshot_first">缓存优先（秒开并后台刷新）</string>
+    <string name="menu_review_open_mode_snapshot_first">缓存优先（秒开并自动切换，二级页或输入中改为提示）</string>
     <string name="menu_review_open_mode_offline">纯快照（仅读本地，未命中不联网）</string>
     <string name="menu_review_snapshot_ttl">段评快照保鲜期</string>
     <string name="menu_review_snapshot_ttl_days">%1$d 天</string>

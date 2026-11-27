@@ -6,9 +6,9 @@ import java.security.MessageDigest
 
 /**
  * SNAPSHOT_FIRST 后台静默刷新的内容指纹对比与清洗策略：
- * - 单次解析 Jsoup 文档，同时输出内容变化决策、评论页内容门判定与评论卡片数；
- * - 后台刷新回写快照库前复用纯静态清洗（规则以 [ReviewSnapshotCapture.buildCleanDomJs] 为准绳），
- *   防止未展开首屏生肉 HTML 截断完整快照或持久化可执行脚本。
+ * - 单次解析 Jsoup 文档，同时输出内容变化决策、评论页内容门判定、评论卡片数与回复项数；
+ * - 后台刷新回写快照库前复用纯静态清洗（规则以 `ReviewSnapshotCapture.buildCleanDomJs` 为准绳），
+ *   防止未展开首屏生肉 HTML 截断完整快照、冲掉已展开回复层或持久化可执行脚本。
  */
 internal object ReviewSnapshotRefreshPolicy {
 
@@ -23,6 +23,7 @@ internal object ReviewSnapshotRefreshPolicy {
         val decision: RefreshDecision,
         val refreshedIsCommentPage: Boolean,
         val refreshedCardCount: Int,
+        val refreshedReplyItemCount: Int,
     )
 
     private val RELATIVE_TIME_REGEX =
@@ -36,26 +37,34 @@ internal object ReviewSnapshotRefreshPolicy {
     private val NON_RESOLVABLE_IMG_SRC_REGEX =
         Regex("""^(?:data:|javascript:|about:|#)""", RegexOption.IGNORE_CASE)
     private const val COMMENT_CARD_SELECTOR = "[data-comment-id], .comment-card"
+    private const val REPLY_ITEM_SELECTOR = ".reply-item"
 
-    fun contentFingerprint(html: String): String {
-        if (html.isBlank()) return ""
-        return contentFingerprint(Jsoup.parse(html))
-    }
-
-    internal fun countCommentCards(html: String?): Int {
-        val content = html?.takeIf { it.isNotBlank() } ?: return 0
-        return Jsoup.parse(content).select(COMMENT_CARD_SELECTOR).size
-    }
-
-    internal fun shouldOverwriteSnapshot(existingHtml: String?, refreshedCardCount: Int): Boolean {
+    /**
+     * 判定后台刷新页是否允许自动切换/覆盖已有快照：
+     * - 新页评论卡片数必须 > 0 且不少于旧快照（防止首屏未展开页面截断已抓齐的多页快照）；
+     * - 当 [cacheReplies] 为 true 且旧快照含 `.reply-item` 时，若新页不含任何 `.reply-item` 则拒绝覆写，
+     *   防止未展开回复层的页面冲掉已展开回复。
+     */
+    internal fun shouldOverwriteSnapshot(
+        existingHtml: String?,
+        refreshedCardCount: Int,
+        refreshedReplyItemCount: Int = 0,
+        cacheReplies: Boolean = false,
+    ): Boolean {
         if (refreshedCardCount <= 0) return false
-        val existingCardCount = countCommentCards(existingHtml)
-        return refreshedCardCount >= existingCardCount
+        val existingDoc = existingHtml?.takeIf { it.isNotBlank() }?.let(Jsoup::parse) ?: return true
+        val existingCardCount = existingDoc.select(COMMENT_CARD_SELECTOR).size
+        if (refreshedCardCount < existingCardCount) return false
+        if (cacheReplies) {
+            val existingReplyCount = existingDoc.select(REPLY_ITEM_SELECTOR).size
+            if (existingReplyCount > 0 && refreshedReplyItemCount == 0) return false
+        }
+        return true
     }
 
     /**
      * 清洗后台刷新得到的原始页面 HTML 以便安全回写离线快照库。
-     * 清洗规则以 [ReviewSnapshotCapture.buildCleanDomJs] 为准绳：
+     * 清洗规则以 `ReviewSnapshotCapture.buildCleanDomJs` 为准绳：
      * 剥离 script/noscript/iframe、外链样式与字体 preload、@font-face/@import，
      * 可选移除回复层，并将相对 img[src]（排除 data:/javascript:/about:/#）解析为绝对 URL。
      */
@@ -107,15 +116,18 @@ internal object ReviewSnapshotRefreshPolicy {
                 decision = RefreshDecision.NO_CHANGE,
                 refreshedIsCommentPage = false,
                 refreshedCardCount = 0,
+                refreshedReplyItemCount = 0,
             )
         val refreshedDoc = Jsoup.parse(refreshed)
         val refreshedCardCount = refreshedDoc.select(COMMENT_CARD_SELECTOR).size
+        val refreshedReplyItemCount = refreshedDoc.select(REPLY_ITEM_SELECTOR).size
         val refreshedHasComments = refreshedCardCount > 0
         val current = currentHtml?.takeIf { it.isNotBlank() }
             ?: return RefreshEvaluation(
                 decision = RefreshDecision.CONTENT_CHANGED,
                 refreshedIsCommentPage = refreshedHasComments,
                 refreshedCardCount = refreshedCardCount,
+                refreshedReplyItemCount = refreshedReplyItemCount,
             )
         val currentDoc = Jsoup.parse(current)
         val currentHasComments = currentDoc.select(COMMENT_CARD_SELECTOR).isNotEmpty()
@@ -133,6 +145,7 @@ internal object ReviewSnapshotRefreshPolicy {
             decision = decision,
             refreshedIsCommentPage = refreshedHasComments,
             refreshedCardCount = refreshedCardCount,
+            refreshedReplyItemCount = refreshedReplyItemCount,
         )
     }
 
@@ -150,7 +163,7 @@ internal object ReviewSnapshotRefreshPolicy {
                 append("cards:").append(commentNodes.size)
                 commentNodes.forEach { card ->
                     val id = card.attr("data-comment-id").trim()
-                    val replyCount = card.select(".reply-item").size
+                    val replyCount = card.select(REPLY_ITEM_SELECTOR).size
                     val imgCount = card.select("img").size
                     val cardClone = card.clone()
                     cardClone.select(".comment-time, time").remove()

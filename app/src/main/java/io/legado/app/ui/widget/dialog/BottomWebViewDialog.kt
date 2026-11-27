@@ -1050,9 +1050,16 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             return@launch
                         }
                         val reloadUrl = refreshed.first.ifBlank { document.first }
-                        if (!evaluation.refreshedIsCommentPage) {
-                            // 数据引擎（JSON）或 JS 壳页不含静态评论卡片，未过自动切换门时
-                            // 回落展示顶部更新提示条由用户决定，避免静默吞掉新评论更新。
+                        val canAutoSwitch = evaluation.refreshedIsCommentPage &&
+                            withContext(Dispatchers.Default) {
+                                ReviewSnapshotRefreshPolicy.shouldOverwriteSnapshot(
+                                    displayedDocumentHtml,
+                                    evaluation.refreshedCardCount
+                                )
+                            }
+                        if (!canAutoSwitch) {
+                            // 数据引擎（JSON）/JS 壳页，或首屏未展开页面（卡数少于当前完整快照）
+                            // 不直接覆盖当前完整快照，回落展示顶部更新提示条由用户决定。
                             withContext(Dispatchers.Main) {
                                 if (ownsLease(lease) && isAdded && !isHidden && !displayingErrorPage) {
                                     pendingNetworkRefresh = reloadUrl to refreshed.second
@@ -1071,8 +1078,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                 true
                             } else {
                                 withTimeoutOrNull(300L) {
-                                    runCatching { isUserBusyInWebView(lease) }.getOrDefault(false)
-                                } ?: false
+                                    runCatching { isUserBusyInWebView(lease) }.getOrDefault(true)
+                                } ?: true
                             }
                             if (busy) {
                                 showUpdateBanner()
@@ -1092,7 +1099,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                     if (existing != null &&
                                         ReviewSnapshotRefreshPolicy.shouldOverwriteSnapshot(
                                             existing.html,
-                                            evaluation.refreshedCardCount
+                                            evaluation.refreshedCardCount,
+                                            evaluation.refreshedReplyItemCount,
+                                            AppConfig.cacheReviewReplies,
                                         )
                                     ) {
                                         val sanitizedHtml = withContext(Dispatchers.Default) {
@@ -1488,7 +1497,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
      * 若处于交互忙态，后台刷新回退为顶部提示条，避免整页重载清空草稿。
      */
     private suspend fun isUserBusyInWebView(lease: WebViewRequestLifecycle): Boolean {
-        if (!::currentWebView.isInitialized || !ownsLease(lease)) return false
+        if (!::currentWebView.isInitialized || !ownsLease(lease)) return true
         val js = """(() => {
             try {
                 const el = document.activeElement;

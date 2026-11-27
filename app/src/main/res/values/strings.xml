@@ -3116,7 +3116,7 @@ Built-in bubbles are read-only; to customize, create a new bubble via Add or Imp
     <string name="menu_review_preheat_wifi_only">Pre-cache reviews on Wi-Fi only</string>
     <string name="menu_review_open_mode">Review open mode</string>
     <string name="menu_review_open_mode_network">Network first (cache fallback)</string>
-    <string name="menu_review_open_mode_snapshot_first">Cache first (instant + refresh)</string>
+    <string name="menu_review_open_mode_snapshot_first">Cache first (instant + auto-switch; banner on subpage/typing)</string>
     <string name="menu_review_open_mode_offline">Snapshot only (local only, offline on miss)</string>
     <string name="menu_review_snapshot_ttl">Review snapshot freshness</string>
     <string name="menu_review_snapshot_ttl_days">%1$d day(s)</string>
