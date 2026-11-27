@@ -28,6 +28,18 @@ class ReviewWindowPrefetcherPolicyTest {
     }
 
     @Test
+    fun windowRangeCoversFirstLastZeroCappedAndSingleChapter() {
+        assertEquals(0..2, ReviewWindowPrefetcher.windowRange(centerIndex = 0, preDownloadNum = 2, chapterSize = 10))
+        assertEquals(9..9, ReviewWindowPrefetcher.windowRange(centerIndex = 9, preDownloadNum = 2, chapterSize = 10))
+        assertEquals(3..3, ReviewWindowPrefetcher.windowRange(centerIndex = 3, preDownloadNum = 0, chapterSize = 10))
+        assertEquals(2..5, ReviewWindowPrefetcher.windowRange(centerIndex = 2, preDownloadNum = 10, chapterSize = 20))
+        assertEquals(0..0, ReviewWindowPrefetcher.windowRange(centerIndex = 0, preDownloadNum = 2, chapterSize = 1))
+        assertTrue(ReviewWindowPrefetcher.windowRange(centerIndex = 0, preDownloadNum = 2, chapterSize = 0).isEmpty())
+        assertTrue(ReviewWindowPrefetcher.windowRange(centerIndex = -1, preDownloadNum = 2, chapterSize = 5).isEmpty())
+        assertTrue(ReviewWindowPrefetcher.windowRange(centerIndex = 5, preDownloadNum = 2, chapterSize = 5).isEmpty())
+    }
+
+    @Test
     fun isStaleRespectsTtlDaysAndSavedAtBoundaries() {
         val oneDayMs = 24 * 60 * 60 * 1000L
         val now = 10_000_000_000L

@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -29,12 +30,14 @@ import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * 评论快照滑动窗口预取器：仅在阅读页串行预取当前章 + 下一章，
+ * 评论快照滑动窗口预取器：仅在阅读页串行预取当前章 + 后 N 章（N 受 [WINDOW_LOOKAHEAD_CAP] 上限约束），
+ * 通过 [Channel.CONFLATED] 常驻消费者合并最新窗口，不打断正在进行的单个按钮抓拍，
  * 并承接点击即缓存与过期刷新。去重走单飞，失败只做纯内存短冷却。
  */
 object ReviewWindowPrefetcher {
 
     private const val TAG = "ReviewWindowPrefetcher"
+    internal const val WINDOW_LOOKAHEAD_CAP = 3
     private const val ONE_DAY_MS = 24 * 60 * 60 * 1000L
     private const val CLICK_CAPTURE_DELAY_MS = 3_000L
     private const val BUTTON_TIMEOUT_MS = 90_000L
@@ -44,9 +47,10 @@ object ReviewWindowPrefetcher {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val inFlight = ConcurrentHashMap<String, Deferred<Unit>>()
     private val failedUntil = ConcurrentHashMap<String, Long>()
+    private val consumerLock = Any()
 
-    @Volatile
-    private var prefetchJob: Job? = null
+    private var prefetchChannel: Channel<Book>? = null
+    private var consumerJob: Job? = null
 
     @Volatile
     private var captureJob: Job? = null
@@ -54,32 +58,63 @@ object ReviewWindowPrefetcher {
     @Volatile
     private var refreshJob: Job? = null
 
+    internal fun windowRange(
+        centerIndex: Int,
+        preDownloadNum: Int,
+        chapterSize: Int,
+    ): IntRange {
+        if (chapterSize <= 0 || centerIndex !in 0 until chapterSize) return IntRange.EMPTY
+        val lookahead = preDownloadNum.coerceIn(0, WINDOW_LOOKAHEAD_CAP)
+        val endIndex = minOf(centerIndex + lookahead, chapterSize - 1)
+        return centerIndex..endIndex
+    }
+
     internal fun isStale(savedAt: Long, now: Long, ttlDays: Int): Boolean {
         if (ttlDays <= 0) return false
         if (savedAt <= 0L) return true
         return now - savedAt > ttlDays * ONE_DAY_MS
     }
 
-    fun prefetch(book: Book, centerIndex: Int) {
+    fun prefetch(book: Book, @Suppress("UNUSED_PARAMETER") centerIndex: Int) {
         if (!canRun(book)) return
-        prefetchJob?.cancel()
-        prefetchJob = scope.launch {
-            val chapterSize = ReadBook.chapterSize
-            if (chapterSize <= 0 || centerIndex < 0 || centerIndex >= chapterSize) return@launch
-            val endIndex = minOf(centerIndex + 1, chapterSize - 1)
-            val chapters = withContext(Dispatchers.IO) {
-                (centerIndex..endIndex).mapNotNull { index ->
-                    appDb.bookChapterDao.getChapter(book.bookUrl, index)
+        val channel = synchronized(consumerLock) {
+            if (consumerJob?.isActive != true || prefetchChannel == null) {
+                val created = Channel<Book>(Channel.CONFLATED)
+                prefetchChannel = created
+                consumerJob = scope.launch {
+                    for (triggerBook in created) {
+                        runPrefetchWindow(triggerBook)
+                    }
                 }
             }
-            for (chapter in chapters) {
-                currentCoroutineContext().ensureActive()
-                runCatching { prefetchChapter(book, chapter) }
-                    .onFailure { error ->
-                        if (error is CancellationException) throw error
-                        AppLog.put("$TAG 章节预取异常\n${error.localizedMessage}", error)
-                    }
+            prefetchChannel
+        }
+        channel?.trySend(book)
+    }
+
+    private suspend fun runPrefetchWindow(book: Book) {
+        if (!canRun(book)) return
+        if (ReadBook.book?.bookUrl != book.bookUrl) return
+        val chapterSize = ReadBook.chapterSize
+        val centerIndex = ReadBook.durChapterIndex
+        val range = windowRange(centerIndex, AppConfig.preDownloadNum, chapterSize)
+        if (range.isEmpty()) return
+        val windowChapterCount = range.last - range.first + 1
+        val chapters = withContext(Dispatchers.IO) {
+            range.mapNotNull { index ->
+                appDb.bookChapterDao.getChapter(book.bookUrl, index)
             }
+        }
+        for (chapter in chapters) {
+            currentCoroutineContext().ensureActive()
+            if (ReadBook.book?.bookUrl != book.bookUrl || ReadBook.durChapterIndex != centerIndex) {
+                return
+            }
+            runCatching { prefetchChapter(book, chapter, centerIndex, windowChapterCount) }
+                .onFailure { error ->
+                    if (error is CancellationException) throw error
+                    AppLog.put("$TAG 章节预取异常\n${error.localizedMessage}", error)
+                }
         }
     }
 
@@ -145,8 +180,12 @@ object ReviewWindowPrefetcher {
     }
 
     fun cancel() {
-        prefetchJob?.cancel()
-        prefetchJob = null
+        synchronized(consumerLock) {
+            prefetchChannel?.close()
+            prefetchChannel = null
+            consumerJob?.cancel()
+            consumerJob = null
+        }
         captureJob?.cancel()
         captureJob = null
         refreshJob?.cancel()
@@ -175,7 +214,12 @@ object ReviewWindowPrefetcher {
         return true
     }
 
-    private suspend fun prefetchChapter(book: Book, chapter: BookChapter) {
+    private suspend fun prefetchChapter(
+        book: Book,
+        chapter: BookChapter,
+        expectedCenterIndex: Int,
+        windowChapterCount: Int,
+    ) {
         val content = readChapterContent(book, chapter) ?: return
         val processed = ParagraphRuleProcessor.process(book, chapter, content)
         val buttons = ReviewSnapshotManager.extractReviewButtonsWithStats(processed).buttons
@@ -183,8 +227,12 @@ object ReviewWindowPrefetcher {
         if (buttons.isEmpty()) return
         val bookSource = appDb.bookSourceDao.getBookSource(book.origin) ?: return
         val ttlDays = AppConfig.reviewSnapshotTtlDays
+        val chapterStartMs = System.currentTimeMillis()
         for (button in buttons) {
             currentCoroutineContext().ensureActive()
+            if (ReadBook.book?.bookUrl != book.bookUrl || ReadBook.durChapterIndex != expectedCenterIndex) {
+                return
+            }
             val key = flightKey(book, chapter, button.src)
             val now = System.currentTimeMillis()
             if (isInCooldown(key, now)) continue
@@ -207,6 +255,10 @@ object ReviewWindowPrefetcher {
                 }
             }
         }
+        val elapsedMs = System.currentTimeMillis() - chapterStartMs
+        AppLog.putDebug(
+            "$TAG 窗口预取统计：窗口=${windowChapterCount}章，章=${chapter.title}，按钮=${buttons.size}个，耗时=${elapsedMs}ms"
+        )
     }
 
     private suspend fun readChapterContent(book: Book, chapter: BookChapter): String? {
