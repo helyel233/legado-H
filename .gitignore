@@ -43,7 +43,10 @@ cloudflare/**/.wrangler/
 # local build logs (Claude)
 /rb*.log
 /release-build*.log
-.legadoh/
+# 发版脚本纳入版本管理；密钥、产物与 body 缓存仍忽略
+.legadoh/*
+!.legadoh/build-signed.sh
+!.legadoh/create-release.sh
 # WorkBuddy 项目运行时数据（记忆/日志），不推送
 .workbuddy/
 
