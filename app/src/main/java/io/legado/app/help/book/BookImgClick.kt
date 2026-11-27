@@ -415,62 +415,6 @@ object BookImgClick {
     }
 
     /**
-     * 兼容旧源：click/js 写在 src 的 url 选项里（无独立 click 字段时走此入口）。
-     * @param hostChapter 当前展示章节；融合挂载的评论按钮据此反查文字书上下文。
-     * @return true 表示已处理
-     */
-    fun oldClickImg(
-        context: AppCompatActivity,
-        scope: CoroutineScope,
-        src: String,
-        hostChapter: BookChapter? = null,
-    ): Boolean {
-        val parsed = parseSrcOptions(src)
-        if (parsed == null) {
-            // 旧源选项 JSON 损坏时，网络链路没有可执行的 click/js。若已缓存，仍应
-            // 直接展示持有的离线评论；无快照在纯快照模式下提示并截断，其余模式交回原图片链路。
-            if (!paramPattern.matcher(src).find()) return false
-            val opened = openSnapshotIfCached(
-                context, src, hostChapter,
-                refreshToNetwork = false, offlineOnly = true
-            )
-            if (!opened && openMode() == AppConfig.ReviewOpenMode.OFFLINE) {
-                context.toastOnUi(R.string.review_no_cached_snapshot)
-                return true
-            }
-            return opened
-        }
-        val (urlNoOption, options) = parsed
-        val click = options["click"]
-        val js = options["js"]
-        if (click.isNullOrBlank() && js.isNullOrBlank()) {
-            return openSnapshotIfCached(
-                context, src, hostChapter,
-                refreshToNetwork = false, offlineOnly = true
-            )
-        }
-        val mode = openMode()
-        val tentative = decideOpenAction(mode, hasSnapshot = true)
-        val opened = if (tentative != OpenAction.OPEN_NETWORK) {
-            openSnapshotIfCached(
-                context, src, hostChapter,
-                refreshToNetwork = tentative == OpenAction.OPEN_SNAPSHOT_AND_REFRESH,
-                offlineOnly = tentative == OpenAction.OPEN_SNAPSHOT_OFFLINE
-            )
-        } else {
-            false
-        }
-        when (decideOpenAction(mode, hasSnapshot = opened)) {
-            OpenAction.OPEN_SNAPSHOT_AND_REFRESH,
-            OpenAction.OPEN_SNAPSHOT_OFFLINE -> Unit
-            OpenAction.BLOCK_NO_SNAPSHOT -> context.toastOnUi(R.string.review_no_cached_snapshot)
-            OpenAction.OPEN_NETWORK ->
-                openNetwork(context, scope, click, js, urlNoOption, src, hostChapter)
-        }
-        return true
-    }
-
-    /**
      * 网络打开（网络优先默认路径 / 快照优先无快照回退）。
      * click 与旧源 js 走与用户点击完全一致的执行环境；
      * 网络优先模式下载入时若该按钮存在快照，将其作为“加载失败/超时兜底”

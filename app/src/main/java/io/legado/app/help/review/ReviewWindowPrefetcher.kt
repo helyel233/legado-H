@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -181,9 +182,8 @@ object ReviewWindowPrefetcher {
         windowScheduler.cancel()
         captureJob?.cancel()
         captureJob = null
-        val activeFlights = inFlight.values.toList()
         inFlight.clear()
-        activeFlights.forEach { it.cancel() }
+        scope.coroutineContext.cancelChildren()
     }
 
     fun clearCooldown(bookUrl: String) {

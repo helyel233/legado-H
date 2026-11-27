@@ -1033,10 +1033,25 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                 refreshed.second
                             )
                         }
+                        if (evaluation.decision == ReviewSnapshotRefreshPolicy.RefreshDecision.NO_CHANGE) {
+                            val now = System.currentTimeMillis()
+                            val book = reviewResourceBook
+                            val chUrl = snapshotChapterUrl
+                            val btnSrc = snapshotButtonSrc
+                            if (book != null && !chUrl.isNullOrBlank() && !btnSrc.isNullOrBlank()) {
+                                ReviewSnapshotStore.touchSavedAt(book, chUrl, btnSrc, now)
+                            }
+                            withContext(Dispatchers.Main) {
+                                if (ownsLease(lease) && isAdded && !isHidden) {
+                                    snapshotSavedAt = now
+                                    updateSourceBadge()
+                                }
+                            }
+                            return@launch
+                        }
                         val reloadUrl = refreshed.first.ifBlank { document.first }
                         val canAutoSwitchContent =
-                            evaluation.decision == ReviewSnapshotRefreshPolicy.RefreshDecision.CONTENT_CHANGED &&
-                                evaluation.refreshedIsCommentPage &&
+                            evaluation.refreshedIsCommentPage &&
                                 withContext(Dispatchers.Default) {
                                     ReviewSnapshotRefreshPolicy.shouldOverwriteSnapshot(
                                         displayedDocumentHtml,
@@ -1044,9 +1059,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                     )
                                 }
                         val action = withContext(Dispatchers.Main) {
-                            if (evaluation.decision == ReviewSnapshotRefreshPolicy.RefreshDecision.NO_CHANGE) {
-                                return@withContext ReviewSnapshotRefreshPolicy.RefreshUiAction.TOUCH_ONLY
-                            }
                             if (!ownsLease(lease) || !isAdded || isHidden || displayingErrorPage) {
                                 return@withContext null
                             }
@@ -1065,28 +1077,12 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                 isUserBusy = busy,
                             )
                             pendingNetworkRefresh = reloadUrl to refreshed.second
-                            when (decided) {
-                                ReviewSnapshotRefreshPolicy.RefreshUiAction.AUTO_SWITCH -> applyPendingNetworkRefresh()
-                                ReviewSnapshotRefreshPolicy.RefreshUiAction.SHOW_BANNER -> showUpdateBanner()
-                                ReviewSnapshotRefreshPolicy.RefreshUiAction.TOUCH_ONLY -> Unit
+                            if (decided == ReviewSnapshotRefreshPolicy.RefreshUiAction.AUTO_SWITCH) {
+                                applyPendingNetworkRefresh()
+                            } else {
+                                showUpdateBanner()
                             }
                             decided
-                        }
-                        if (action == ReviewSnapshotRefreshPolicy.RefreshUiAction.TOUCH_ONLY) {
-                            val now = System.currentTimeMillis()
-                            val book = reviewResourceBook
-                            val chUrl = snapshotChapterUrl
-                            val btnSrc = snapshotButtonSrc
-                            if (book != null && !chUrl.isNullOrBlank() && !btnSrc.isNullOrBlank()) {
-                                ReviewSnapshotStore.touchSavedAt(book, chUrl, btnSrc, now)
-                            }
-                            withContext(Dispatchers.Main) {
-                                if (ownsLease(lease) && isAdded && !isHidden) {
-                                    snapshotSavedAt = now
-                                    updateSourceBadge()
-                                }
-                            }
-                            return@launch
                         }
                         val switched = action == ReviewSnapshotRefreshPolicy.RefreshUiAction.AUTO_SWITCH
                         if (switched) {
