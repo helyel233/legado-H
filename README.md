@@ -117,7 +117,7 @@ cd legado-H
 
 新接手代码时，先跑 `python3 tools/architecture_guide.py`：它从源码实时生成导读（顶层枢纽类、策略类索引、术语映射、隐式契约锚点），不落盘、不会过期。
 
-- [开发经验与规则](docs/development-playbook.md) · [改动安全网](docs/change-safety.md) · [发版手册](release-process.md)
+- [开发经验与规则](docs/development-playbook.md) · [改动安全网](docs/change-safety.md) · [发版手册](docs/release-process.md)
 - [UI 架构 v4 与双包体系](docs/ui-architecture-v4-plan.md) · [玻璃材质接入方案](docs/glass-appwide-adoption-plan.md) · [EPUB 直连引擎](docs/epub-direct-engine.md)
 - [页面模板](docs/reader-templates.md) · [网络与 DNS](docs/doh-network.md) · [视觉资源包](docs/visual-resource-packages.md) · [段落规则与气泡包导入](docs/online-package-import.md) · [公网 Web 中继](docs/public-web-relay.md)
 

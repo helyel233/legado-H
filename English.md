@@ -117,7 +117,7 @@ cd legado-H
 
 When picking up the codebase, run `python3 tools/architecture_guide.py` first: it generates a guide from the live source (top-level hubs, policy classes, terminology mapping, implicit-contract anchors) without writing a file, so it cannot go stale.
 
-- [Development playbook](docs/development-playbook.md) · [Change safety net](docs/change-safety.md) · [Release process](release-process.md)
+- [Development playbook](docs/development-playbook.md) · [Change safety net](docs/change-safety.md) · [Release process](docs/release-process.md)
 - [UI architecture v4 and the package system](docs/ui-architecture-v4-plan.md) · [Glass material adoption plan](docs/glass-appwide-adoption-plan.md) · [EPUB direct engine](docs/epub-direct-engine.md)
 - [Page templates](docs/reader-templates.md) · [Network and DNS](docs/doh-network.md) · [Visual resource packages](docs/visual-resource-packages.md) · [Paragraph rules and bubble-pack import](docs/online-package-import.md) · [Public web relay](docs/public-web-relay.md)
 
