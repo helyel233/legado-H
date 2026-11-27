@@ -25,7 +25,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 
@@ -47,10 +46,14 @@ object ReviewWindowPrefetcher {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val inFlight = ConcurrentHashMap<String, Deferred<Unit>>()
     private val failedUntil = ConcurrentHashMap<String, Long>()
-    private val consumerLock = Any()
 
-    private var prefetchChannel: Channel<Book>? = null
-    private var consumerJob: Job? = null
+    private val windowScheduler = ConflatedWindowScheduler<Book>(
+        scope = scope,
+        onError = { error ->
+            AppLog.put("$TAG 窗口预取调度异常\n${error.localizedMessage}", error)
+        },
+        runner = ::runPrefetchWindow,
+    )
 
     @Volatile
     private var captureJob: Job? = null
@@ -75,21 +78,20 @@ object ReviewWindowPrefetcher {
         return now - savedAt > ttlDays * ONE_DAY_MS
     }
 
+    internal fun canRunPolicy(
+        syncCacheReview: Boolean,
+        isVideo: Boolean,
+        wifiOnly: Boolean,
+        isWifi: () -> Boolean,
+        isNetworkAvailable: () -> Boolean,
+    ): Boolean {
+        if (!syncCacheReview || isVideo) return false
+        return if (wifiOnly) isWifi() else isNetworkAvailable()
+    }
+
     fun prefetch(book: Book, @Suppress("UNUSED_PARAMETER") centerIndex: Int) {
         if (!canRun(book)) return
-        val channel = synchronized(consumerLock) {
-            if (consumerJob?.isActive != true || prefetchChannel == null) {
-                val created = Channel<Book>(Channel.CONFLATED)
-                prefetchChannel = created
-                consumerJob = scope.launch {
-                    for (triggerBook in created) {
-                        runPrefetchWindow(triggerBook)
-                    }
-                }
-            }
-            prefetchChannel
-        }
-        channel?.trySend(book)
+        windowScheduler.send(book)
     }
 
     private suspend fun runPrefetchWindow(book: Book) {
@@ -100,13 +102,12 @@ object ReviewWindowPrefetcher {
         val range = windowRange(centerIndex, AppConfig.preDownloadNum, chapterSize)
         if (range.isEmpty()) return
         val windowChapterCount = range.last - range.first + 1
-        val chapters = withContext(Dispatchers.IO) {
-            range.mapNotNull { index ->
-                appDb.bookChapterDao.getChapter(book.bookUrl, index)
-            }
+        val chapters = range.mapNotNull { index ->
+            appDb.bookChapterDao.getChapter(book.bookUrl, index)
         }
         for (chapter in chapters) {
             currentCoroutineContext().ensureActive()
+            if (!canRun(book)) return
             if (ReadBook.book?.bookUrl != book.bookUrl || ReadBook.durChapterIndex != centerIndex) {
                 return
             }
@@ -131,6 +132,7 @@ object ReviewWindowPrefetcher {
         captureJob?.cancel()
         captureJob = scope.launch {
             delay(CLICK_CAPTURE_DELAY_MS)
+            if (!canRun(book)) return@launch
             val key = flightKey(book, chapter, buttonSrc)
             singleFlight(key) {
                 runCapture(key, "点击即缓存") {
@@ -180,16 +182,14 @@ object ReviewWindowPrefetcher {
     }
 
     fun cancel() {
-        synchronized(consumerLock) {
-            prefetchChannel?.close()
-            prefetchChannel = null
-            consumerJob?.cancel()
-            consumerJob = null
-        }
+        windowScheduler.cancel()
         captureJob?.cancel()
         captureJob = null
         refreshJob?.cancel()
         refreshJob = null
+        val activeFlights = inFlight.values.toList()
+        inFlight.clear()
+        activeFlights.forEach { it.cancel() }
     }
 
     fun clearCooldown(bookUrl: String) {
@@ -207,13 +207,13 @@ object ReviewWindowPrefetcher {
         failedUntil.clear()
     }
 
-    private fun canRun(book: Book): Boolean {
-        if (!NetworkUtils.isAvailable()) return false
-        if (!AppConfig.syncCacheReview) return false
-        if (book.isVideo) return false
-        if (AppConfig.reviewPreheatWifiOnly && !NetworkUtils.isWifi()) return false
-        return true
-    }
+    private fun canRun(book: Book): Boolean = canRunPolicy(
+        syncCacheReview = AppConfig.syncCacheReview,
+        isVideo = book.isVideo,
+        wifiOnly = AppConfig.reviewPreheatWifiOnly,
+        isWifi = NetworkUtils::isWifi,
+        isNetworkAvailable = NetworkUtils::isAvailable,
+    )
 
     private suspend fun prefetchChapter(
         book: Book,
@@ -223,7 +223,7 @@ object ReviewWindowPrefetcher {
     ) {
         val content = readChapterContent(book, chapter) ?: return
         val processed = ParagraphRuleProcessor.process(book, chapter, content)
-        val buttons = ReviewSnapshotManager.extractReviewButtonsWithStats(processed).buttons
+        val buttons = ReviewSnapshotManager.extractReviewButtons(processed)
             .filter { it.hasAction }
         if (buttons.isEmpty()) return
         val bookSource = appDb.bookSourceDao.getBookSource(book.origin) ?: return
@@ -231,14 +231,15 @@ object ReviewWindowPrefetcher {
         val chapterStartMs = System.currentTimeMillis()
         for (button in buttons) {
             currentCoroutineContext().ensureActive()
+            if (!canRun(book)) return
             if (ReadBook.book?.bookUrl != book.bookUrl || ReadBook.durChapterIndex != expectedCenterIndex) {
                 return
             }
             val key = flightKey(book, chapter, button.src)
             val now = System.currentTimeMillis()
             if (isInCooldown(key, now)) continue
-            val existing = ReviewSnapshotStore.get(book, chapter, button.src)
-            if (existing != null && !existing.partial && !isStale(existing.savedAt, now, ttlDays)) {
+            val savedAt = ReviewSnapshotStore.getSavedAt(book, chapter, button.src)
+            if (savedAt != null && !isStale(savedAt, now, ttlDays)) {
                 continue
             }
             singleFlight(key) {
@@ -288,6 +289,7 @@ object ReviewWindowPrefetcher {
                 inFlight.remove(key, created)
             }
         }
+        created.invokeOnCompletion { inFlight.remove(key, created) }
         val existing = inFlight.putIfAbsent(key, created)
         if (existing != null) {
             created.cancel()
@@ -302,16 +304,20 @@ object ReviewWindowPrefetcher {
         try {
             if (block()) {
                 failedUntil.remove(key)
-            } else {
+            } else if (NetworkUtils.isAvailable()) {
                 recordCooldown(key)
             }
         } catch (error: TimeoutCancellationException) {
-            recordCooldown(key)
+            if (NetworkUtils.isAvailable()) {
+                recordCooldown(key)
+            }
             AppLog.put("$TAG ${label}失败：抓取超时", error)
         } catch (error: CancellationException) {
             throw error
         } catch (error: Throwable) {
-            recordCooldown(key)
+            if (NetworkUtils.isAvailable()) {
+                recordCooldown(key)
+            }
             AppLog.put("$TAG ${label}失败\n${error.localizedMessage}", error)
         }
     }
@@ -337,6 +343,51 @@ object ReviewWindowPrefetcher {
         while (failedUntil.size > MAX_COOLDOWN_ENTRIES) {
             val earliest = failedUntil.entries.minByOrNull { it.value } ?: break
             failedUntil.remove(earliest.key, earliest.value)
+        }
+    }
+}
+
+/**
+ * 基于 [Channel.CONFLATED] 的常驻单消费者调度器：
+ * - 快速连续发送时仅保留最新元素，不打断正在执行中的任务；
+ * - 捕获单次执行异常防止消费者退出；
+ * - [cancel] 关闭通道并取消在途消费，后续 [send] 自动重建消费者。
+ */
+internal class ConflatedWindowScheduler<T>(
+    private val scope: CoroutineScope,
+    private val onError: (Throwable) -> Unit = {},
+    private val runner: suspend (T) -> Unit,
+) {
+    private val lock = Any()
+    private var channel: Channel<T>? = null
+    private var consumerJob: Job? = null
+
+    fun send(item: T) {
+        val target = synchronized(lock) {
+            if (consumerJob?.isActive != true || channel == null) {
+                val created = Channel<T>(Channel.CONFLATED)
+                channel = created
+                consumerJob = scope.launch {
+                    for (value in created) {
+                        runCatching { runner(value) }
+                            .onFailure { error ->
+                                if (error is CancellationException) throw error
+                                onError(error)
+                            }
+                    }
+                }
+            }
+            channel
+        }
+        target?.trySend(item)
+    }
+
+    fun cancel() {
+        synchronized(lock) {
+            channel?.close()
+            channel = null
+            consumerJob?.cancel()
+            consumerJob = null
         }
     }
 }

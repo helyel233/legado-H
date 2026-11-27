@@ -61,7 +61,7 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
     }
 
     /** 将历史 4 模式取值及未知值平滑归一到当前三模式（历史 snapshot_only 保持映射到缓存优先） */
-    private fun normalizeReviewOpenMode(raw: String?): String = when (raw) {
+    internal fun normalizeReviewOpenMode(raw: String?): String = when (raw) {
         ReviewOpenMode.OFFLINE -> ReviewOpenMode.OFFLINE
         ReviewOpenMode.SNAPSHOT_FIRST, "snapshot_only" -> ReviewOpenMode.SNAPSHOT_FIRST
         ReviewOpenMode.NETWORK, "network_only" -> ReviewOpenMode.NETWORK
@@ -1896,9 +1896,9 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         }
 
     /**
-     * 评论打开方式：network（联网优先） / snapshot_first（缓存优先）。
-     * 图标直点与选中文字后的段评菜单共用此值（见 [BookImgClick] 的二模式语义）。
-     * 历史偏好值 snapshot_only / network_only 自动归一到对应的二模式取值。
+     * 评论打开方式：network（联网优先） / snapshot_first（缓存优先） / offline（纯快照）。
+     * 图标直点与选中文字后的段评菜单共用此值（见 [BookImgClick] 的三模式语义）。
+     * 历史偏好值 snapshot_only / network_only 自动归一到对应取值。
      */
     var reviewOpenMode: String
         get() = normalizeReviewOpenMode(

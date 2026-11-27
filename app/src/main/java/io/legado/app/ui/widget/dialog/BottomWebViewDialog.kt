@@ -131,7 +131,9 @@ import io.legado.app.help.webView.WebViewHtmlStore
 import io.legado.app.utils.configureOfflineResourceLoading
 import io.legado.app.utils.gone
 import io.legado.app.utils.setDarkeningAllowed
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
+import kotlin.coroutines.resume
 import splitties.init.appCtx
 
 class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view), WebJsExtensions.Callback {
@@ -142,6 +144,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         const val ARG_FALLBACK_HTML_FILE = "fallbackHtmlFile"
         const val ARG_FALLBACK_SAVED_AT = "fallbackSavedAt"
         const val ARG_IS_SNAPSHOT_HTML = "isSnapshotHtml"
+        const val ARG_OFFLINE_ONLY = "offlineOnly"
         const val ARG_REVIEW_RESOURCE_BOOK = "reviewResourceBook"
         const val ARG_SNAPSHOT_CHAPTER_URL = "snapshotChapterUrl"
         const val ARG_SNAPSHOT_BUTTON_SRC = "snapshotButtonSrc"
@@ -381,6 +384,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             putString("config", config)
             putBoolean("useCommentWebViewSession", webViewSession != null)
             putBoolean(ARG_IS_SNAPSHOT_HTML, isSnapshotHtml)
+            putBoolean(ARG_OFFLINE_ONLY, offlineOnly)
             putParcelable(ARG_REVIEW_RESOURCE_BOOK, reviewResourceBook)
             // 快照身份：进程重建时按主键重读本地快照（替代把大 HTML 塞进 Bundle）
             putString(ARG_SNAPSHOT_CHAPTER_URL, snapshotChapterUrl)
@@ -825,6 +829,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             val url = args.getString("url") ?: return@launch
             // 评论快照/离线评论上下文：配置变更重建时构造函数不会重新执行，
             // 必须从 arguments 恢复，不能依赖构造时赋值的字段。
+            offlineMode = args.getBoolean(ARG_OFFLINE_ONLY, offlineMode)
             @Suppress("DEPRECATION")
             reviewResourceBook = args.getParcelable(ARG_REVIEW_RESOURCE_BOOK)
             syntheticParaContent = SyntheticParaContent.fromBundle(args)
@@ -1015,18 +1020,19 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                 currentWebView.clearHistory()
                 // “快照优先”：快照先显示，后台抓取最新评论页并与当前展示快照比对内容摘要。
                 // 无实质变化时仅静默刷新元数据时间戳，不再触发 loadDataWithBaseURL 整页重绘闪烁；
-                // 若检测到新评论，在顶部展示平滑更新提示条供切换。
+                // 若检测到有效评论更新：用户未在打字/二级页时自动切换并尽量还原滚动位置，
+                // 否则回退展示顶部更新提示条由用户决定；回写快照库前先清洗并校验不截断旧快照。
                 val refresher = networkRefresher
                 if (refresher != null) {
                     lease.scope.launch(IO) {
                         val refreshed = runCatching { refresher() }.getOrNull() ?: return@launch
-                        val decision = withContext(Dispatchers.Default) {
-                            ReviewSnapshotRefreshPolicy.evaluateRefresh(
+                        val evaluation = withContext(Dispatchers.Default) {
+                            ReviewSnapshotRefreshPolicy.evaluateRefreshDetail(
                                 displayedDocumentHtml,
                                 refreshed.second
                             )
                         }
-                        if (decision == ReviewSnapshotRefreshPolicy.RefreshDecision.NO_CHANGE) {
+                        if (evaluation.decision == ReviewSnapshotRefreshPolicy.RefreshDecision.NO_CHANGE) {
                             val now = System.currentTimeMillis()
                             val book = reviewResourceBook
                             val chUrl = snapshotChapterUrl
@@ -1042,20 +1048,21 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             }
                             return@launch
                         }
-                        val isValidCommentPage = withContext(Dispatchers.Default) {
-                            ReviewSnapshotRefreshPolicy.isCommentPage(refreshed.second)
-                        }
-                        if (!isValidCommentPage) {
+                        if (!evaluation.refreshedIsCommentPage) {
                             return@launch
                         }
                         val reloadUrl = refreshed.first.ifBlank { document.first }
                         val switched = withContext(Dispatchers.Main) {
-                            if (ownsLease(lease) && isAdded && !isHidden && !displayingErrorPage) {
-                                pendingNetworkRefresh = reloadUrl to refreshed.second
+                            if (!ownsLease(lease) || !isAdded || isHidden || displayingErrorPage) {
+                                return@withContext false
+                            }
+                            pendingNetworkRefresh = reloadUrl to refreshed.second
+                            if (currentWebView.canGoBack() || isUserBusyInWebView(lease)) {
+                                showUpdateBanner()
+                                false
+                            } else {
                                 applyPendingNetworkRefresh()
                                 true
-                            } else {
-                                false
                             }
                         }
                         if (switched) {
@@ -1065,16 +1072,31 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             if (book != null && !chUrl.isNullOrBlank() && !btnSrc.isNullOrBlank()) {
                                 runCatching {
                                     val existing = ReviewSnapshotStore.getByKey(book, chUrl, btnSrc)
-                                    if (existing != null) {
-                                        val now = System.currentTimeMillis()
-                                        ReviewSnapshotStore.put(
-                                            book,
-                                            existing.copy(
-                                                url = reloadUrl,
-                                                html = refreshed.second,
-                                                savedAt = now,
-                                            )
+                                    if (existing != null &&
+                                        ReviewSnapshotRefreshPolicy.shouldOverwriteSnapshot(
+                                            existing.html,
+                                            evaluation.refreshedCardCount
                                         )
+                                    ) {
+                                        val sanitizedHtml = withContext(Dispatchers.Default) {
+                                            ReviewSnapshotRefreshPolicy.sanitizeForSnapshot(
+                                                refreshed.second,
+                                                reloadUrl,
+                                                AppConfig.cacheReviewReplies
+                                            )
+                                        }
+                                        if (sanitizedHtml.isNotBlank()) {
+                                            val now = System.currentTimeMillis()
+                                            ReviewSnapshotStore.put(
+                                                book,
+                                                existing.copy(
+                                                    url = reloadUrl,
+                                                    html = sanitizedHtml,
+                                                    savedAt = now,
+                                                    downloadEngine = "web",
+                                                )
+                                            )
+                                        }
                                     }
                                 }.onFailure { error ->
                                     AppLog.put("段评自动切换后回写快照失败：${error.localizedMessage}", error)
@@ -1444,6 +1466,33 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         }
     }
 
+    /**
+     * 检测用户当前是否在评论页内输入（聚焦输入框/可编辑节点）或正打开评论输入弹窗。
+     * 若处于交互忙态，后台刷新回退为顶部提示条，避免整页重载清空草稿。
+     */
+    private suspend fun isUserBusyInWebView(lease: WebViewRequestLifecycle): Boolean {
+        if (!ownsLease(lease)) return true
+        val js = """(() => {
+            try {
+                const el = document.activeElement;
+                const tag = el && el.tagName ? el.tagName.toUpperCase() : '';
+                const editing = tag === 'INPUT' || tag === 'TEXTAREA' || (el && el.isContentEditable === true);
+                const modal = document.getElementById('commentModalOverlay');
+                const modalOpen = !!(modal && getComputedStyle(modal).display !== 'none' && getComputedStyle(modal).visibility !== 'hidden');
+                return editing || modalOpen;
+            } catch (e) {
+                return false;
+            }
+        })()""".trimIndent()
+        return suspendCancellableCoroutine { cont ->
+            currentWebView.evaluateJavascript(js) { raw ->
+                if (cont.isActive) {
+                    cont.resume(raw?.trim()?.equals("true", ignoreCase = true) == true)
+                }
+            }
+        }
+    }
+
     private fun applyPendingNetworkRefresh() {
         val refresh = pendingNetworkRefresh ?: return
         val lease = requestLifecycle?.takeIf(::ownsLease) ?: return
@@ -1459,6 +1508,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         currentWebView.evaluateJavascript("window.scrollY") { value ->
             if (!ownsLease(lease)) return@evaluateJavascript
             pendingRestoreScrollY = value?.trim()?.toFloatOrNull()?.toInt() ?: -1
+            needClearHistory = true
             currentWebView.loadDataWithBaseURL(
                 reloadUrl,
                 newHtml,

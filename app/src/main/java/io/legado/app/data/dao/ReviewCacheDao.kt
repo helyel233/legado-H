@@ -31,6 +31,9 @@ interface ReviewCacheDao {
     @Query("SELECT 1 FROM review_cache WHERE cacheKey = :cacheKey LIMIT 1")
     fun exists(cacheKey: String): Int?
 
+    @Query("SELECT savedAt FROM review_cache WHERE cacheKey = :cacheKey LIMIT 1")
+    fun savedAt(cacheKey: String): Long?
+
     @Query("SELECT buttonSrc FROM review_cache WHERE bookUrl = :bookUrl AND chapterUrl = :chapterUrl")
     fun buttonSrcsForChapter(bookUrl: String, chapterUrl: String): List<String>
 

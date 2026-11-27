@@ -42,12 +42,13 @@ import splitties.init.appCtx
 /**
  * 图片/评论点击统一入口。
  *
- * “评论打开方式”二模式（[AppConfig.reviewOpenMode]，默认联网优先）：
+ * “评论打开方式”三模式（[AppConfig.reviewOpenMode]，默认联网优先）：
  * - 联网优先（[AppConfig.ReviewOpenMode.NETWORK]）：点击评论直接执行原 click/js
  *   加载在线评论页；若该按钮存在本地快照，则在网络加载失败/超时时自动用缓存兜底，
  *   无快照则展示正常错误；
  * - 缓存优先（[AppConfig.ReviewOpenMode.SNAPSHOT_FIRST]）：命中缓存立即用快照秒开
- *   （0 秒可见），同时后台静默 SWR 刷新真实评论页；无缓存则按正常网络链路打开。
+ *   （0 秒可见），同时后台静默 SWR 刷新真实评论页；无缓存则按正常网络链路打开；
+ * - 纯快照（[AppConfig.ReviewOpenMode.OFFLINE]）：仅读取本地快照，未命中时严格零联网并提示。
  *
  * 同一套 click/js 执行逻辑同时服务用户点击与后台抓取：抓取时传入拦截宿主
  * （click 分支替换 java 宿主；js 分支挂 AnalyzeRule 钩子），其余环境完全一致。
@@ -70,8 +71,6 @@ object BookImgClick {
     }
 
     private fun openMode(): String = AppConfig.reviewOpenMode
-
-    private fun isOfflineOnly(): Boolean = openMode() == AppConfig.ReviewOpenMode.OFFLINE
 
     /** 与图片点击入口共用同一判定，避免给没有 click/js 的零评论泡暴露段评菜单。 */
     fun hasAction(src: String, click: String?): Boolean {
@@ -264,11 +263,11 @@ object BookImgClick {
     /**
      * 段评图标直点路径的**同步热命中**快速通道（点击即弹）。
      *
-     * 仅在缓存优先模式（[AppConfig.ReviewOpenMode.SNAPSHOT_FIRST]）生效：只做一次
-     * stat + 进程内快照内存缓存查询（无解析、无协程调度），命中即在主线程直接构造并
-     * 显示对话框，并挂上后台 SWR 刷新器；联网优先模式直接返回 false 走原链路。
+     * 在缓存优先（[AppConfig.ReviewOpenMode.SNAPSHOT_FIRST]）与纯快照
+     * （[AppConfig.ReviewOpenMode.OFFLINE]）模式均生效：只做进程内快照内存缓存查询
+     * （无解析、无协程调度），命中即在主线程直接构造并显示对话框；联网优先模式直接返回 false。
      *
-     * 未命中返回 false：调用方按原链路走 IO 协程读文件（首次/被淘汰），
+     * 未命中返回 false：调用方按原链路走 IO 协程读库（首次/被淘汰），
      * 那次读入后会热缓存，下次同一按钮即走本通道。
      *
      * @param pclick 段落规则点击值；图标直点段落规则段评时传入，用于弹窗源键
@@ -286,7 +285,10 @@ object BookImgClick {
         onDismiss: (() -> Unit)? = null,
     ): Boolean {
         if (context.isFinishing || context.isDestroyed) return false
-        if (openMode() != AppConfig.ReviewOpenMode.SNAPSHOT_FIRST) return false
+        val action = decideOpenAction(openMode(), hasSnapshot = true)
+        if (action != OpenAction.OPEN_SNAPSHOT_AND_REFRESH && action != OpenAction.OPEN_SNAPSHOT_OFFLINE) {
+            return false
+        }
         // 主线程快速通道：只认调用方给的内存章节，不做任何数据库回退
         val chapter = hostChapter ?: return false
         val resolvedContext = reviewContext(chapter, src) ?: return false
@@ -299,13 +301,23 @@ object BookImgClick {
                 )
             }
             ?: return false
+        val offlineOnly = action == OpenAction.OPEN_SNAPSHOT_OFFLINE
         val snapshotSource = resolveNetworkSource(resolvedContext)
-        val refresher = buildNetworkRefresher(src, cached, snapshotSource)
+        val refresher = if (offlineOnly) null else buildNetworkRefresher(src, cached, snapshotSource)
+        if (offlineOnly) {
+            val ttlDays = AppConfig.reviewSnapshotTtlDays
+            if (ReviewWindowPrefetcher.isStale(
+                    cached.snapshot.savedAt, System.currentTimeMillis(), ttlDays
+                )
+            ) {
+                ReviewWindowPrefetcher.refreshButton(cached.book, cached.chapter, src)
+            }
+        }
         return showSnapshot(
             context, cached,
             source = snapshotSource,
             networkRefresher = refresher,
-            offlineOnly = false,
+            offlineOnly = offlineOnly,
             sourceKeyOverride = pclick
                 ?.let { ParagraphRuleProcessor.ruleIdOfClick(it) }
                 ?.let { "paragraph_rule_$it" },
@@ -315,13 +327,14 @@ object BookImgClick {
     }
 
     /**
-     * 段评图标直点路径的快照消费（与选中文字后的段评菜单同一套二模式语义）：
+     * 段评图标直点路径的快照消费（与选中文字后的段评菜单同一套三模式语义）：
      * - 缓存优先（[AppConfig.ReviewOpenMode.SNAPSHOT_FIRST]）：有缓存 → 立即打开并后台
      *   SWR 刷新，返回 [ReviewSnapshotConsumption.Opened]；无缓存 → 返回 NotConsumed 回落网络；
+     * - 纯快照（[AppConfig.ReviewOpenMode.OFFLINE]）：有缓存 → 离线打开；无缓存 → 提示并返回 BlockedOffline；
      * - 联网优先（[AppConfig.ReviewOpenMode.NETWORK]，默认）：直接返回 NotConsumed，
      *   由调用方按原 click/js 链路联网加载，并在失败/超时时用缓存兜底。
      *
-     * 在 IO 线程调用（内部会读快照文件），弹窗经 runOnUiThread 展示。
+     * 在 IO 线程调用（内部会读快照库），弹窗经 runOnUiThread 展示。
      * 热路径请先试 [tryOpenCachedSnapshotImmediately]（同步内存命中直开）。
      *
      * @param pclick 段落规则点击值；图标直点段落规则段评时传入，用于后台刷新与弹窗源键
@@ -334,33 +347,23 @@ object BookImgClick {
         pclick: String? = null,
         onDismiss: (() -> Unit)? = null,
     ): ReviewSnapshotConsumption {
-        return when {
-            isOfflineOnly() -> {
-                val opened = openSnapshotIfCached(
-                    context, src, hostChapter,
-                    refreshToNetwork = false, offlineOnly = true,
-                    pclick = pclick, onDismiss = onDismiss
-                )
-                if (opened) {
-                    ReviewSnapshotConsumption.Opened
-                } else {
-                    context.toastOnUi(R.string.review_no_cached_snapshot)
-                    ReviewSnapshotConsumption.BlockedOffline
-                }
+        val mode = openMode()
+        val tentative = decideOpenAction(mode, hasSnapshot = true)
+        if (tentative == OpenAction.OPEN_NETWORK) return ReviewSnapshotConsumption.NotConsumed
+        val opened = openSnapshotIfCached(
+            context, src, hostChapter,
+            refreshToNetwork = tentative == OpenAction.OPEN_SNAPSHOT_AND_REFRESH,
+            offlineOnly = tentative == OpenAction.OPEN_SNAPSHOT_OFFLINE,
+            pclick = pclick, onDismiss = onDismiss
+        )
+        return when (decideOpenAction(mode, hasSnapshot = opened)) {
+            OpenAction.OPEN_SNAPSHOT_AND_REFRESH,
+            OpenAction.OPEN_SNAPSHOT_OFFLINE -> ReviewSnapshotConsumption.Opened
+            OpenAction.BLOCK_NO_SNAPSHOT -> {
+                context.toastOnUi(R.string.review_no_cached_snapshot)
+                ReviewSnapshotConsumption.BlockedOffline
             }
-            openMode() == AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
-                val opened = openSnapshotIfCached(
-                    context, src, hostChapter,
-                    refreshToNetwork = true, offlineOnly = false,
-                    pclick = pclick, onDismiss = onDismiss
-                )
-                if (opened) {
-                    ReviewSnapshotConsumption.Opened
-                } else {
-                    ReviewSnapshotConsumption.NotConsumed
-                }
-            }
-            else -> ReviewSnapshotConsumption.NotConsumed
+            OpenAction.OPEN_NETWORK -> ReviewSnapshotConsumption.NotConsumed
         }
     }
 
@@ -390,28 +393,24 @@ object BookImgClick {
         syntheticPara: SyntheticParaContent? = null,
     ) {
         // 合成入口只复用缓存地址创建本段本地模板，不展示锚点段的评论。
-        when {
-            isOfflineOnly() -> {
-                if (!openSnapshotIfCached(
-                        context, src, hostChapter,
-                        refreshToNetwork = false, offlineOnly = true, syntheticPara = syntheticPara
-                    )
-                ) {
-                    context.toastOnUi(R.string.review_no_cached_snapshot)
-                }
-            }
-            openMode() == AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
-                if (openSnapshotIfCached(
-                        context, src, hostChapter,
-                        refreshToNetwork = true, offlineOnly = false, syntheticPara = syntheticPara
-                    )
-                ) {
-                    return
-                }
-                // 无快照 → 直接按正常网络评论打开
+        val mode = openMode()
+        val tentative = decideOpenAction(mode, hasSnapshot = true)
+        val opened = if (tentative != OpenAction.OPEN_NETWORK) {
+            openSnapshotIfCached(
+                context, src, hostChapter,
+                refreshToNetwork = tentative == OpenAction.OPEN_SNAPSHOT_AND_REFRESH,
+                offlineOnly = tentative == OpenAction.OPEN_SNAPSHOT_OFFLINE,
+                syntheticPara = syntheticPara
+            )
+        } else {
+            false
+        }
+        when (decideOpenAction(mode, hasSnapshot = opened)) {
+            OpenAction.OPEN_SNAPSHOT_AND_REFRESH,
+            OpenAction.OPEN_SNAPSHOT_OFFLINE -> return
+            OpenAction.BLOCK_NO_SNAPSHOT -> context.toastOnUi(R.string.review_no_cached_snapshot)
+            OpenAction.OPEN_NETWORK ->
                 openNetwork(context, scope, click, null, null, src, hostChapter, syntheticPara)
-            }
-            else -> openNetwork(context, scope, click, null, null, src, hostChapter, syntheticPara)
         }
     }
 
@@ -448,26 +447,23 @@ object BookImgClick {
                 refreshToNetwork = false, offlineOnly = true
             )
         }
-        when {
-            isOfflineOnly() -> {
-                if (!openSnapshotIfCached(
-                        context, src, hostChapter,
-                        refreshToNetwork = false, offlineOnly = true
-                    )
-                ) {
-                    context.toastOnUi(R.string.review_no_cached_snapshot)
-                }
-            }
-            openMode() == AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
-                if (!openSnapshotIfCached(
-                        context, src, hostChapter,
-                        refreshToNetwork = true, offlineOnly = false
-                    )
-                ) {
-                    openNetwork(context, scope, click, js, urlNoOption, src, hostChapter)
-                }
-            }
-            else -> openNetwork(context, scope, click, js, urlNoOption, src, hostChapter)
+        val mode = openMode()
+        val tentative = decideOpenAction(mode, hasSnapshot = true)
+        val opened = if (tentative != OpenAction.OPEN_NETWORK) {
+            openSnapshotIfCached(
+                context, src, hostChapter,
+                refreshToNetwork = tentative == OpenAction.OPEN_SNAPSHOT_AND_REFRESH,
+                offlineOnly = tentative == OpenAction.OPEN_SNAPSHOT_OFFLINE
+            )
+        } else {
+            false
+        }
+        when (decideOpenAction(mode, hasSnapshot = opened)) {
+            OpenAction.OPEN_SNAPSHOT_AND_REFRESH,
+            OpenAction.OPEN_SNAPSHOT_OFFLINE -> Unit
+            OpenAction.BLOCK_NO_SNAPSHOT -> context.toastOnUi(R.string.review_no_cached_snapshot)
+            OpenAction.OPEN_NETWORK ->
+                openNetwork(context, scope, click, js, urlNoOption, src, hostChapter)
         }
         return true
     }

@@ -38,4 +38,36 @@ class ReviewOpenModePolicyTest {
             BookImgClick.decideOpenAction(AppConfig.ReviewOpenMode.NETWORK, hasSnapshot = false),
         )
     }
+
+    @Test
+    fun normalizeReviewOpenModeMapsLegacyAndUnknownValuesCleanly() {
+        assertEquals(
+            AppConfig.ReviewOpenMode.OFFLINE,
+            AppConfig.normalizeReviewOpenMode(AppConfig.ReviewOpenMode.OFFLINE),
+        )
+        assertEquals(
+            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST,
+            AppConfig.normalizeReviewOpenMode(AppConfig.ReviewOpenMode.SNAPSHOT_FIRST),
+        )
+        assertEquals(
+            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST,
+            AppConfig.normalizeReviewOpenMode("snapshot_only"),
+        )
+        assertEquals(
+            AppConfig.ReviewOpenMode.NETWORK,
+            AppConfig.normalizeReviewOpenMode(AppConfig.ReviewOpenMode.NETWORK),
+        )
+        assertEquals(
+            AppConfig.ReviewOpenMode.NETWORK,
+            AppConfig.normalizeReviewOpenMode("network_only"),
+        )
+        assertEquals(
+            AppConfig.ReviewOpenMode.NETWORK,
+            AppConfig.normalizeReviewOpenMode(null),
+        )
+        assertEquals(
+            AppConfig.ReviewOpenMode.NETWORK,
+            AppConfig.normalizeReviewOpenMode("unknown_legacy_mode"),
+        )
+    }
 }

@@ -404,6 +404,23 @@ object ReviewSnapshotStore {
     }
 
     /**
+     * 轻量保鲜期查询：仅返回完整快照的 savedAt，不把大 HTML 载入内存 LRU，
+     * 供预取器快速判断是否已存在且未过期。
+     */
+    fun getSavedAt(book: Book, chapter: BookChapter, buttonSrc: String): Long? {
+        if (book.bookUrl.isBlank() || chapter.url.isBlank() || buttonSrc.isBlank()) return null
+        val memKey = snapshotCacheKey(book.bookUrl, chapter.url, buttonSrc)
+        snapshotCache.get(memKey)?.let { cached ->
+            return if (cached.partial) null else cached.savedAt
+        }
+        ensureLegacyImported(book)
+        val dbKey = ReviewCache.cacheKey(book.bookUrl, chapter.url, buttonSrc)
+        return runCatching {
+            appDb.reviewCacheDao.savedAt(dbKey)
+        }.getOrNull()
+    }
+
+    /**
      * 按主键读取（弹窗进程重建用：只有 Book 与主键字符串，没有章节实体）。
      */
     fun getByKey(book: Book, chapterUrl: String, buttonSrc: String): ReviewSnapshot? {

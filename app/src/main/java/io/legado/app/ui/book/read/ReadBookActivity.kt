@@ -1845,13 +1845,13 @@ class ReadBookActivity : BaseReadBookActivity(),
                         oldClickImg(button.src)
                     } else {
                         // 快照热命中：与气泡直点同一通道（主线程内存查询，命中即弹），
-                        // 网络优先模式下保鲜期内的快照同样先给 0 秒可见、后台再刷在线页。
                         // 合成入口（选区无泡段落）走自己的模板，不能拿锚点段快照顶替。
                         val hotChapter = ReadBook.curTextChapter?.chapter?.takeIf {
                             it.index == ReadBook.durChapterIndex &&
                                 it.bookUrl == ReadBook.book?.bookUrl
                         }
-                        val openedBySnapshot = selectedSyntheticPara == null &&
+                        val syntheticPara = selectedSyntheticPara
+                        val openedBySnapshot = syntheticPara == null &&
                             hotChapter != null &&
                             BookImgClick.tryOpenCachedSnapshotImmediately(
                                 this, button.src, hotChapter,
@@ -1863,14 +1863,19 @@ class ReadBookActivity : BaseReadBookActivity(),
                         if (openedBySnapshot) {
                             commentBrowserShowing = true
                         } else {
-                            BookImgClick.clickImg(
-                                this,
-                                lifecycleScope,
-                                button.click,
-                                button.src,
-                                ReadBook.curTextChapter?.chapter,
-                                selectedSyntheticPara
-                            )
+                            val click = button.click
+                            val src = button.src
+                            val chapter = ReadBook.curTextChapter?.chapter
+                            lifecycleScope.launch(IO) {
+                                BookImgClick.clickImg(
+                                    this@ReadBookActivity,
+                                    lifecycleScope,
+                                    click,
+                                    src,
+                                    chapter,
+                                    syntheticPara
+                                )
+                            }
                         }
                     }
                 }
@@ -2314,9 +2319,9 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
 
     /**
-     * 段评预热带：当前章排版完成后，后台抓取上一章/本章/下一章的评论快照，
-     * 使用户点段评图标时本地已有快照（快照优先/仅快照模式下 0 秒可见）。
-     * 翻章时自动取消在途任务，同时最多一轮三章预热在跑。
+     * 段评预热带：当前章排版完成后，后台抓取当前章及后续预下载窗口内的评论快照，
+     * 使用户点段评图标时本地已有快照（缓存优先/纯快照模式下 0 秒可见）。
+     * 翻章时经 CONFLATED 通道合并最新窗口，不打断正在进行的单个按钮抓拍。
      */
     private fun preheatReviewSnapshots() {
         val book = ReadBook.book ?: return
@@ -2376,9 +2381,9 @@ class ReadBookActivity : BaseReadBookActivity(),
     // endregion
 
     /**
-     * 评论打开方式选择：联网优先 / 缓存优先。
-     * 段评菜单（选中文字）与段评图标直点共用此值，二模式语义见 [BookImgClick]。
-     * 选项文案自带括注说明，避免只有「联网优先/缓存优先」几个字看不出差别。
+     * 评论打开方式选择：联网优先 / 缓存优先 / 纯快照。
+     * 段评菜单（选中文字）与段评图标直点共用此值，三模式语义见 [BookImgClick]。
+     * 选项文案自带括注说明，避免只有名称看不出差别。
      */
     override fun showReviewOpenModeDialog() {
         val modes = listOf(

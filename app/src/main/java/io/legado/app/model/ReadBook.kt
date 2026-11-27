@@ -86,8 +86,10 @@ object ReadBook : CoroutineScope by MainScope() {
         }
     var callBack: CallBack? = null
     var inBookshelf = false
+    @Volatile
     var chapterSize = 0
     var simulatedChapterSize = 0
+    @Volatile
     var durChapterIndex = 0
     var durChapterPos = 0
     private val directTextRevisionSeed = AtomicLong(0L)
