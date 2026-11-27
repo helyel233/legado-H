@@ -139,7 +139,7 @@ git diff --check
 - **玻璃**：用户认可 A 套 AGSL 管线，B 套手写 `GlassFrostDrawable` 已删除，只保留 `glassFrostSurfaceRgb` 迁入 `GlassSurfacePalette.kt`。观感由档位唯一决定，与运行时序无关。
 - **顶栏三族**：A 系 `MainTopBarView`（4 主 Tab），B 系 `TitleBar`（59 layout），C 系 Compose 自建（15 个形态）。A+B 覆盖顶栏包语法全部页面；C 系维持既定形态，不消费顶栏包语法。`AppManagementScaffold` 的 `cornerRadiusPx=0f` 是有意设计（贴边全宽），不是死参数。
 - **顶栏几何单一真相源**：`lib/theme/TopBarChromeSpec.kt` 纯函数层；半径唯一取 `TopBarConfig.cornerRadius`；严禁用 `cornerScale>0` / `radius>0` 反推是否悬浮。
-- **UI 架构方案**：v2（`docs/ui-architecture-v2-plan.md`）→ v3 一体化工作台（`docs/ui-architecture-v3-plan.md`）→ v4 基础层与 v4.1 双包体系（`docs/ui-architecture-v4-plan.md`）。v4 的两个 Kill Switch 单一写入点在 `AppearanceKitActivity`；Scope Token 走纯函数 `resolveScopeOverrides`；recreate 由 `WindowSnapshotTransitionController` 包裹；16 个新偏好键集中在 `PreferKey.kt`。
+- **UI 架构方案**：已收口至 v4 基础层与 v4.1 双包体系（`docs/ui-architecture-v4-plan.md`）。v4 的两个 Kill Switch 单一写入点在 `AppearanceKitActivity`；Scope Token 走纯函数 `resolveScopeOverrides`；recreate 由 `WindowSnapshotTransitionController` 包裹；16 个新偏好键集中在 `PreferKey.kt`。
 - **Compose/XML 并存**：136 个真 Compose `setContent` 文件；`LegadoComposeTheme` 不产生布局节点、不画背景 Surface，只提供 `MaterialTheme + LocalTextStyle + LocalLegadoTokens`。墨水屏下 token 会把 accent→黑、primary/card/bottomBar→白，属于已记录的行为变化。
 - **系统栏**：`targetSdk 36` / Android 16 上 `windowOptOutEdgeToEdgeEnforcement` 已禁用，`statusBarColor` / `setDecorFitsSystemWindows` 被废弃或失效；真实落地在 `ActivityExtensions.applyGlobalStatusBarInset()`；阅读器与 EPUB 预览覆写 `applyGlobalStatusBarInsetEnabled=false` 自管。
 - **偏好键**：独立布尔/枚举状态键取代数值反推是既定范式（`glassPresetMatched`、`floatingChrome`、`readBook.msgIsError`、eInk 的 `lastNonEInkThemeMode`）。
@@ -162,9 +162,8 @@ git diff --check
 |---|---|
 | `docs/change-safety.md` | R1–R5 改动安全网完整版（含真实事故与代码反例） |
 | `docs/release-process.md` | 发版唯一规范：版本规则、双包构建、上传、纠错 |
-| `docs/ui-architecture-v2-plan.md` / `v3-plan.md` / `v4-plan.md` | UI 架构演进方案与已定稿结论 |
+| `docs/ui-architecture-v4-plan.md` | UI 架构 v4 与双包体系定稿方案 |
 | `docs/glass-appwide-adoption-plan.md` | 玻璃全 App 接入方案 |
-| `docs/m2b-compose-residual-list.md` | Compose 迁移残留清单 |
 | `.workbuddy/skills/legado-change-safety/SKILL.md` | 改动前 / 交付前可执行检查清单（交付清单按本文第 0 节的现行约定使用） |
 | `.workbuddy/memory/YYYY-MM-DD.md` | 逐日事实底稿；规则冲突时以更新日期最新的记录为准 |
 
