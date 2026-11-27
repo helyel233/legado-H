@@ -48,7 +48,7 @@ import splitties.init.appCtx
  *   无快照则展示正常错误；
  * - 缓存优先（[AppConfig.ReviewOpenMode.SNAPSHOT_FIRST]）：命中缓存立即用快照秒开
  *   （0 秒可见），同时后台静默 SWR 刷新真实评论页；无缓存则按正常网络链路打开；
- * - 纯快照（[AppConfig.ReviewOpenMode.OFFLINE]）：仅读取本地快照，未命中时严格零联网并提示。
+ * - 纯快照（[AppConfig.ReviewOpenMode.OFFLINE]）：仅读取本地快照，未命中时严格零联网并提示；命中过期快照时仍会在后台按需刷新。
  *
  * 同一套 click/js 执行逻辑同时服务用户点击与后台抓取：抓取时传入拦截宿主
  * （click 分支替换 java 宿主；js 分支挂 AnalyzeRule 钩子），其余环境完全一致。
@@ -330,7 +330,7 @@ object BookImgClick {
      * 段评图标直点路径的快照消费（与选中文字后的段评菜单同一套三模式语义）：
      * - 缓存优先（[AppConfig.ReviewOpenMode.SNAPSHOT_FIRST]）：有缓存 → 立即打开并后台
      *   SWR 刷新，返回 [ReviewSnapshotConsumption.Opened]；无缓存 → 返回 NotConsumed 回落网络；
-     * - 纯快照（[AppConfig.ReviewOpenMode.OFFLINE]）：有缓存 → 离线打开；无缓存 → 提示并返回 BlockedOffline；
+     * - 纯快照（[AppConfig.ReviewOpenMode.OFFLINE]）：有缓存 → 离线打开（过期时后台按需刷新）；无缓存 → 提示并返回 BlockedOffline；
      * - 联网优先（[AppConfig.ReviewOpenMode.NETWORK]，默认）：直接返回 NotConsumed，
      *   由调用方按原 click/js 链路联网加载，并在失败/超时时用缓存兜底。
      *
@@ -428,15 +428,17 @@ object BookImgClick {
         val parsed = parseSrcOptions(src)
         if (parsed == null) {
             // 旧源选项 JSON 损坏时，网络链路没有可执行的 click/js。若已缓存，仍应
-            // 直接展示持有的离线评论；无快照则交回原图片链路暴露其原始失败。
-            return if (paramPattern.matcher(src).find()) {
-                openSnapshotIfCached(
-                    context, src, hostChapter,
-                    refreshToNetwork = false, offlineOnly = true
-                )
-            } else {
-                false
+            // 直接展示持有的离线评论；无快照在纯快照模式下提示并截断，其余模式交回原图片链路。
+            if (!paramPattern.matcher(src).find()) return false
+            val opened = openSnapshotIfCached(
+                context, src, hostChapter,
+                refreshToNetwork = false, offlineOnly = true
+            )
+            if (!opened && openMode() == AppConfig.ReviewOpenMode.OFFLINE) {
+                context.toastOnUi(R.string.review_no_cached_snapshot)
+                return true
             }
+            return opened
         }
         val (urlNoOption, options) = parsed
         val click = options["click"]

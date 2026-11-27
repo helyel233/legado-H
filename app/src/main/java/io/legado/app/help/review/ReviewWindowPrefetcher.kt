@@ -58,9 +58,6 @@ object ReviewWindowPrefetcher {
     @Volatile
     private var captureJob: Job? = null
 
-    @Volatile
-    private var refreshJob: Job? = null
-
     internal fun windowRange(
         centerIndex: Int,
         preDownloadNum: Int,
@@ -155,8 +152,7 @@ object ReviewWindowPrefetcher {
 
     fun refreshButton(book: Book, chapter: BookChapter, buttonSrc: String) {
         if (!canRun(book)) return
-        refreshJob?.cancel()
-        refreshJob = scope.launch {
+        scope.launch {
             val key = flightKey(book, chapter, buttonSrc)
             singleFlight(key) {
                 runCapture(key, "快照刷新") {
@@ -185,8 +181,6 @@ object ReviewWindowPrefetcher {
         windowScheduler.cancel()
         captureJob?.cancel()
         captureJob = null
-        refreshJob?.cancel()
-        refreshJob = null
         val activeFlights = inFlight.values.toList()
         inFlight.clear()
         activeFlights.forEach { it.cancel() }

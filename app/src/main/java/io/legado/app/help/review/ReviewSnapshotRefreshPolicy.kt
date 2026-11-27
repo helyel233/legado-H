@@ -19,12 +19,32 @@ internal object ReviewSnapshotRefreshPolicy {
         CONTENT_CHANGED,
     }
 
+    enum class RefreshUiAction {
+        /** 无实质变化：仅刷新 savedAt 与角标 */
+        TOUCH_ONLY,
+        /** 内容门未过或用户正在二级页/输入中：展示顶部更新横幅 */
+        SHOW_BANNER,
+        /** 内容门通过且用户空闲：直接自动切换 */
+        AUTO_SWITCH,
+    }
+
     data class RefreshEvaluation(
         val decision: RefreshDecision,
         val refreshedIsCommentPage: Boolean,
         val refreshedCardCount: Int,
         val refreshedReplyItemCount: Int,
     )
+
+    internal fun decideRefreshUiAction(
+        evaluation: RefreshEvaluation,
+        canAutoSwitchContent: Boolean,
+        canGoBack: Boolean,
+        isUserBusy: Boolean,
+    ): RefreshUiAction = when {
+        evaluation.decision == RefreshDecision.NO_CHANGE -> RefreshUiAction.TOUCH_ONLY
+        !canAutoSwitchContent || canGoBack || isUserBusy -> RefreshUiAction.SHOW_BANNER
+        else -> RefreshUiAction.AUTO_SWITCH
+    }
 
     private val RELATIVE_TIME_REGEX =
         Regex("""\b\d+\s*(?:秒|分钟|小时|天)前\b|刚刚""")

@@ -1033,7 +1033,46 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                                 refreshed.second
                             )
                         }
-                        if (evaluation.decision == ReviewSnapshotRefreshPolicy.RefreshDecision.NO_CHANGE) {
+                        val reloadUrl = refreshed.first.ifBlank { document.first }
+                        val canAutoSwitchContent =
+                            evaluation.decision == ReviewSnapshotRefreshPolicy.RefreshDecision.CONTENT_CHANGED &&
+                                evaluation.refreshedIsCommentPage &&
+                                withContext(Dispatchers.Default) {
+                                    ReviewSnapshotRefreshPolicy.shouldOverwriteSnapshot(
+                                        displayedDocumentHtml,
+                                        evaluation.refreshedCardCount
+                                    )
+                                }
+                        val action = withContext(Dispatchers.Main) {
+                            if (evaluation.decision == ReviewSnapshotRefreshPolicy.RefreshDecision.NO_CHANGE) {
+                                return@withContext ReviewSnapshotRefreshPolicy.RefreshUiAction.TOUCH_ONLY
+                            }
+                            if (!ownsLease(lease) || !isAdded || isHidden || displayingErrorPage) {
+                                return@withContext null
+                            }
+                            val canGoBack = ::currentWebView.isInitialized && currentWebView.canGoBack()
+                            val busy = if (!canAutoSwitchContent || canGoBack) {
+                                true
+                            } else {
+                                withTimeoutOrNull(300L) {
+                                    runCatching { isUserBusyInWebView(lease) }.getOrDefault(true)
+                                } ?: true
+                            }
+                            val decided = ReviewSnapshotRefreshPolicy.decideRefreshUiAction(
+                                evaluation = evaluation,
+                                canAutoSwitchContent = canAutoSwitchContent,
+                                canGoBack = canGoBack,
+                                isUserBusy = busy,
+                            )
+                            pendingNetworkRefresh = reloadUrl to refreshed.second
+                            when (decided) {
+                                ReviewSnapshotRefreshPolicy.RefreshUiAction.AUTO_SWITCH -> applyPendingNetworkRefresh()
+                                ReviewSnapshotRefreshPolicy.RefreshUiAction.SHOW_BANNER -> showUpdateBanner()
+                                ReviewSnapshotRefreshPolicy.RefreshUiAction.TOUCH_ONLY -> Unit
+                            }
+                            decided
+                        }
+                        if (action == ReviewSnapshotRefreshPolicy.RefreshUiAction.TOUCH_ONLY) {
                             val now = System.currentTimeMillis()
                             val book = reviewResourceBook
                             val chUrl = snapshotChapterUrl
@@ -1049,46 +1088,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             }
                             return@launch
                         }
-                        val reloadUrl = refreshed.first.ifBlank { document.first }
-                        val canAutoSwitch = evaluation.refreshedIsCommentPage &&
-                            withContext(Dispatchers.Default) {
-                                ReviewSnapshotRefreshPolicy.shouldOverwriteSnapshot(
-                                    displayedDocumentHtml,
-                                    evaluation.refreshedCardCount
-                                )
-                            }
-                        if (!canAutoSwitch) {
-                            // 数据引擎（JSON）/JS 壳页，或首屏未展开页面（卡数少于当前完整快照）
-                            // 不直接覆盖当前完整快照，回落展示顶部更新提示条由用户决定。
-                            withContext(Dispatchers.Main) {
-                                if (ownsLease(lease) && isAdded && !isHidden && !displayingErrorPage) {
-                                    pendingNetworkRefresh = reloadUrl to refreshed.second
-                                    showUpdateBanner()
-                                }
-                            }
-                            return@launch
-                        }
-                        val switched = withContext(Dispatchers.Main) {
-                            if (!ownsLease(lease) || !isAdded || isHidden || displayingErrorPage) {
-                                return@withContext false
-                            }
-                            pendingNetworkRefresh = reloadUrl to refreshed.second
-                            val canGoBack = ::currentWebView.isInitialized && currentWebView.canGoBack()
-                            val busy = if (canGoBack) {
-                                true
-                            } else {
-                                withTimeoutOrNull(300L) {
-                                    runCatching { isUserBusyInWebView(lease) }.getOrDefault(true)
-                                } ?: true
-                            }
-                            if (busy) {
-                                showUpdateBanner()
-                                false
-                            } else {
-                                applyPendingNetworkRefresh()
-                                true
-                            }
-                        }
+                        val switched = action == ReviewSnapshotRefreshPolicy.RefreshUiAction.AUTO_SWITCH
                         if (switched) {
                             val book = reviewResourceBook
                             val chUrl = snapshotChapterUrl

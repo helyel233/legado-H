@@ -173,4 +173,36 @@ class ReviewSnapshotRefreshPolicyTest {
         val parsedNoReplies = Jsoup.parse(cleanedNoReplies)
         assertTrue(parsedNoReplies.select(".reply-section").isEmpty())
     }
+
+    @Test
+    fun decideRefreshUiActionCoversAllBranches() {
+        val noChange = ReviewSnapshotRefreshPolicy.RefreshEvaluation(
+            decision = ReviewSnapshotRefreshPolicy.RefreshDecision.NO_CHANGE,
+            refreshedIsCommentPage = true,
+            refreshedCardCount = 5,
+            refreshedReplyItemCount = 1,
+        )
+        val changed = noChange.copy(decision = ReviewSnapshotRefreshPolicy.RefreshDecision.CONTENT_CHANGED)
+
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshUiAction.TOUCH_ONLY,
+            ReviewSnapshotRefreshPolicy.decideRefreshUiAction(noChange, canAutoSwitchContent = true, canGoBack = false, isUserBusy = false),
+        )
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshUiAction.SHOW_BANNER,
+            ReviewSnapshotRefreshPolicy.decideRefreshUiAction(changed, canAutoSwitchContent = false, canGoBack = false, isUserBusy = false),
+        )
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshUiAction.SHOW_BANNER,
+            ReviewSnapshotRefreshPolicy.decideRefreshUiAction(changed, canAutoSwitchContent = true, canGoBack = true, isUserBusy = false),
+        )
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshUiAction.SHOW_BANNER,
+            ReviewSnapshotRefreshPolicy.decideRefreshUiAction(changed, canAutoSwitchContent = true, canGoBack = false, isUserBusy = true),
+        )
+        assertEquals(
+            ReviewSnapshotRefreshPolicy.RefreshUiAction.AUTO_SWITCH,
+            ReviewSnapshotRefreshPolicy.decideRefreshUiAction(changed, canAutoSwitchContent = true, canGoBack = false, isUserBusy = false),
+        )
+    }
 }
