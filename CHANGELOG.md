@@ -1,5 +1,22 @@
 # 更新日志
 
+## 3.2.1 版（2026-11-27）
+
+段评快照链路增强：预热窗口跟随 `preDownloadNum`（上限 3 章）并改用 `CONFLATED` 调度，新增纯快照模式（未命中严格零联网），缓存优先支持过门后自动切换并回写快照，预热入口增加无网守卫。**新特性 + 修复 → minor + 0.1，patch = 1。**
+
+### 新增
+
+- **预热窗口与调度（`ReviewWindowPrefetcher`）**：预热窗口扩展为当前章起 `min(preDownloadNum, 3)` 章（当前章优先），改用 `Channel.CONFLATED` 常驻消费者调度，避免翻章打断整轮预热；跨书切换自动丢弃过期窗口，`cancel()` 覆盖清理在途刷新
+- **纯快照模式（`ReviewOpenMode.OFFLINE`）**：阅读页三点菜单与评论设置页同步新增「纯快照」模式；未命中本地快照时严格零联网并提示，命中但过期时保留受总闸与仅 WiFi 约束的后台预热与补抓
+- **自动切换与快照回写**：缓存优先拿到新页面后经内容门（`ReviewSnapshotRefreshPolicy.isCommentPage`，校验 `[data-comment-id], .comment-card`）自动切换并保留滚动位置，同时清洗回写 `ReviewSnapshotStore`
+- **无网守卫**：预热入口检查 `NetworkUtils.isNetworkAvailable()`，断网时不触发抓拍与 5 分钟冷却
+
+### 修复与单测
+
+- 抽离 `ReviewOpenModePolicy` 纯 JVM 模式归一逻辑，修复页面重建离线态丢失，删除未使用的 `oldClickImg`
+- 切换门复用防截断、`NO_CHANGE` 分支前置并按 key 去重过期刷新；未过门回落顶部更新横幅，JS 忙态超时安全回退并保护楼中楼回复层，中英文案对齐
+- 新增并扩充 `ReviewWindowPrefetcherPolicyTest`、`ReviewOpenModePolicyTest`、`ReviewSnapshotRefreshPolicyTest`
+
 ## 3.1.2 版（2026-11-27）
 
 壁纸取景几何重构：预览与渲染共用同一套边界计算，新增取景框与按模式独立的缩放区间，平铺与偏移行为对齐真机；并清理过期 UI 架构归档。**仅优化与重构 → patch + 1。**
