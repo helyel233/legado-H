@@ -133,6 +133,7 @@ import io.legado.app.utils.gone
 import io.legado.app.utils.setDarkeningAllowed
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.coroutines.resume
 import splitties.init.appCtx
 
@@ -1048,16 +1049,32 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             }
                             return@launch
                         }
+                        val reloadUrl = refreshed.first.ifBlank { document.first }
                         if (!evaluation.refreshedIsCommentPage) {
+                            // 数据引擎（JSON）或 JS 壳页不含静态评论卡片，未过自动切换门时
+                            // 回落展示顶部更新提示条由用户决定，避免静默吞掉新评论更新。
+                            withContext(Dispatchers.Main) {
+                                if (ownsLease(lease) && isAdded && !isHidden && !displayingErrorPage) {
+                                    pendingNetworkRefresh = reloadUrl to refreshed.second
+                                    showUpdateBanner()
+                                }
+                            }
                             return@launch
                         }
-                        val reloadUrl = refreshed.first.ifBlank { document.first }
                         val switched = withContext(Dispatchers.Main) {
                             if (!ownsLease(lease) || !isAdded || isHidden || displayingErrorPage) {
                                 return@withContext false
                             }
                             pendingNetworkRefresh = reloadUrl to refreshed.second
-                            if (currentWebView.canGoBack() || isUserBusyInWebView(lease)) {
+                            val canGoBack = ::currentWebView.isInitialized && currentWebView.canGoBack()
+                            val busy = if (canGoBack) {
+                                true
+                            } else {
+                                withTimeoutOrNull(300L) {
+                                    runCatching { isUserBusyInWebView(lease) }.getOrDefault(false)
+                                } ?: false
+                            }
+                            if (busy) {
                                 showUpdateBanner()
                                 false
                             } else {
@@ -1471,7 +1488,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
      * 若处于交互忙态，后台刷新回退为顶部提示条，避免整页重载清空草稿。
      */
     private suspend fun isUserBusyInWebView(lease: WebViewRequestLifecycle): Boolean {
-        if (!ownsLease(lease)) return true
+        if (!::currentWebView.isInitialized || !ownsLease(lease)) return false
         val js = """(() => {
             try {
                 const el = document.activeElement;

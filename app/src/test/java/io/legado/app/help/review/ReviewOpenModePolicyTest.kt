@@ -43,31 +43,31 @@ class ReviewOpenModePolicyTest {
     fun normalizeReviewOpenModeMapsLegacyAndUnknownValuesCleanly() {
         assertEquals(
             AppConfig.ReviewOpenMode.OFFLINE,
-            AppConfig.normalizeReviewOpenMode(AppConfig.ReviewOpenMode.OFFLINE),
+            ReviewOpenModePolicy.normalize(AppConfig.ReviewOpenMode.OFFLINE),
         )
         assertEquals(
             AppConfig.ReviewOpenMode.SNAPSHOT_FIRST,
-            AppConfig.normalizeReviewOpenMode(AppConfig.ReviewOpenMode.SNAPSHOT_FIRST),
+            ReviewOpenModePolicy.normalize(AppConfig.ReviewOpenMode.SNAPSHOT_FIRST),
         )
         assertEquals(
             AppConfig.ReviewOpenMode.SNAPSHOT_FIRST,
-            AppConfig.normalizeReviewOpenMode("snapshot_only"),
+            ReviewOpenModePolicy.normalize("snapshot_only"),
         )
         assertEquals(
             AppConfig.ReviewOpenMode.NETWORK,
-            AppConfig.normalizeReviewOpenMode(AppConfig.ReviewOpenMode.NETWORK),
+            ReviewOpenModePolicy.normalize(AppConfig.ReviewOpenMode.NETWORK),
         )
         assertEquals(
             AppConfig.ReviewOpenMode.NETWORK,
-            AppConfig.normalizeReviewOpenMode("network_only"),
+            ReviewOpenModePolicy.normalize("network_only"),
         )
         assertEquals(
             AppConfig.ReviewOpenMode.NETWORK,
-            AppConfig.normalizeReviewOpenMode(null),
+            ReviewOpenModePolicy.normalize(null),
         )
         assertEquals(
             AppConfig.ReviewOpenMode.NETWORK,
-            AppConfig.normalizeReviewOpenMode("unknown_legacy_mode"),
+            ReviewOpenModePolicy.normalize("unknown_legacy_mode"),
         )
     }
 }

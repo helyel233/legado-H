@@ -89,7 +89,7 @@ object ReviewWindowPrefetcher {
         return if (wifiOnly) isWifi() else isNetworkAvailable()
     }
 
-    fun prefetch(book: Book, @Suppress("UNUSED_PARAMETER") centerIndex: Int) {
+    fun prefetch(book: Book) {
         if (!canRun(book)) return
         windowScheduler.send(book)
     }

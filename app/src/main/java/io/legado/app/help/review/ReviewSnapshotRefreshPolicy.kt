@@ -7,7 +7,7 @@ import java.security.MessageDigest
 /**
  * SNAPSHOT_FIRST 后台静默刷新的内容指纹对比与清洗策略：
  * - 单次解析 Jsoup 文档，同时输出内容变化决策、评论页内容门判定与评论卡片数；
- * - 后台刷新回写快照库前复用纯静态清洗（剥离脚本/外链样式、补全相对图片 URL、可选剥离回复层），
+ * - 后台刷新回写快照库前复用纯静态清洗（规则以 [ReviewSnapshotCapture.buildCleanDomJs] 为准绳），
  *   防止未展开首屏生肉 HTML 截断完整快照或持久化可执行脚本。
  */
 internal object ReviewSnapshotRefreshPolicy {
@@ -22,7 +22,6 @@ internal object ReviewSnapshotRefreshPolicy {
     data class RefreshEvaluation(
         val decision: RefreshDecision,
         val refreshedIsCommentPage: Boolean,
-        val currentCardCount: Int,
         val refreshedCardCount: Int,
     )
 
@@ -30,21 +29,17 @@ internal object ReviewSnapshotRefreshPolicy {
         Regex("""\b\d+\s*(?:秒|分钟|小时|天)前\b|刚刚""")
     private val WHITESPACE_REGEX = Regex("""\s+""")
     private val FONT_FACE_REGEX = Regex("""@font-face\s*\{[^}]*\}""", RegexOption.IGNORE_CASE)
-    private val CSS_IMPORT_REGEX = Regex("""@import\s+[^;]+;""", RegexOption.IGNORE_CASE)
+    private val CSS_IMPORT_REGEX = Regex(
+        """@import\s+(?:url\s*\([^)]*\)|["'][^"']*["'])[^;]*;?""",
+        RegexOption.IGNORE_CASE,
+    )
+    private val NON_RESOLVABLE_IMG_SRC_REGEX =
+        Regex("""^(?:data:|javascript:|about:|#)""", RegexOption.IGNORE_CASE)
     private const val COMMENT_CARD_SELECTOR = "[data-comment-id], .comment-card"
 
     fun contentFingerprint(html: String): String {
         if (html.isBlank()) return ""
         return contentFingerprint(Jsoup.parse(html))
-    }
-
-    /**
-     * 判断后台拉取的在线页面是否为有效评论页。
-     *
-     * shortcut: 只认静态评论卡片节点，JS 驱动型源永不自动切换，出现整站壳页化时升级。
-     */
-    internal fun isCommentPage(html: String?): Boolean {
-        return countCommentCards(html) > 0
     }
 
     internal fun countCommentCards(html: String?): Int {
@@ -59,9 +54,10 @@ internal object ReviewSnapshotRefreshPolicy {
     }
 
     /**
-     * 清洗后台刷新得到的原始页面 HTML 以便安全回写离线快照库：
+     * 清洗后台刷新得到的原始页面 HTML 以便安全回写离线快照库。
+     * 清洗规则以 [ReviewSnapshotCapture.buildCleanDomJs] 为准绳：
      * 剥离 script/noscript/iframe、外链样式与字体 preload、@font-face/@import，
-     * 可选移除回复层，并将相对 img[src] 解析为绝对 URL。
+     * 可选移除回复层，并将相对 img[src]（排除 data:/javascript:/about:/#）解析为绝对 URL。
      */
     internal fun sanitizeForSnapshot(
         html: String,
@@ -75,7 +71,7 @@ internal object ReviewSnapshotRefreshPolicy {
             val rel = link.attr("rel").lowercase()
             val asAttr = link.attr("as").lowercase()
             if (rel.contains("stylesheet") ||
-                (rel.contains("preload") && (asAttr == "style" || asAttr == "font"))
+                (rel.contains("preload") && asAttr == "font")
             ) {
                 link.remove()
             }
@@ -92,7 +88,7 @@ internal object ReviewSnapshotRefreshPolicy {
         }
         doc.select("img[src]").forEach { img ->
             val rawSrc = img.attr("src").trim()
-            if (rawSrc.isNotEmpty() && !rawSrc.startsWith("data:", ignoreCase = true)) {
+            if (rawSrc.isNotEmpty() && !NON_RESOLVABLE_IMG_SRC_REGEX.containsMatchIn(rawSrc)) {
                 val abs = img.absUrl("src").trim()
                 if (abs.isNotEmpty()) {
                     img.attr("src", abs)
@@ -100,10 +96,6 @@ internal object ReviewSnapshotRefreshPolicy {
             }
         }
         return doc.outerHtml()
-    }
-
-    fun evaluateRefresh(currentHtml: String?, refreshedHtml: String?): RefreshDecision {
-        return evaluateRefreshDetail(currentHtml, refreshedHtml).decision
     }
 
     internal fun evaluateRefreshDetail(
@@ -114,7 +106,6 @@ internal object ReviewSnapshotRefreshPolicy {
             ?: return RefreshEvaluation(
                 decision = RefreshDecision.NO_CHANGE,
                 refreshedIsCommentPage = false,
-                currentCardCount = countCommentCards(currentHtml),
                 refreshedCardCount = 0,
             )
         val refreshedDoc = Jsoup.parse(refreshed)
@@ -124,12 +115,10 @@ internal object ReviewSnapshotRefreshPolicy {
             ?: return RefreshEvaluation(
                 decision = RefreshDecision.CONTENT_CHANGED,
                 refreshedIsCommentPage = refreshedHasComments,
-                currentCardCount = 0,
                 refreshedCardCount = refreshedCardCount,
             )
         val currentDoc = Jsoup.parse(current)
-        val currentCardCount = currentDoc.select(COMMENT_CARD_SELECTOR).size
-        val currentHasComments = currentCardCount > 0
+        val currentHasComments = currentDoc.select(COMMENT_CARD_SELECTOR).isNotEmpty()
         val refreshedHasScripts = refreshedDoc.select("script").isNotEmpty()
         // 若新抓回的是纯 JS/AJAX 壳页（无静态评论节点但含脚本），而当前展示页已有静态评论，
         // 无法直接靠静态 HTML 断言内容相同，交由更新流程按变更处理
@@ -143,7 +132,6 @@ internal object ReviewSnapshotRefreshPolicy {
         return RefreshEvaluation(
             decision = decision,
             refreshedIsCommentPage = refreshedHasComments,
-            currentCardCount = currentCardCount,
             refreshedCardCount = refreshedCardCount,
         )
     }

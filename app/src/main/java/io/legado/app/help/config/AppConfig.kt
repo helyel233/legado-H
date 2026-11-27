@@ -42,6 +42,7 @@ import io.legado.app.ui.main.ai.AiProviderConfig
 import io.legado.app.ui.main.ai.AiSkillConfig
 import io.legado.app.ui.main.ai.AiWorldBookConfig
 import io.legado.app.ui.book.read.ReadAiBookHistory
+import io.legado.app.help.review.ReviewOpenModePolicy
 import splitties.init.appCtx
 import io.legado.app.R
 
@@ -60,13 +61,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         const val OFFLINE = "offline"
     }
 
-    /** 将历史 4 模式取值及未知值平滑归一到当前三模式（历史 snapshot_only 保持映射到缓存优先） */
-    internal fun normalizeReviewOpenMode(raw: String?): String = when (raw) {
-        ReviewOpenMode.OFFLINE -> ReviewOpenMode.OFFLINE
-        ReviewOpenMode.SNAPSHOT_FIRST, "snapshot_only" -> ReviewOpenMode.SNAPSHOT_FIRST
-        ReviewOpenMode.NETWORK, "network_only" -> ReviewOpenMode.NETWORK
-        else -> ReviewOpenMode.NETWORK
-    }
 
     /** 段评快照默认保鲜期（天），见 [reviewSnapshotTtlDays] */
     const val DEFAULT_REVIEW_SNAPSHOT_TTL_DAYS = 3
@@ -1901,13 +1895,13 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
      * 历史偏好值 snapshot_only / network_only 自动归一到对应取值。
      */
     var reviewOpenMode: String
-        get() = normalizeReviewOpenMode(
+        get() = ReviewOpenModePolicy.normalize(
             appCtx.getPrefString(PreferKey.reviewOpenMode, ReviewOpenMode.NETWORK)
         )
         set(value) {
             appCtx.putPrefString(
                 PreferKey.reviewOpenMode,
-                normalizeReviewOpenMode(value)
+                ReviewOpenModePolicy.normalize(value)
             )
         }
 

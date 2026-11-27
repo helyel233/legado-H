@@ -2325,7 +2325,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      */
     private fun preheatReviewSnapshots() {
         val book = ReadBook.book ?: return
-        ReviewWindowPrefetcher.prefetch(book, ReadBook.durChapterIndex)
+        ReviewWindowPrefetcher.prefetch(book)
         warmUpCommentWebView()
     }
 

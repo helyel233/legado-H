@@ -4,6 +4,7 @@ import androidx.lifecycle.lifecycleScope
 import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.review.ReviewOpenModePolicy
 import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.help.review.ReviewWindowPrefetcher
 import io.legado.app.lib.dialogs.alert
@@ -52,7 +53,7 @@ class CommentConfigFragment : ComposeSettingFragment() {
             )
         )
         val rawOpenMode = stringSetting(PreferKey.reviewOpenMode, AppConfig.ReviewOpenMode.NETWORK)
-        val selectedOpenMode = AppConfig.normalizeReviewOpenMode(rawOpenMode)
+        val selectedOpenMode = ReviewOpenModePolicy.normalize(rawOpenMode)
         val clearSummary = cachedTotalBytes?.let { bytes ->
             str(R.string.review_cache_clear_all_summary, ConvertUtils.formatFileSize(bytes))
         } ?: str(R.string.review_cache_clear_all_summary_loading)
