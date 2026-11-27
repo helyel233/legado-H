@@ -831,6 +831,7 @@ private fun readMenuButtonIconRes(
 
 /** 打开方式的短标签：悬在菜单标题里，不能带选项页那句很长的括注 */
 private fun reviewOpenModeShortLabelRes(mode: String): Int = when (mode) {
+    AppConfig.ReviewOpenMode.OFFLINE -> R.string.review_open_mode_short_offline
     AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> R.string.review_open_mode_short_snapshot_first
     else -> R.string.review_open_mode_short_network
 }

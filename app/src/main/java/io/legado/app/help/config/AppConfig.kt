@@ -55,10 +55,14 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
         /** 缓存优先：命中缓存立即秒开，后台静默 SWR 刷新 */
         const val SNAPSHOT_FIRST = "snapshot_first"
+
+        /** 纯快照：仅使用本地快照，未命中时严格零联网并提示 */
+        const val OFFLINE = "offline"
     }
 
-    /** 将历史 4 模式取值及未知值平滑归一到当前二模式 */
+    /** 将历史 4 模式取值及未知值平滑归一到当前三模式（历史 snapshot_only 保持映射到缓存优先） */
     private fun normalizeReviewOpenMode(raw: String?): String = when (raw) {
+        ReviewOpenMode.OFFLINE -> ReviewOpenMode.OFFLINE
         ReviewOpenMode.SNAPSHOT_FIRST, "snapshot_only" -> ReviewOpenMode.SNAPSHOT_FIRST
         ReviewOpenMode.NETWORK, "network_only" -> ReviewOpenMode.NETWORK
         else -> ReviewOpenMode.NETWORK

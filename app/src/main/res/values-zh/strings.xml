@@ -2903,6 +2903,7 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="menu_review_open_mode">评论打开方式</string>
     <string name="menu_review_open_mode_network">联网优先（失败用缓存兜底）</string>
     <string name="menu_review_open_mode_snapshot_first">缓存优先（秒开并后台刷新）</string>
+    <string name="menu_review_open_mode_offline">纯快照（仅读本地，不联网）</string>
     <string name="menu_review_snapshot_ttl">段评快照保鲜期</string>
     <string name="menu_review_snapshot_ttl_days">%1$d 天</string>
     <string name="menu_review_snapshot_ttl_never">不保鲜</string>
@@ -2910,6 +2911,7 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="review_current_value">当前：%1$s</string>
     <string name="review_open_mode_short_network">联网优先</string>
     <string name="review_open_mode_short_snapshot_first">缓存优先</string>
+    <string name="review_open_mode_short_offline">纯快照</string>
     <!-- 跨段选区时标出段评目标段位 -->
     <string name="review_menu_target_suffix">·第 %1$d 段</string>
     <string name="review_snapshot_offline_hint">这是离线快照（不联网）：发评前可先在三点菜单开启「离线评论模式」，评论会记录下来、之后统一发送</string>

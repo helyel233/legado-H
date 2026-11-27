@@ -2383,7 +2383,8 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun showReviewOpenModeDialog() {
         val modes = listOf(
             AppConfig.ReviewOpenMode.NETWORK to R.string.menu_review_open_mode_network,
-            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST to R.string.menu_review_open_mode_snapshot_first
+            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST to R.string.menu_review_open_mode_snapshot_first,
+            AppConfig.ReviewOpenMode.OFFLINE to R.string.menu_review_open_mode_offline
         )
         val current = AppConfig.reviewOpenMode
         selector(
@@ -4765,6 +4766,9 @@ class ReadBookActivity : BaseReadBookActivity(),
             ) {
                 BookImgClick.ReviewSnapshotConsumption.Opened -> {
                     commentBrowserShowing = true
+                    return@async
+                }
+                BookImgClick.ReviewSnapshotConsumption.BlockedOffline -> {
                     return@async
                 }
                 BookImgClick.ReviewSnapshotConsumption.NotConsumed -> Unit

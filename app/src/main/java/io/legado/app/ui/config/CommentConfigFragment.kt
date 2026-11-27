@@ -45,16 +45,17 @@ class CommentConfigFragment : ComposeSettingFragment() {
             SettingChoiceOption(
                 value = AppConfig.ReviewOpenMode.SNAPSHOT_FIRST,
                 label = str(R.string.menu_review_open_mode_snapshot_first)
+            ),
+            SettingChoiceOption(
+                value = AppConfig.ReviewOpenMode.OFFLINE,
+                label = str(R.string.menu_review_open_mode_offline)
             )
         )
         val rawOpenMode = stringSetting(PreferKey.reviewOpenMode, AppConfig.ReviewOpenMode.NETWORK)
-        val selectedOpenMode = if (
-            rawOpenMode == AppConfig.ReviewOpenMode.SNAPSHOT_FIRST ||
-            rawOpenMode == "snapshot_only"
-        ) {
-            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST
-        } else {
-            AppConfig.ReviewOpenMode.NETWORK
+        val selectedOpenMode = when (rawOpenMode) {
+            AppConfig.ReviewOpenMode.OFFLINE -> AppConfig.ReviewOpenMode.OFFLINE
+            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST, "snapshot_only" -> AppConfig.ReviewOpenMode.SNAPSHOT_FIRST
+            else -> AppConfig.ReviewOpenMode.NETWORK
         }
         val clearSummary = cachedTotalBytes?.let { bytes ->
             str(R.string.review_cache_clear_all_summary, ConvertUtils.formatFileSize(bytes))

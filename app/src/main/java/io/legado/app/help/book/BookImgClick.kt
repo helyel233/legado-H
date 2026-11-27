@@ -33,6 +33,7 @@ import io.legado.app.ui.widget.dialog.BottomWebViewDialog
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.coroutineContext
@@ -53,7 +54,24 @@ import splitties.init.appCtx
  */
 object BookImgClick {
 
+    internal enum class OpenAction {
+        OPEN_SNAPSHOT_AND_REFRESH,
+        OPEN_SNAPSHOT_OFFLINE,
+        BLOCK_NO_SNAPSHOT,
+        OPEN_NETWORK,
+    }
+
+    internal fun decideOpenAction(mode: String, hasSnapshot: Boolean): OpenAction = when (mode) {
+        AppConfig.ReviewOpenMode.OFFLINE ->
+            if (hasSnapshot) OpenAction.OPEN_SNAPSHOT_OFFLINE else OpenAction.BLOCK_NO_SNAPSHOT
+        AppConfig.ReviewOpenMode.SNAPSHOT_FIRST ->
+            if (hasSnapshot) OpenAction.OPEN_SNAPSHOT_AND_REFRESH else OpenAction.OPEN_NETWORK
+        else -> OpenAction.OPEN_NETWORK
+    }
+
     private fun openMode(): String = AppConfig.reviewOpenMode
+
+    private fun isOfflineOnly(): Boolean = openMode() == AppConfig.ReviewOpenMode.OFFLINE
 
     /** 与图片点击入口共用同一判定，避免给没有 click/js 的零评论泡暴露段评菜单。 */
     fun hasAction(src: String, click: String?): Boolean {
@@ -316,8 +334,21 @@ object BookImgClick {
         pclick: String? = null,
         onDismiss: (() -> Unit)? = null,
     ): ReviewSnapshotConsumption {
-        return when (openMode()) {
-            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
+        return when {
+            isOfflineOnly() -> {
+                val opened = openSnapshotIfCached(
+                    context, src, hostChapter,
+                    refreshToNetwork = false, offlineOnly = true,
+                    pclick = pclick, onDismiss = onDismiss
+                )
+                if (opened) {
+                    ReviewSnapshotConsumption.Opened
+                } else {
+                    context.toastOnUi(R.string.review_no_cached_snapshot)
+                    ReviewSnapshotConsumption.BlockedOffline
+                }
+            }
+            openMode() == AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
                 val opened = openSnapshotIfCached(
                     context, src, hostChapter,
                     refreshToNetwork = true, offlineOnly = false,
@@ -338,6 +369,9 @@ object BookImgClick {
         /** 已用快照打开弹窗：调用方不得再执行 click/js */
         object Opened : ReviewSnapshotConsumption
 
+        /** 纯快照模式下无本地快照，已提示用户：调用方不得再执行 click/js */
+        object BlockedOffline : ReviewSnapshotConsumption
+
         /** 未消费：调用方继续执行 click/js 网络链路 */
         object NotConsumed : ReviewSnapshotConsumption
     }
@@ -356,8 +390,17 @@ object BookImgClick {
         syntheticPara: SyntheticParaContent? = null,
     ) {
         // 合成入口只复用缓存地址创建本段本地模板，不展示锚点段的评论。
-        when (openMode()) {
-            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
+        when {
+            isOfflineOnly() -> {
+                if (!openSnapshotIfCached(
+                        context, src, hostChapter,
+                        refreshToNetwork = false, offlineOnly = true, syntheticPara = syntheticPara
+                    )
+                ) {
+                    context.toastOnUi(R.string.review_no_cached_snapshot)
+                }
+            }
+            openMode() == AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
                 if (openSnapshotIfCached(
                         context, src, hostChapter,
                         refreshToNetwork = true, offlineOnly = false, syntheticPara = syntheticPara
@@ -405,8 +448,17 @@ object BookImgClick {
                 refreshToNetwork = false, offlineOnly = true
             )
         }
-        when (openMode()) {
-            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
+        when {
+            isOfflineOnly() -> {
+                if (!openSnapshotIfCached(
+                        context, src, hostChapter,
+                        refreshToNetwork = false, offlineOnly = true
+                    )
+                ) {
+                    context.toastOnUi(R.string.review_no_cached_snapshot)
+                }
+            }
+            openMode() == AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
                 if (!openSnapshotIfCached(
                         context, src, hostChapter,
                         refreshToNetwork = true, offlineOnly = false

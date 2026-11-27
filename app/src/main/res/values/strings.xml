@@ -3117,12 +3117,14 @@ Built-in bubbles are read-only; to customize, create a new bubble via Add or Imp
     <string name="menu_review_open_mode">Review open mode</string>
     <string name="menu_review_open_mode_network">Network first (cache fallback)</string>
     <string name="menu_review_open_mode_snapshot_first">Cache first (instant + refresh)</string>
+    <string name="menu_review_open_mode_offline">Snapshot only (local only, no network)</string>
     <string name="menu_review_snapshot_ttl">Review snapshot freshness</string>
     <string name="menu_review_snapshot_ttl_days">%1$d day(s)</string>
     <string name="menu_review_snapshot_ttl_never">Never expires</string>
     <string name="review_current_value">Current: %1$s</string>
     <string name="review_open_mode_short_network">Network first</string>
     <string name="review_open_mode_short_snapshot_first">Cache first</string>
+    <string name="review_open_mode_short_offline">Snapshot only</string>
     <string name="review_menu_target_suffix"> · ¶%1$d</string>
     <string name="review_snapshot_offline_hint">Offline snapshot (no network). Turn on offline review mode in the overflow menu first: comments will be recorded and sent later.</string>
     <string name="menu_current_option">Current</string>
