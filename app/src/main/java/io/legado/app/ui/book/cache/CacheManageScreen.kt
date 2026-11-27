@@ -304,13 +304,14 @@ internal fun CacheActionButton(
                 },
                 shape = RoundedCornerShape(actionRadius)
             )
-            .clickable(enabled = enabled, onClick = onClick),
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center
     ) {
         Text(
             text = text,
             color = if (accent) palette.settings.accent else palette.settings.primaryText,
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontFamily = palette.settings.bodyFontFamily,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis

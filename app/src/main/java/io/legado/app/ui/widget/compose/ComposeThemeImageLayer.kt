@@ -1,9 +1,15 @@
 package io.legado.app.ui.widget.compose
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapShader
+import android.graphics.Canvas
 import android.graphics.Matrix
+import android.graphics.Paint
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.drawable.Animatable
+import android.graphics.drawable.BitmapDrawable
 import android.graphics.drawable.Drawable
 import android.view.ViewGroup
 import android.widget.ImageView
@@ -26,6 +32,10 @@ import com.bumptech.glide.load.engine.GlideException
 import com.bumptech.glide.request.RequestListener
 import com.bumptech.glide.request.target.Target
 import com.bumptech.glide.signature.ObjectKey
+import io.legado.app.help.config.pkg.WallpaperScaleMode
+import io.legado.app.help.config.pkg.WallpaperTransform
+import io.legado.app.help.config.pkg.buildWallpaperMatrix
+import io.legado.app.help.config.pkg.drawTransformedBitmap
 import io.legado.app.utils.ImageTypeUtils
 import java.io.File
 
@@ -49,6 +59,7 @@ fun ComposeThemeImageLayer(
                 animate = state.animated,
                 alpha = state.alpha,
                 crop = state.crop,
+                transform = state.transform,
                 stableWidthScale = stableWidthScale
             )
         }
@@ -61,13 +72,15 @@ private fun ComposeThemeImage(
     animate: Boolean,
     alpha: Float,
     crop: ComposeThemeImageCrop?,
+    transform: WallpaperTransform?,
     stableWidthScale: Boolean
 ) {
     // Include file stamp so same-path wallpaper replacements bypass stale Glide cache.
     val fileLength = file.length()
     val fileLastModified = file.lastModified()
-    val loadKey = remember(file.absolutePath, fileLength, fileLastModified, animate, crop) {
-        ComposeThemeImageLoadKey(file.absolutePath, fileLength, fileLastModified, animate, crop)
+    val activeTransform = transform?.takeUnless { it.isDefault }
+    val loadKey = remember(file.absolutePath, fileLength, fileLastModified, animate, crop, activeTransform) {
+        ComposeThemeImageLoadKey(file.absolutePath, fileLength, fileLastModified, animate, crop, activeTransform)
     }
     AndroidView(
         modifier = Modifier.fillMaxSize(),
@@ -85,13 +98,14 @@ private fun ComposeThemeImage(
             imageView.alpha = alpha.coerceIn(0f, 1f)
             imageView.stableWidthScale = stableWidthScale
             imageView.crop = crop
+            imageView.transform = activeTransform
             if (imageView.loadKey == loadKey) {
                 (imageView.drawable as? Animatable)?.start()
                 return@AndroidView
             }
             imageView.loadKey = loadKey
             val requestManager = Glide.with(imageView.context.applicationContext ?: imageView.context)
-            if (crop != null || stableWidthScale) {
+            if (crop != null || stableWidthScale || activeTransform != null) {
                 imageView.scaleType = ImageView.ScaleType.MATRIX
                 if (animate) {
                     requestManager.load(file)
@@ -140,6 +154,19 @@ private class CropAwareImageView(context: Context) : AppCompatImageView(context)
             applyCropMatrixIfNeeded()
         }
 
+    var transform: WallpaperTransform? = null
+        set(value) {
+            if (field != value) {
+                field = value
+                applyCropMatrixIfNeeded()
+                invalidate()
+            }
+        }
+
+    private val tilePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private var tileShaderBitmap: Bitmap? = null
+    private var tileShader: BitmapShader? = null
+
     fun drawableStartListener(): RequestListener<Drawable> {
         return object : RequestListener<Drawable> {
             override fun onLoadFailed(
@@ -182,7 +209,49 @@ private class CropAwareImageView(context: Context) : AppCompatImageView(context)
         applyCropMatrixIfNeeded()
     }
 
+    override fun onDraw(canvas: Canvas) {
+        val activeTransform = transform?.takeUnless { it.isDefault }
+        if (activeTransform?.mode == WallpaperScaleMode.TILE) {
+            val bitmap = (drawable as? BitmapDrawable)?.bitmap
+            if (bitmap != null && !bitmap.isRecycled && width > 0 && height > 0) {
+                if (tileShaderBitmap !== bitmap) {
+                    tileShaderBitmap = bitmap
+                    tileShader = BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+                }
+                drawTransformedBitmap(
+                    canvas = canvas,
+                    bitmap = bitmap,
+                    bounds = RectF(0f, 0f, width.toFloat(), height.toFloat()),
+                    transform = activeTransform,
+                    paint = tilePaint,
+                    tileShader = tileShader
+                )
+                return
+            }
+        }
+        super.onDraw(canvas)
+    }
+
     private fun applyCropMatrixIfNeeded() {
+        val activeTransform = transform?.takeUnless { it.isDefault }
+        if (activeTransform != null) {
+            if (scaleType != ImageView.ScaleType.MATRIX) return
+            val drawable = drawable ?: return
+            val drawableWidth = drawable.intrinsicWidth.takeIf { it > 0 } ?: return
+            val drawableHeight = drawable.intrinsicHeight.takeIf { it > 0 } ?: return
+            val viewWidth = width.takeIf { it > 0 } ?: return
+            val viewHeight = height.takeIf { it > 0 } ?: return
+            if (activeTransform.mode != WallpaperScaleMode.TILE) {
+                imageMatrix = buildWallpaperMatrix(
+                    srcWidth = drawableWidth.toFloat(),
+                    srcHeight = drawableHeight.toFloat(),
+                    dstWidth = viewWidth.toFloat(),
+                    dstHeight = viewHeight.toFloat(),
+                    transform = activeTransform
+                )
+            }
+            return
+        }
         val crop = crop
         if (crop == null && !stableWidthScale) return
         if (scaleType != ImageView.ScaleType.MATRIX) return
@@ -222,6 +291,7 @@ data class ComposeThemeImageState(
     val animated: Boolean = ImageTypeUtils.isAnimatedImage(file),
     val alpha: Float = 1f,
     val crop: ComposeThemeImageCrop? = null,
+    val transform: WallpaperTransform? = null,
     val fallbackColor: Int
 )
 
@@ -230,9 +300,10 @@ private data class ComposeThemeImageLoadKey(
     val length: Long,
     val lastModified: Long,
     val animated: Boolean,
-    val crop: ComposeThemeImageCrop?
+    val crop: ComposeThemeImageCrop?,
+    val transform: WallpaperTransform?
 ) {
-    val cacheKey: String = "$path:$length:$lastModified:$animated:$crop"
+    val cacheKey: String = "$path:$length:$lastModified:$animated:$crop:${transform?.encode()}"
 }
 
 data class ComposeThemeImageCrop(

@@ -335,7 +335,6 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
                 book = book,
                 chapterIndexes = start..end,
                 source = CacheRequestSource.CACHE_ACTIVITY,
-                reviewIncremental = true,
             )
         }.onFailure {
             AppLog.put("提交缓存任务失败：${it.localizedMessage}", it)

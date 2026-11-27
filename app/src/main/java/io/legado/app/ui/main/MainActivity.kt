@@ -74,6 +74,7 @@ import io.legado.app.help.config.MainBottomNavConfig
 import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.pkg.WallpaperTransform
 import io.legado.app.help.coroutine.Coroutine
 import io.legado.app.lib.theme.ThemeTokenCompiler
 import io.legado.app.lib.theme.WindowSnapshotTransitionController
@@ -2150,11 +2151,19 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
     }
 
     private fun renderStandardBottomWallpaper() = binding.run {
-        val config = NavigationBarIconConfig.currentEntry(AppConfig.isNightTheme).config
+        val isNight = AppConfig.isNightTheme
+        val config = NavigationBarIconConfig.currentEntry(isNight).config
         val alpha = standardBottomBarOpacityLevel(config.opacity)
-        val wallpaper = NavigationBarIconConfig.currentBottomWallpaperPath(AppConfig.isNightTheme)
-            ?.let(::File)
-            ?.takeIf { it.isFile && it.canRead() }
+        val artPath = getPrefString(
+            if (isNight) PreferKey.bottomBarBgImageN else PreferKey.bottomBarBgImage
+        )?.takeIf { it.isNotBlank() }
+        val wallpaper = (artPath?.let(::File)?.takeIf { it.isFile && it.canRead() }
+            ?: NavigationBarIconConfig.currentBottomWallpaperPath(isNight)
+                ?.let(::File)
+                ?.takeIf { it.isFile && it.canRead() })
+        val transform = WallpaperTransform.decode(
+            getPrefString(if (isNight) PreferKey.bottomBarBgTransformN else PreferKey.bottomBarBgTransform)
+        )
         bottomNavigationWallpaper.isVisible = wallpaper != null
         bottomNavigationWallpaper.setContent {
             LegadoComposeTheme {
@@ -2163,6 +2172,7 @@ class MainActivity : VMBaseActivity<ActivityMainBinding, MainViewModel>(),
                     file = wallpaper,
                     animated = wallpaper?.extension.equals("gif", ignoreCase = true),
                     alpha = alpha,
+                    transform = transform,
                     fallbackColor = Color.TRANSPARENT
                 )
             )

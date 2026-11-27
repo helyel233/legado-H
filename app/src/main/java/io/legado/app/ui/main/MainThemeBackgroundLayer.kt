@@ -9,6 +9,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Theme
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.pkg.WallpaperTransform
 import io.legado.app.ui.widget.compose.ComposeThemeImageLayer
 import io.legado.app.ui.widget.compose.ComposeThemeImageCrop
 import io.legado.app.ui.widget.compose.ComposeThemeImageState
@@ -37,6 +38,7 @@ fun MainThemeBackgroundLayer(
             file = state.file,
             animated = state.animated && state.blur == 0,
             crop = state.crop,
+            transform = state.transform,
             fallbackColor = state.fallbackColor
         ),
         modifier = modifier
@@ -48,6 +50,7 @@ data class MainThemeBackgroundState(
     val animated: Boolean,
     val blur: Int,
     val crop: ComposeThemeImageCrop?,
+    val transform: WallpaperTransform?,
     val fallbackColor: Int
 ) {
     companion object {
@@ -63,6 +66,7 @@ data class MainThemeBackgroundState(
                     fileLastModified = 0L,
                     blur = 0,
                     crop = null,
+                    transform = null,
                     fallbackColor = fallbackColor,
                     eInkMode = true
                 )
@@ -78,6 +82,7 @@ data class MainThemeBackgroundState(
                     fileLastModified = 0L,
                     blur = 0,
                     crop = null,
+                    transform = null,
                     fallbackColor = fallbackColor,
                     eInkMode = false
                 )
@@ -92,6 +97,11 @@ data class MainThemeBackgroundState(
                 Theme.Dark -> PreferKey.bgImageNCrop
                 else -> null
             }
+            val transformKey = when (themeMode) {
+                Theme.Light -> PreferKey.bgImageTransform
+                Theme.Dark -> PreferKey.bgImageTransformN
+                else -> null
+            }
             val rawPath = context.getPrefString(imageKey)?.takeIf { it.isNotBlank() }
             val resolvedPath = rawPath?.let { resolveBackgroundPath(context, imageKey, it) }
             val file = resolvedPath?.let(::File)?.takeIf { it.isFile && it.canRead() }
@@ -103,6 +113,7 @@ data class MainThemeBackgroundState(
                 fileLastModified = file?.lastModified() ?: 0L,
                 blur = blurKey?.let { context.getPrefInt(it, 0) } ?: 0,
                 crop = ThemeConfig.normalizeBackgroundCrop(cropKey?.let { context.getPrefString(it) }),
+                transform = transformKey?.let { context.getPrefString(it) }?.takeIf { it.isNotBlank() },
                 fallbackColor = fallbackColor,
                 eInkMode = false
             )
@@ -119,6 +130,7 @@ data class MainThemeBackgroundState(
                 animated = ImageTypeUtils.isAnimatedImage(file),
                 blur = signature.blur,
                 crop = signature.crop.toComposeCrop(),
+                transform = WallpaperTransform.decode(signature.transform),
                 fallbackColor = signature.fallbackColor
             )
         }
@@ -158,6 +170,7 @@ data class MainThemeBackgroundSignature(
     val fileLastModified: Long,
     val blur: Int,
     val crop: String?,
+    val transform: String? = null,
     val fallbackColor: Int,
     val eInkMode: Boolean
 )

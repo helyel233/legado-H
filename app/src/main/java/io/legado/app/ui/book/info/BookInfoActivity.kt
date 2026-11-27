@@ -85,6 +85,9 @@ import io.legado.app.help.config.BookInfoComponentItem
 import io.legado.app.help.config.BookInfoComponentType
 import io.legado.app.help.config.BookInfoPageStyle
 import io.legado.app.help.config.LocalConfig
+import io.legado.app.help.config.pkg.WallpaperScaleMode
+import io.legado.app.help.config.pkg.WallpaperTransform
+import io.legado.app.help.config.pkg.buildWallpaperMatrix
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.exoplayer.ExoPlayerHelper
 import io.legado.app.help.webView.PooledWebView
@@ -2549,9 +2552,22 @@ class BookInfoActivity :
             return
         }
         val detailBg = BookInfoBackdropSurface.bookInfoBackdropImagePath(this)
-        if (detailBg == lastBookInfoBgPath) return
-        lastBookInfoBgPath = detailBg
+        val isNight = AppConfig.isNightTheme
+        val hasDedicatedBg = !getPrefString(
+            if (isNight) PreferKey.bookInfoBgImageN else PreferKey.bookInfoBgImage
+        ).isNullOrBlank()
+        val transformKey = if (hasDedicatedBg) {
+            if (isNight) PreferKey.bookInfoBgTransformN else PreferKey.bookInfoBgTransform
+        } else {
+            if (isNight) PreferKey.bgImageTransformN else PreferKey.bgImageTransform
+        }
+        val transform = WallpaperTransform.decode(getPrefString(transformKey))
+            ?.takeUnless { it.isDefault }
+        val bgSignature = "$detailBg|${transform?.encode().orEmpty()}"
+        if (bgSignature == lastBookInfoBgPath) return
+        lastBookInfoBgPath = bgSignature
         if (!detailBg.isNullOrBlank()) {
+            binding.bgBook.scaleType = ImageView.ScaleType.CENTER_CROP
             BookCover.loadBlur(this, detailBg, false, null)
                 .dontAnimate()
                 .listener(object : com.bumptech.glide.request.RequestListener<android.graphics.drawable.Drawable> {
@@ -2581,11 +2597,44 @@ class BookInfoActivity :
                             resource, targetW, targetH
                         )
                         updateBookInfoBackdropBitmap(bmp)
+                        if (transform != null) {
+                            binding.bgBook.post {
+                                if (isFinishing || isDestroyed) return@post
+                                if (transform.mode == WallpaperScaleMode.TILE) {
+                                    val tileBitmap = (resource as? android.graphics.drawable.BitmapDrawable)?.bitmap
+                                    if (tileBitmap != null && !tileBitmap.isRecycled) {
+                                        binding.bgBook.scaleType = ImageView.ScaleType.FIT_XY
+                                        binding.bgBook.setImageDrawable(
+                                            io.legado.app.utils.CenterCropBitmapDrawable(
+                                                resources,
+                                                tileBitmap,
+                                                transform
+                                            )
+                                        )
+                                    }
+                                } else {
+                                    binding.bgBook.scaleType = ImageView.ScaleType.MATRIX
+                                    val drawable = binding.bgBook.drawable ?: resource
+                                    val dw = drawable.intrinsicWidth.takeIf { it > 0 } ?: return@post
+                                    val dh = drawable.intrinsicHeight.takeIf { it > 0 } ?: return@post
+                                    val vw = binding.bgBook.width.takeIf { it > 0 } ?: return@post
+                                    val vh = binding.bgBook.height.takeIf { it > 0 } ?: return@post
+                                    binding.bgBook.imageMatrix = buildWallpaperMatrix(
+                                        srcWidth = dw.toFloat(),
+                                        srcHeight = dh.toFloat(),
+                                        dstWidth = vw.toFloat(),
+                                        dstHeight = vh.toFloat(),
+                                        transform = transform
+                                    )
+                                }
+                            }
+                        }
                         return false
                     }
                 })
                 .into(binding.bgBook)
         } else {
+            binding.bgBook.scaleType = ImageView.ScaleType.CENTER_CROP
             binding.bgBook.setImageDrawable(null)
             updateBookInfoBackdropBitmap(null)
         }

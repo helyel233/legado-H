@@ -18,24 +18,15 @@ enum class CacheKind {
 
 enum class CachePhase {
     BODY,
-    REVIEW,
     MEDIA,
     TTS,
 }
 
 /** The legal artifact combinations owned by the cache domain. */
 internal fun CacheKind.supports(phase: CachePhase): Boolean = when (this) {
-    CacheKind.TEXT ->
-        phase == CachePhase.BODY || phase == CachePhase.REVIEW || phase == CachePhase.TTS
-    CacheKind.AUDIO -> phase == CachePhase.MEDIA || phase == CachePhase.REVIEW
+    CacheKind.TEXT -> phase == CachePhase.BODY || phase == CachePhase.TTS
+    CacheKind.AUDIO -> phase == CachePhase.MEDIA
     CacheKind.VIDEO -> phase == CachePhase.MEDIA
-}
-
-/** A successful primary unit is the only unit allowed to create a REVIEW sibling. */
-internal fun CacheKind.reviewPrerequisitePhase(): CachePhase? = when (this) {
-    CacheKind.TEXT -> CachePhase.BODY
-    CacheKind.AUDIO -> CachePhase.MEDIA
-    CacheKind.VIDEO -> null
 }
 
 /** TTS 音频是文字书正文的衍生产物：正文产物完整是该章可合成的唯一前置。 */
@@ -78,8 +69,6 @@ enum class CacheUnitStatus {
     SUCCEEDED,
     FAILED,
     SKIPPED,
-    REVIEW_ELIGIBLE,
-    REVIEW_BLOCKED,
     NOT_APPLICABLE,
     CANCELLED,
 }
@@ -96,12 +85,6 @@ data class CacheUnitState(
     val updatedAt: Long = 0L,
 )
 
-/** Exact failed review buttons selected for a cache-management retry. */
-data class CacheReviewRetryTarget(
-    val unitKey: CacheUnitKey,
-    val buttonSources: List<String>,
-)
-
 data class CacheRequest(
     val source: CacheRequestSource,
     val kind: CacheKind,
@@ -109,16 +92,8 @@ data class CacheRequest(
     val bookUrl: String,
     val bookName: String,
     val units: List<CacheUnitKey>,
-    val reviewEnabled: Boolean = false,
-    /** Empty for normal review caching; non-empty targets only recorded failed buttons. */
-    val reviewRetryTargets: List<CacheReviewRetryTarget> = emptyList(),
     /** TEXT+BODY 任务终态后追加 TEXT+TTS 任务。 */
     val ttsEnabled: Boolean = false,
-    /**
-     * 用户显式下载重复章节时对已完整快照执行增量下载（只补新增评论，不整章强刷）。
-     * 仅显式点击下载的入口置 true；阅读时自动下载保持纯跳过。
-     */
-    val reviewIncremental: Boolean = false,
 )
 
 internal data class CacheWorkerLease(
@@ -136,13 +111,8 @@ data class CacheTaskState(
     val bookUrl: String,
     val bookName: String,
     val units: List<CacheUnitState>,
-    val reviewEnabled: Boolean = false,
-    /** Persisted with a REVIEW task so a resumed retry cannot widen back to a chapter refresh. */
-    val reviewRetryTargets: List<CacheReviewRetryTarget> = emptyList(),
     /** Persisted with a TEXT+BODY task so process recovery still appends the TTS sibling. */
     val ttsEnabled: Boolean = false,
-    /** Persisted with the prerequisite so the appended REVIEW task keeps the incremental intent. */
-    val reviewIncremental: Boolean = false,
     val status: CacheLifecycle = CacheLifecycle.QUEUED,
     val result: CacheResult? = null,
     val skipReason: CacheTaskSkipReason? = null,
@@ -156,8 +126,7 @@ data class CacheTaskState(
 /** Units that may be handed to an executor after submit, resume, or process recovery. */
 internal fun CacheTaskState.runnableUnits(): List<CacheUnitState> = units.filter { unit ->
     unit.status == CacheUnitStatus.PENDING ||
-        unit.status == CacheUnitStatus.RUNNING ||
-        unit.status == CacheUnitStatus.REVIEW_ELIGIBLE
+        unit.status == CacheUnitStatus.RUNNING
 }
 
 data class CacheSessionState(
@@ -246,12 +215,4 @@ object CacheLifecycleRules {
             status == CacheLifecycle.FAILED ||
             status == CacheLifecycle.CANCELLED
     }
-}
-
-sealed interface ReviewRetryResult {
-    data class Started(val count: Int) : ReviewRetryResult
-    object SwitchDisabled : ReviewRetryResult
-    object UnsupportedBook : ReviewRetryResult
-    object AlreadyInProgress : ReviewRetryResult
-    object NothingToRetry : ReviewRetryResult
 }

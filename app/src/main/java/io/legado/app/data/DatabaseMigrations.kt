@@ -27,6 +27,7 @@ object DatabaseMigrations {
             migration_106_107, migration_107_108, migration_108_109, migration_109_110,
             migration_110_111, migration_111_112, MIGRATION_112_113, MIGRATION_113_114,
             MIGRATION_114_115, MIGRATION_115_116, MIGRATION_116_117, MIGRATION_117_118,
+            MIGRATION_118_119,
         )
     }
 
@@ -203,6 +204,24 @@ object DatabaseMigrations {
                     tokenize=unicode61
                 )
                 """.trimIndent()
+            )
+        }
+    }
+
+    val MIGRATION_118_119 = object : Migration(118, 119) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // 评论快照缓存单表：唯一真相源，含单书/全局 LRU 与 30 天 TTL 所需索引
+            db.execSQL(
+                "CREATE TABLE IF NOT EXISTS `review_cache` (`cacheKey` TEXT NOT NULL, `bookUrl` TEXT NOT NULL, `chapterUrl` TEXT NOT NULL, `chapterIndex` INTEGER NOT NULL, `chapterTitle` TEXT NOT NULL, `buttonSrc` TEXT NOT NULL, `url` TEXT NOT NULL, `title` TEXT NOT NULL, `html` TEXT NOT NULL, `downloadEngine` TEXT NOT NULL, `savedAt` INTEGER NOT NULL, `lastAccessAt` INTEGER NOT NULL, `sizeBytes` INTEGER NOT NULL, PRIMARY KEY(`cacheKey`))"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_review_cache_bookUrl_chapterUrl` ON `review_cache` (`bookUrl`, `chapterUrl`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_review_cache_bookUrl_lastAccessAt` ON `review_cache` (`bookUrl`, `lastAccessAt`)"
+            )
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS `index_review_cache_savedAt` ON `review_cache` (`savedAt`)"
             )
         }
     }

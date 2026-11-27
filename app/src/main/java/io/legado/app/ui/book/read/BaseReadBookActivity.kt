@@ -456,7 +456,6 @@ abstract class BaseReadBookActivity :
                                 book = book,
                                 chapterIndexes = (start - 1)..(end - 1),
                                 source = CacheRequestSource.READER,
-                                reviewIncremental = true,
                             )
                         }.onFailure {
                             toastOnUi(R.string.error)

@@ -14,7 +14,6 @@ internal class CacheWorkerDispatcherImpl(
 ) : CacheWorkerDispatcher {
 
     private val bodyAdapter = TextBodyWorkerAdapter(workerPort)
-    private val reviewAdapter = ReviewWorkerAdapter(workerPort)
     private val mediaAdapter = MediaWorkerAdapter(workerPort)
 
     override fun start(submission: CacheSubmission) {
@@ -41,9 +40,6 @@ internal class CacheWorkerDispatcherImpl(
             task.kind == CacheKind.TEXT && task.phase == CachePhase.BODY -> {
                 bodyAdapter.pause(submission)
             }
-            task.phase == CachePhase.REVIEW && task.kind.reviewPrerequisitePhase() != null -> {
-                reviewAdapter.pause(submission)
-            }
             task.phase == CachePhase.MEDIA -> {
                 mediaAdapter.pause(submission)
             }
@@ -62,9 +58,6 @@ internal class CacheWorkerDispatcherImpl(
         when {
             task.kind == CacheKind.TEXT && task.phase == CachePhase.BODY -> {
                 bodyAdapter.cancel(submission)
-            }
-            task.phase == CachePhase.REVIEW && task.kind.reviewPrerequisitePhase() != null -> {
-                reviewAdapter.cancel(submission)
             }
             task.phase == CachePhase.MEDIA -> {
                 mediaAdapter.cancel(submission)
@@ -107,9 +100,6 @@ internal class CacheWorkerDispatcherImpl(
             when {
                 task.kind == CacheKind.TEXT && task.phase == CachePhase.BODY -> {
                     bodyAdapter.start(task, lease)
-                }
-                task.phase == CachePhase.REVIEW && task.kind.reviewPrerequisitePhase() != null -> {
-                    reviewAdapter.start(task, lease)
                 }
                 task.phase == CachePhase.MEDIA -> {
                     mediaAdapter.start(task, lease)

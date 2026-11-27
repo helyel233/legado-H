@@ -18,6 +18,7 @@ import io.legado.app.constant.PreferKey
 import io.legado.app.constant.Theme
 import io.legado.app.help.DefaultData
 import io.legado.app.help.UiPerfMetrics
+import io.legado.app.help.config.pkg.WallpaperTransform
 import io.legado.app.lib.theme.PrefBatchTransaction
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.ThemeRuntimeKeys
@@ -75,7 +76,9 @@ object ThemeConfig {
         val blurRadius: Int,
         val widthPixels: Int,
         val heightPixels: Int,
-        val isNinePatch: Boolean
+        val isNinePatch: Boolean,
+        val decodeKey: String = cacheKey,
+        val transform: WallpaperTransform = WallpaperTransform.DEFAULT
     )
 
     private sealed interface BgCacheEntry {
@@ -217,7 +220,17 @@ object ThemeConfig {
         val width = metrics.widthPixels.coerceAtLeast(1)
         val height = metrics.heightPixels.coerceAtLeast(1)
         val isNinePatch = path.endsWith(".9.png", ignoreCase = true)
-        val cacheKey = "$path|${file.length()}|${file.lastModified()}|blur=$blur|${width}x$height"
+        val transformKey = when (themeMode) {
+            Theme.Light -> PreferKey.bgImageTransform
+            Theme.Dark -> PreferKey.bgImageTransformN
+            else -> null
+        }
+        val transform = transformKey
+            ?.let { context.getPrefString(it) }
+            ?.let(WallpaperTransform::decode)
+            ?: WallpaperTransform.DEFAULT
+        val decodeKey = "$path|${file.length()}|${file.lastModified()}|blur=$blur|${width}x$height"
+        val cacheKey = "$decodeKey|t=${transform.encode()}"
         return BgImageSpec(
             cacheKey = cacheKey,
             path = path,
@@ -225,15 +238,17 @@ object ThemeConfig {
             blurRadius = blur,
             widthPixels = width,
             heightPixels = height,
-            isNinePatch = isNinePatch
+            isNinePatch = isNinePatch,
+            decodeKey = decodeKey,
+            transform = transform
         )
     }
 
     fun getCachedBgDrawable(context: Context, spec: BgImageSpec): Drawable? {
-        val entry = bgBitmapCache.get(spec.cacheKey) ?: return null
-        return entryToDrawable(context, entry).also {
+        val entry = bgBitmapCache.get(spec.decodeKey) ?: return null
+        return entryToDrawable(context, entry, spec.transform).also {
             if (it == null) {
-                bgBitmapCache.remove(spec.cacheKey)
+                bgBitmapCache.remove(spec.decodeKey)
             }
         }
     }
@@ -241,7 +256,7 @@ object ThemeConfig {
     suspend fun loadBgDrawableAsync(context: Context, spec: BgImageSpec): Drawable? {
         getCachedBgDrawable(context, spec)?.let { return it }
         val newDeferred = CompletableDeferred<BgCacheEntry?>()
-        val existing = inFlightBgLoads.putIfAbsent(spec.cacheKey, newDeferred)
+        val existing = inFlightBgLoads.putIfAbsent(spec.decodeKey, newDeferred)
         val entry = if (existing != null) {
             existing.await()
         } else {
@@ -255,15 +270,15 @@ object ThemeConfig {
                 newDeferred.completeExceptionally(t)
                 throw t
             } finally {
-                inFlightBgLoads.remove(spec.cacheKey, newDeferred)
+                inFlightBgLoads.remove(spec.decodeKey, newDeferred)
             }
         }
-        return entry?.let { entryToDrawable(context, it) }
+        return entry?.let { entryToDrawable(context, it, spec.transform) }
     }
 
     suspend fun prewarmBgImage(context: Context) {
         val spec = resolveBgImageSpec(context, context.resources.displayMetrics) ?: return
-        if (bgBitmapCache.get(spec.cacheKey) != null) return
+        if (bgBitmapCache.get(spec.decodeKey) != null) return
         runCatching { loadBgDrawableAsync(context, spec) }
     }
 
@@ -271,14 +286,18 @@ object ThemeConfig {
         val spec = resolveBgImageSpec(context, metrics) ?: return null
         getCachedBgDrawable(context, spec)?.let { return it }
         val entry = decodeAndCacheBgEntry(spec) ?: return null
-        return entryToDrawable(context, entry)
+        return entryToDrawable(context, entry, spec.transform)
     }
 
-    private fun entryToDrawable(context: Context, entry: BgCacheEntry): Drawable? {
+    private fun entryToDrawable(
+        context: Context,
+        entry: BgCacheEntry,
+        transform: WallpaperTransform = WallpaperTransform.DEFAULT
+    ): Drawable? {
         return when (entry) {
             is BgCacheEntry.BitmapEntry -> {
                 if (entry.bitmap.isRecycled) null
-                else CenterCropBitmapDrawable(context.resources, entry.bitmap)
+                else CenterCropBitmapDrawable(context.resources, entry.bitmap, transform)
             }
             is BgCacheEntry.NinePatchEntry -> {
                 entry.constantState.newDrawable(context.resources)
@@ -287,7 +306,7 @@ object ThemeConfig {
     }
 
     private fun decodeAndCacheBgEntry(spec: BgImageSpec): BgCacheEntry? {
-        bgBitmapCache.get(spec.cacheKey)?.let { return it }
+        bgBitmapCache.get(spec.decodeKey)?.let { return it }
         val startNs = System.nanoTime()
         if (spec.isHttpResolved && !isUsableThemeImage(File(spec.path))) {
             return null
@@ -313,7 +332,7 @@ object ThemeConfig {
             }
         }
         if (entry != null) {
-            bgBitmapCache.put(spec.cacheKey, entry)
+            bgBitmapCache.put(spec.decodeKey, entry)
         }
         val elapsedMs = (System.nanoTime() - startNs).coerceAtLeast(0L) / 1_000_000.0
         UiPerfMetrics.record(

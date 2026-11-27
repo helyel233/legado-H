@@ -82,7 +82,6 @@ import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.help.coroutine.Coroutine
-import io.legado.app.help.review.reviewoutbox.ReviewOutboxStore
 import io.legado.app.help.source.getSourceType
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.theme.TopBarChromeSpec
@@ -206,8 +205,6 @@ class ReadMenu @JvmOverloads constructor(
         refreshMenuGlass()
         // 玻璃判定先于系统栏同步：玻璃激活时导航栏区域要全程让给玻璃
         callBack.upSystemUiVisibility()
-        // 每次唤出菜单都刷新待发条数：三点图标小圆点与「发送离线评论（N）」都吃这个值
-        refreshOfflineReviewCounts()
         if (!LocalConfig.readMenuHelpVersionIsLast) {
             callBack.showHelp()
         }
@@ -294,20 +291,6 @@ class ReadMenu @JvmOverloads constructor(
                 currentChapterUrl = null
                 currentChapterName = book.durChapterTitle?.takeIf { it.isNotBlank() }
             }
-        }
-    }
-
-    /**
-     * 离线评论条数：唤出菜单时刷一次，三点菜单的发送/导出/清除入口据此显隐。
-     * 查询走 IO，主线程只拿结果赋值。
-     */
-    private fun refreshOfflineReviewCounts() {
-        viewScope()?.launch {
-            val (pending, total) = withContext(Dispatchers.IO) {
-                ReviewOutboxStore.countSendable() to ReviewOutboxStore.countAll()
-            }
-            offlineReviewPendingCount = pending
-            offlineReviewRecordCount = total
         }
     }
 
@@ -454,9 +437,6 @@ class ReadMenu @JvmOverloads constructor(
     private var customButtonMetadata by mutableStateOf(emptyMap<Long, ReadMenuCustomButton>())
     private var bottomMenuBounds by mutableStateOf<RectF?>(null)
     private var colorTick by mutableIntStateOf(0)
-    /** 离线评论待发送 / 全部记录数：决定三点菜单里是否出现发送、导出、清除 */
-    private var offlineReviewPendingCount by mutableIntStateOf(0)
-    private var offlineReviewRecordCount by mutableIntStateOf(0)
     // endregion
 
     init {
@@ -771,9 +751,7 @@ class ReadMenu @JvmOverloads constructor(
                             bookName = currentBookName,
                             isLocalBook = ReadBook.isLocalBook,
                             isEpub = directReader,
-                            supportsReplaceRules = replaceRulesSupported,
-                            offlineReviewPending = offlineReviewPendingCount,
-                            offlineReviewRecords = offlineReviewRecordCount
+                            supportsReplaceRules = replaceRulesSupported
                         ),
                         actions = ReadMenuTitleBarActions(
                             onBackClick = { callBack.returnToBookshelf() },
@@ -812,18 +790,6 @@ class ReadMenu @JvmOverloads constructor(
                             },
                             onTogglePreheatWifiOnlyClick = {
                                 callBack.togglePreheatWifiOnly()
-                            },
-                            onToggleOfflineReviewModeClick = {
-                                callBack.toggleOfflineReviewMode()
-                            },
-                            onSendOfflineReviewsClick = {
-                                callBack.sendOfflineReviews()
-                            },
-                            onExportOfflineReviewsClick = {
-                                callBack.exportOfflineReviews()
-                            },
-                            onClearOfflineReviewsClick = {
-                                callBack.clearOfflineReviews()
                             }
                         ),
                         style = barStyle,
@@ -1339,11 +1305,5 @@ class ReadMenu @JvmOverloads constructor(
         fun showReviewOpenModeDialog() = Unit
         fun showReviewSnapshotTtlDialog() = Unit
         fun togglePreheatWifiOnly() = Unit
-        fun toggleOfflineReviewMode() = Unit
-
-        /** 离线评论：发送 / 导出 / 清除（三点菜单只在有记录时显示这三项） */
-        fun sendOfflineReviews() = Unit
-        fun exportOfflineReviews() = Unit
-        fun clearOfflineReviews() = Unit
     }
 }

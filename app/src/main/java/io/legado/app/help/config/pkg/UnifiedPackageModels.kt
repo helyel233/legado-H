@@ -80,8 +80,18 @@ data class ArtWallpapersSpec(
     val panel: String? = null,
     val panelScaleType: String? = null,
     val welcome: String? = null,
+    val transforms: Map<String, WallpaperTransform> = emptyMap(),
     val unknownFields: Map<String, JsonElement> = emptyMap()
-)
+) {
+    fun transformFor(slot: String): WallpaperTransform {
+        return transforms[slot]?.normalized()
+            ?: if (slot == WallpaperTransform.SLOT_PANEL) {
+                WallpaperTransform.fromLegacyPanelScaleType(panelScaleType)
+            } else {
+                WallpaperTransform.DEFAULT
+            }
+    }
+}
 
 data class ArtTypographySpec(
     val uiFontPath: String? = null,

@@ -26,7 +26,6 @@ enum class CacheLogEventType {
     WORKER_DISPATCH_FAILED,
     TERMINAL_EFFECT_FAILED,
     REQUEST_ACCEPTED,
-    REVIEW_RESOURCE_GC,
 }
 
 data class CacheLogEvent(

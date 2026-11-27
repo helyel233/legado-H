@@ -7,6 +7,7 @@ import androidx.preference.PreferenceViewHolder
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.pkg.WallpaperTransform
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.lib.theme.themeDividerColorOrDefault
@@ -215,12 +216,15 @@ object PreferenceItemStyle {
         val mode = preference.context.getPrefString(
             if (AppConfig.isNightTheme) PreferKey.panelBgScaleTypeN else PreferKey.panelBgScaleType
         ).orEmpty()
+        val transform = preference.context.getPrefString(
+            if (AppConfig.isNightTheme) PreferKey.panelBgTransformN else PreferKey.panelBgTransform
+        ).orEmpty()
         val fileKey = path.takeUnless { it.isBlank() || it.startsWith("http", ignoreCase = true) }
             ?.let(::File)
             ?.takeIf { it.exists() }
             ?.let { "${it.absolutePath}:${it.length()}:${it.lastModified()}" }
             ?: path
-        return "$fileKey|$mode|${UiCorner.layoutAlpha()}"
+        return "$fileKey|$mode|$transform|${UiCorner.layoutAlpha()}"
     }
 
     private fun buildPanelImage(
@@ -236,6 +240,11 @@ object PreferenceItemStyle {
         val mode = preference.context.getPrefString(
             if (AppConfig.isNightTheme) PreferKey.panelBgScaleTypeN else PreferKey.panelBgScaleType
         ) ?: ThemeConfig.PANEL_BG_CROP
+        val transform = WallpaperTransform.decode(
+            preference.context.getPrefString(
+                if (AppConfig.isNightTheme) PreferKey.panelBgTransformN else PreferKey.panelBgTransform
+            )
+        ) ?: WallpaperTransform.fromLegacyPanelScaleType(mode)
         val members = visibleGroupMembers(parent, preference)
         if (members.isEmpty()) return null
         var groupHeight = 0
@@ -264,7 +273,8 @@ object PreferenceItemStyle {
                 groupHeight = groupHeight,
                 offsetY = offsetY,
                 topRadius = if (hasVisibleSibling(parent, preference, forward = false)) 0f else radius,
-                bottomRadius = if (hasVisibleSibling(parent, preference, forward = true)) 0f else radius
+                bottomRadius = if (hasVisibleSibling(parent, preference, forward = true)) 0f else radius,
+                transform = transform
             ),
             groupHeight = groupHeight,
             offsetY = offsetY

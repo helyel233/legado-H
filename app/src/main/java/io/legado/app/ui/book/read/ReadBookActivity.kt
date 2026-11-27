@@ -168,12 +168,10 @@ import io.legado.app.ui.book.read.page.LottieImageBitmapCache
 import io.legado.app.ui.book.read.page.delegate.ScrollPageDelegate
 import io.legado.app.ui.book.read.page.entities.PageDirection
 import io.legado.app.ui.book.read.page.entities.ReviewButton
-import io.legado.app.help.review.ReviewPreheatCoordinator
+import io.legado.app.help.review.ReviewWindowPrefetcher
 import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.help.review.SyntheticParaContent
 import io.legado.app.help.review.SyntheticReviewEntry
-import io.legado.app.help.review.reviewoutbox.ReviewOutboxDispatcher
-import io.legado.app.help.review.reviewoutbox.ReviewOutboxStore
 import io.legado.app.ui.book.read.page.entities.TextPage
 import io.legado.app.ui.book.read.page.provider.ChapterProvider
 import io.legado.app.ui.book.read.page.provider.LayoutProgressListener
@@ -455,24 +453,6 @@ class ReadBookActivity : BaseReadBookActivity(),
             viewModel.saveImage(it.value, uri)
         }
     }
-    private val offlineReviewExport = registerForActivityResult(HandleFileContract()) { result ->
-        val uri = result.uri ?: return@registerForActivityResult
-        val json = offlineReviewExportCache ?: return@registerForActivityResult
-        lifecycleScope.launch {
-            withContext(IO) {
-                contentResolver.openOutputStream(uri)?.use { stream ->
-                    stream.write(json.toByteArray(Charsets.UTF_8))
-                } ?: error("无法写入导出文件: $uri")
-            }
-            val total = offlineReviewExportCount
-            toastOnUi(getString(R.string.offline_review_export_done, total))
-            AppLog.putDebug(
-                "${ReviewOutboxStore.LogTag} 导出离线评论 $total 条 → $uri"
-            )
-        }
-    }
-    private var offlineReviewExportCache: String? = null
-    private var offlineReviewExportCount = 0
     private var menu: Menu? = null
     private var modernMenuPopup: ModernActionPopup.Handle? = null
     private var backupJob: Job? = null
@@ -882,9 +862,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         })
         window.setBackgroundDrawable(null)
         upScreenTimeOut()
-        lifecycleScope.launch {
-            withContext(IO) { ReviewOutboxStore.recoverSendingOnStart() }
-        }
         ReadBook.register(this)
         setupSourceRecoveryBar()
         viewModel.sourceSwitchRecoveryLiveData.observe(this) {
@@ -1228,7 +1205,6 @@ class ReadBookActivity : BaseReadBookActivity(),
 
                     R.id.menu_reverse_content -> item.isVisible = onLine && !isEpubCoreMode()
                     R.id.menu_paragraph_rule_manage -> item.isVisible = !book.isEpub && !isEpubCoreMode()
-                    R.id.menu_offline_review_mode -> item.isChecked = AppConfig.offlineReviewMode
                 }
             }
         }
@@ -1414,27 +1390,6 @@ class ReadBookActivity : BaseReadBookActivity(),
 
             R.id.menu_effective_replaces -> showEffectiveReplaces()
 
-            R.id.menu_offline_review_mode -> {
-                // 逻辑统一走 toggleOfflineReviewMode（三点菜单真实入口），避免双份漂移
-                toggleOfflineReviewMode()
-                item.isChecked = AppConfig.offlineReviewMode
-            }
-
-            R.id.menu_send_offline_reviews -> {
-                binding.readMenu.runMenuOut()
-                sendOfflineReviews()
-            }
-
-            R.id.menu_export_offline_reviews -> {
-                binding.readMenu.runMenuOut()
-                exportOfflineReviews()
-            }
-
-            R.id.menu_clear_offline_reviews -> {
-                binding.readMenu.runMenuOut()
-                clearOfflineReviews()
-            }
-
             R.id.menu_highlight_rule_manage -> showHighlightRuleManage()
             R.id.menu_paragraph_rule_manage -> ReadBook.book?.let {
                 startActivity<ParagraphRuleManageActivity> {
@@ -1445,111 +1400,6 @@ class ReadBookActivity : BaseReadBookActivity(),
             R.id.menu_help -> showHelp()
         }
         return super.onCompatOptionsItemSelected(item)
-    }
-
-    override fun sendOfflineReviews() {
-        lifecycleScope.launch {
-            val unknown = withContext(IO) { ReviewOutboxStore.unknownCount() }
-            if (unknown > 0) {
-                AlertDialog.Builder(this@ReadBookActivity)
-                    .setTitle(R.string.menu_send_offline_reviews)
-                    .setMessage(getString(R.string.offline_review_send_confirm_unknown, unknown))
-                    .setPositiveButton(R.string.sure) { _, _ -> launchOfflineReviewSend() }
-                    .setNegativeButton(R.string.cancel, null)
-                    .show()
-            } else {
-                launchOfflineReviewSend()
-            }
-        }
-    }
-
-    private fun launchOfflineReviewSend() {
-        lifecycleScope.launch {
-            val count = withContext(IO) { ReviewOutboxStore.countSendable() }
-            if (count == 0) {
-                toastOnUi(R.string.offline_review_no_records)
-                return@launch
-            }
-            toastOnUi(getString(R.string.offline_review_send_start, count))
-            ReviewOutboxDispatcher.sendInBackground { summary ->
-                // 批次独立于页面生命周期，回调统一用全局资源，不引用 Activity
-                val summary = summary ?: run {
-                    splitties.init.appCtx.toastOnUi(R.string.offline_review_send_running)
-                    return@sendInBackground
-                }
-                if (summary.total == 0) {
-                    splitties.init.appCtx.toastOnUi(R.string.offline_review_no_records)
-                    return@sendInBackground
-                }
-                splitties.init.appCtx.toastOnUi(
-                    splitties.init.appCtx.getString(
-                        R.string.offline_review_send_done, summary.success, summary.failures.size
-                    )
-                )
-                if (summary.failures.isNotEmpty()) {
-                    val detail = summary.failures.joinToString("\n") { failure ->
-                        "《${failure.item.bookName}》${failure.item.kindText()} ：${failure.message}"
-                    }
-                    splitties.init.appCtx.toastOnUi(
-                        splitties.init.appCtx.getString(
-                            R.string.offline_review_send_failed_detail, detail
-                        )
-                    )
-                }
-            }
-        }
-    }
-
-    override fun exportOfflineReviews() {
-        lifecycleScope.launch {
-            val json = withContext(IO) {
-                val items = ReviewOutboxStore.all()
-                if (items.isEmpty()) {
-                    null
-                } else {
-                    ReviewOutboxStore.buildExportJson(items).also {
-                        offlineReviewExportCount = items.size
-                    }
-                }
-            }
-            if (json == null) {
-                toastOnUi(R.string.offline_review_export_empty)
-                return@launch
-            }
-            offlineReviewExportCache = json
-            val fileName = "离线评论_" +
-                java.text.SimpleDateFormat("yyyyMMdd_HHmm", java.util.Locale.US)
-                    .format(java.util.Date()) + ".json"
-            offlineReviewExport.launch {
-                mode = HandleFileContract.EXPORT
-                fileData = HandleFileContract.FileData(
-                    fileName,
-                    json.toByteArray(Charsets.UTF_8),
-                    "application/json"
-                )
-            }
-        }
-    }
-
-    override fun clearOfflineReviews() {
-        lifecycleScope.launch {
-            val total = withContext(IO) { ReviewOutboxStore.countAll() }
-            if (total == 0) {
-                toastOnUi(R.string.offline_review_no_records)
-                return@launch
-            }
-            AlertDialog.Builder(this@ReadBookActivity)
-                .setTitle(R.string.offline_review_clear_confirm_title)
-                .setMessage(getString(R.string.offline_review_clear_confirm_message, total))
-                .setPositiveButton(R.string.sure) { _, _ ->
-                    lifecycleScope.launch {
-                        val cleared = withContext(IO) { ReviewOutboxStore.clearAll() }
-                        toastOnUi(getString(R.string.offline_review_clear_done, cleared))
-                    }
-                }
-                .setNegativeButton(R.string.cancel, null)
-                .show()
-        }
     }
 
     private fun refreshContentAll(book: Book) {
@@ -2470,7 +2320,7 @@ class ReadBookActivity : BaseReadBookActivity(),
      */
     private fun preheatReviewSnapshots() {
         val book = ReadBook.book ?: return
-        ReviewPreheatCoordinator.preheat(book, ReadBook.durChapterIndex)
+        ReviewWindowPrefetcher.prefetch(book, ReadBook.durChapterIndex)
         warmUpCommentWebView()
     }
 
@@ -2523,33 +2373,17 @@ class ReadBookActivity : BaseReadBookActivity(),
             preheatReviewSnapshots()
         }
     }
-
-    override fun toggleOfflineReviewMode() {
-        AppConfig.offlineReviewMode = !AppConfig.offlineReviewMode
-        toastOnUi(
-            if (AppConfig.offlineReviewMode) {
-                R.string.offline_review_mode_on
-            } else {
-                R.string.offline_review_mode_off
-            }
-        )
-        AppLog.putDebug(
-            "${ReviewOutboxStore.LogTag} 离线评论模式切换 → ${AppConfig.offlineReviewMode}"
-        )
-    }
     // endregion
 
     /**
-     * 评论打开方式选择：网络优先 / 纯联网 / 快照优先 / 仅快照。
-     * 段评菜单（选中文字）与段评图标直点共用此值，四模式语义见 [BookImgClick]。
-     * 选项文案自带括注说明，避免只有「网络优先/快照优先」几个字看不出差别。
+     * 评论打开方式选择：联网优先 / 缓存优先。
+     * 段评菜单（选中文字）与段评图标直点共用此值，二模式语义见 [BookImgClick]。
+     * 选项文案自带括注说明，避免只有「联网优先/缓存优先」几个字看不出差别。
      */
     override fun showReviewOpenModeDialog() {
         val modes = listOf(
             AppConfig.ReviewOpenMode.NETWORK to R.string.menu_review_open_mode_network,
-            AppConfig.ReviewOpenMode.NETWORK_ONLY to R.string.menu_review_open_mode_network_only,
-            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST to R.string.menu_review_open_mode_snapshot_first,
-            AppConfig.ReviewOpenMode.SNAPSHOT_ONLY to R.string.menu_review_open_mode_snapshot_only
+            AppConfig.ReviewOpenMode.SNAPSHOT_FIRST to R.string.menu_review_open_mode_snapshot_first
         )
         val current = AppConfig.reviewOpenMode
         selector(
@@ -4933,10 +4767,6 @@ class ReadBookActivity : BaseReadBookActivity(),
                     commentBrowserShowing = true
                     return@async
                 }
-                BookImgClick.ReviewSnapshotConsumption.Miss -> {
-                    commentBrowserOpening = false
-                    return@async
-                }
                 BookImgClick.ReviewSnapshotConsumption.NotConsumed -> Unit
             }
             // 网络链路：click JS 执行环境与弹窗路径不变，仅把 showBrowser 录音，
@@ -4953,7 +4783,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                     val handled =
                         baseCallback.showBrowser(url, html, preloadJs, config, sourceKey)
                     if (handled) {
-                        ReviewPreheatCoordinator.captureFromClick(
+                        ReviewWindowPrefetcher.captureFromClick(
                             book, chapter, src, url, html, preloadJs, sourceKey = sourceKey
                         )
                     }
@@ -5058,8 +4888,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                     val source = ReadBook.bookSource ?: return@async
                     val book = ReadBook.book ?: return@async
                     val chapter = currentChapterForClick() ?: throw Exception("no find chapter")
-                    // 旧源 click 按打开模式消费本地快照：Opened=已打开、Miss=已提示
-                    // （仅快照模式无快照，不得回落网络），NotConsumed 继续网络链路
+                    // 旧源 click 按打开模式消费本地快照：Opened=已打开，NotConsumed 继续网络链路
                     if (
                         BookImgClick.clickImgSnapshotFirst(this@ReadBookActivity, src, chapter)
                         != BookImgClick.ReviewSnapshotConsumption.NotConsumed
@@ -5126,7 +4955,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             val book = ReadBook.book ?: return@async
             val chapter = currentChapterForClick() ?: throw Exception("no find chapter")
             // 旧源 click 同样按打开模式消费本地快照（与段评菜单同一语义）：
-            // Miss（仅快照模式无快照）已提示且不得回落网络
+            // Opened=已打开，NotConsumed 继续网络链路
             if (
                 BookImgClick.clickImgSnapshotFirst(this@ReadBookActivity, src, chapter)
                 != BookImgClick.ReviewSnapshotConsumption.NotConsumed
@@ -5170,7 +4999,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                 preloadJs: String?,
                 config: String?
             ): Boolean {
-                ReviewPreheatCoordinator.captureFromClick(book, chapter, src, url, html, preloadJs)
+                ReviewWindowPrefetcher.captureFromClick(book, chapter, src, url, html, preloadJs)
                 return false
             }
 
@@ -6193,7 +6022,7 @@ class ReadBookActivity : BaseReadBookActivity(),
         commentBrowserOpening = false
         commentBrowserShowing = false
         // 离开阅读页：取消在途的段评预热（翻章取消由预热带内部 supersede 处理）
-        ReviewPreheatCoordinator.cancelPreheat()
+        ReviewWindowPrefetcher.cancel()
         handler.removeCallbacksAndMessages(null) // 清理Handler消息
         if (!ReadBook.inBookshelf && !isChangingConfigurations) {
             viewModel.removeFromBookshelf(null)

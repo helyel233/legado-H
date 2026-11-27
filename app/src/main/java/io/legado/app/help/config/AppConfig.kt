@@ -50,23 +50,19 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
 
     /** 评论打开方式取值 */
     object ReviewOpenMode {
-        /** 网络优先：新鲜快照可秒开，在线页为终态 */
+        /** 联网优先：直接联网加载，失败/超时自动用缓存兜底 */
         const val NETWORK = "network"
 
-        /** 纯联网：绝不先弹快照，只在线失败/超时时用快照兜底 */
-        const val NETWORK_ONLY = "network_only"
-
+        /** 缓存优先：命中缓存立即秒开，后台静默 SWR 刷新 */
         const val SNAPSHOT_FIRST = "snapshot_first"
-        const val SNAPSHOT_ONLY = "snapshot_only"
     }
 
-    /** [reviewOpenMode] 的合法取值白名单，坏值统一回退到网络优先 */
-    private val REVIEW_OPEN_MODES = setOf(
-        ReviewOpenMode.NETWORK,
-        ReviewOpenMode.NETWORK_ONLY,
-        ReviewOpenMode.SNAPSHOT_FIRST,
-        ReviewOpenMode.SNAPSHOT_ONLY
-    )
+    /** 将历史 4 模式取值及未知值平滑归一到当前二模式 */
+    private fun normalizeReviewOpenMode(raw: String?): String = when (raw) {
+        ReviewOpenMode.SNAPSHOT_FIRST, "snapshot_only" -> ReviewOpenMode.SNAPSHOT_FIRST
+        ReviewOpenMode.NETWORK, "network_only" -> ReviewOpenMode.NETWORK
+        else -> ReviewOpenMode.NETWORK
+    }
 
     /** 段评快照默认保鲜期（天），见 [reviewSnapshotTtlDays] */
     const val DEFAULT_REVIEW_SNAPSHOT_TTL_DAYS = 3
@@ -1895,101 +1891,19 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
             appCtx.putPrefBoolean(PreferKey.cacheReviewReplies, value)
         }
 
-    /** 阅读或书架刷新时，按正文预下载窗口自动执行正文→评论下载任务。 */
-    var autoDownloadReview: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.autoDownloadReview, false)
-        set(value) {
-            appCtx.putPrefBoolean(PreferKey.autoDownloadReview, value)
-        }
-
     /**
-     * 评论缓存是否静默：开启后评论缓存的进度、完成、失败都不再进入通知栏。
-     * 评论抓取本身在应用进程内完成，不再使用前台服务，因此不会有任何通知。
-     */
-    var cacheReviewSilent: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.cacheReviewSilent, true)
-        set(value) {
-            appCtx.putPrefBoolean(PreferKey.cacheReviewSilent, value)
-        }
-
-    /** 缓存评论快照时保存评论者头像到资源库。 */
-    var cacheReviewAvatars: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.cacheReviewAvatars, true)
-        set(value) {
-            appCtx.putPrefBoolean(PreferKey.cacheReviewAvatars, value)
-        }
-
-    /** 缓存评论快照时保存非头像的评论图片到资源库。 */
-    var cacheReviewImages: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.cacheReviewImages, true)
-        set(value) {
-            appCtx.putPrefBoolean(PreferKey.cacheReviewImages, value)
-        }
-
-    /** 超过阈值时压缩评论者头像。 */
-    var compressReviewAvatars: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.compressReviewAvatars, true)
-        set(value) {
-            appCtx.putPrefBoolean(PreferKey.compressReviewAvatars, value)
-        }
-
-    /** 超过阈值时压缩评论内图片。 */
-    var compressReviewImages: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.compressReviewImages, true)
-        set(value) {
-            appCtx.putPrefBoolean(PreferKey.compressReviewImages, value)
-        }
-
-    /**
-     * 评论头像压缩后的最大大小，单位 KiB。
-     *
-     * 阈值必须为正：0 或负数会让压缩没有意义，还会让抓取侧的资源处理判定失效。
-     * 读写两侧都钳到 [MIN_REVIEW_COMPRESSION_KB]，历史坏值读取时自动修正。
-     */
-    var reviewAvatarCompressionMaxKb: Int
-        get() = appCtx.getPrefInt(
-            PreferKey.reviewAvatarCompressionMaxKb,
-            DEFAULT_REVIEW_AVATAR_COMPRESSION_KB
-        ).let(::normalizeReviewCompressionKb)
-        set(value) {
-            appCtx.putPrefInt(
-                PreferKey.reviewAvatarCompressionMaxKb,
-                normalizeReviewCompressionKb(value)
-            )
-        }
-
-    /** 评论内图片压缩后的最大大小，单位 KiB；下限同 [reviewAvatarCompressionMaxKb]。 */
-    var reviewImageCompressionMaxKb: Int
-        get() = appCtx.getPrefInt(
-            PreferKey.reviewImageCompressionMaxKb,
-            DEFAULT_REVIEW_IMAGE_COMPRESSION_KB
-        ).let(::normalizeReviewCompressionKb)
-        set(value) {
-            appCtx.putPrefInt(
-                PreferKey.reviewImageCompressionMaxKb,
-                normalizeReviewCompressionKb(value)
-            )
-        }
-
-    val reviewAvatarCompressionMaxBytes: Long
-        get() = reviewAvatarCompressionMaxKb.toLong() * 1024L
-
-    val reviewImageCompressionMaxBytes: Long
-        get() = reviewImageCompressionMaxKb.toLong() * 1024L
-
-    /**
-     * 评论打开方式：network / network_only / snapshot_first / snapshot_only。
-     * 图标直点与选中文字后的段评菜单共用此值（见 [BookImgClick] 的四模式语义）。
+     * 评论打开方式：network（联网优先） / snapshot_first（缓存优先）。
+     * 图标直点与选中文字后的段评菜单共用此值（见 [BookImgClick] 的二模式语义）。
+     * 历史偏好值 snapshot_only / network_only 自动归一到对应的二模式取值。
      */
     var reviewOpenMode: String
-        // 未知值统一回退到网络优先，避免消费端 when 落到意外分支
-        get() = appCtx.getPrefString(PreferKey.reviewOpenMode, ReviewOpenMode.NETWORK)
-            ?.takeIf { it in REVIEW_OPEN_MODES }
-            ?: ReviewOpenMode.NETWORK
+        get() = normalizeReviewOpenMode(
+            appCtx.getPrefString(PreferKey.reviewOpenMode, ReviewOpenMode.NETWORK)
+        )
         set(value) {
             appCtx.putPrefString(
                 PreferKey.reviewOpenMode,
-                value.takeIf { it in REVIEW_OPEN_MODES } ?: ReviewOpenMode.NETWORK
+                normalizeReviewOpenMode(value)
             )
         }
 
@@ -2015,17 +1929,6 @@ object AppConfig : SharedPreferences.OnSharedPreferenceChangeListener {
         ).coerceAtLeast(0)
         set(value) {
             appCtx.putPrefInt(PreferKey.reviewSnapshotTtlDays, value.coerceAtLeast(0))
-        }
-
-    /**
-     * 离线评论模式：只控制发送策略，不代表真实网络状态。
-     * 开启后，评论弹窗内的发表动作一律拦截记录为离线评论，不立即发送（无论有无网络）；
-     * 关闭后不拦截，走书源原有发送流程，真实无网时由原流程自行失败。
-     */
-    var offlineReviewMode: Boolean
-        get() = appCtx.getPrefBoolean(PreferKey.offlineReviewMode, false)
-        set(value) {
-            appCtx.putPrefBoolean(PreferKey.offlineReviewMode, value)
         }
 
     /**

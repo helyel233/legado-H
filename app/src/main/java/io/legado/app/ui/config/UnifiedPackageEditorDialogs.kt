@@ -50,6 +50,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import io.legado.app.help.config.AppConfig
+import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.pkg.ArtPackagePayload
 import io.legado.app.help.config.pkg.ArtPaletteSpec
 import io.legado.app.help.config.pkg.ArtTypographySpec
@@ -66,6 +67,8 @@ import io.legado.app.help.config.pkg.SurfaceScopesParams
 import io.legado.app.help.config.pkg.UiScope
 import io.legado.app.help.config.pkg.UnifiedPackageDraftStore
 import io.legado.app.help.config.pkg.UnifiedPackageRepository
+import io.legado.app.help.config.pkg.WallpaperScaleMode
+import io.legado.app.help.config.pkg.WallpaperTransform
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -236,6 +239,19 @@ internal fun ArtPackageEditorDialog(
     var bookInfoWallpaper by remember { mutableStateOf(baseWallpapers.bookInfo.orEmpty()) }
     var panelWallpaper by remember { mutableStateOf(baseWallpapers.panel.orEmpty()) }
     var welcomeWallpaper by remember { mutableStateOf(baseWallpapers.welcome.orEmpty()) }
+    var wallpaperTransforms by remember(entry.manifest.id, preferNightSlot) {
+        mutableStateOf(
+            mapOf(
+                WallpaperTransform.SLOT_MAIN to baseWallpapers.transformFor(WallpaperTransform.SLOT_MAIN),
+                WallpaperTransform.SLOT_TOP_BAR to baseWallpapers.transformFor(WallpaperTransform.SLOT_TOP_BAR),
+                WallpaperTransform.SLOT_BOTTOM_BAR to baseWallpapers.transformFor(WallpaperTransform.SLOT_BOTTOM_BAR),
+                WallpaperTransform.SLOT_BOOK_INFO to baseWallpapers.transformFor(WallpaperTransform.SLOT_BOOK_INFO),
+                WallpaperTransform.SLOT_PANEL to baseWallpapers.transformFor(WallpaperTransform.SLOT_PANEL),
+                WallpaperTransform.SLOT_WELCOME to baseWallpapers.transformFor(WallpaperTransform.SLOT_WELCOME)
+            )
+        )
+    }
+    var previewingWallpaperSlot by remember { mutableStateOf<ArtWallpaperSlotMeta?>(null) }
 
     // Fonts
     var uiFontPath by remember { mutableStateOf(baseTypography.uiFontPath.orEmpty()) }
@@ -381,8 +397,59 @@ internal fun ArtPackageEditorDialog(
                                 ColorFieldRow("标题字体色 (Title Text)", titleFontColor, style, dialogPalette, referenceColors = referenceColors) { titleFontColor = it }
                             }
                             1 -> {
-                                AssetPathFieldRow("主界面壁纸", mainWallpaper, onPickAssetFile) { mainWallpaper = it }
-                                AssetPathFieldRow("顶栏壁纸", topBarWallpaper, onPickAssetFile) { topBarWallpaper = it }
+                                fun parseFallbackColor(raw: String, defaultColor: Color): Color =
+                                    ColorPaletteHelper.parseColorInput(raw)
+                                        ?.let { Color(it or 0xFF000000.toInt()) }
+                                        ?: defaultColor
+                                fun slotPath(meta: ArtWallpaperSlotMeta): String = when (meta) {
+                                    ArtWallpaperSlotMeta.MAIN -> mainWallpaper
+                                    ArtWallpaperSlotMeta.TOP_BAR -> topBarWallpaper
+                                    ArtWallpaperSlotMeta.BOTTOM_BAR -> bottomBarWallpaper
+                                    ArtWallpaperSlotMeta.BOOK_INFO -> bookInfoWallpaper
+                                    ArtWallpaperSlotMeta.PANEL -> panelWallpaper
+                                    ArtWallpaperSlotMeta.WELCOME -> welcomeWallpaper
+                                }
+                                fun setSlotPath(meta: ArtWallpaperSlotMeta, next: String) {
+                                    when (meta) {
+                                        ArtWallpaperSlotMeta.MAIN -> mainWallpaper = next
+                                        ArtWallpaperSlotMeta.TOP_BAR -> topBarWallpaper = next
+                                        ArtWallpaperSlotMeta.BOTTOM_BAR -> bottomBarWallpaper = next
+                                        ArtWallpaperSlotMeta.BOOK_INFO -> bookInfoWallpaper = next
+                                        ArtWallpaperSlotMeta.PANEL -> panelWallpaper = next
+                                        ArtWallpaperSlotMeta.WELCOME -> welcomeWallpaper = next
+                                    }
+                                }
+                                fun slotFallback(meta: ArtWallpaperSlotMeta): Color = when (meta) {
+                                    ArtWallpaperSlotMeta.MAIN,
+                                    ArtWallpaperSlotMeta.BOOK_INFO,
+                                    ArtWallpaperSlotMeta.WELCOME -> parseFallbackColor(backgroundColor, style.surface)
+                                    ArtWallpaperSlotMeta.TOP_BAR -> parseFallbackColor(primaryColor, style.surface)
+                                    ArtWallpaperSlotMeta.BOTTOM_BAR -> parseFallbackColor(bottomBackground, style.surface)
+                                    ArtWallpaperSlotMeta.PANEL -> parseFallbackColor(cardColor, style.surface)
+                                }
+                                @Composable
+                                fun renderWallpaperSlot(meta: ArtWallpaperSlotMeta, alpha: Float = 1f) {
+                                    ArtWallpaperSlotRow(
+                                        slotMeta = meta,
+                                        value = slotPath(meta),
+                                        transform = wallpaperTransforms[meta.slotId] ?: WallpaperTransform.DEFAULT,
+                                        packageDir = entry.dir,
+                                        baseDir = resolvedBaseDir,
+                                        fallbackColor = slotFallback(meta),
+                                        alpha = alpha,
+                                        style = style,
+                                        palette = dialogPalette,
+                                        onPickFile = onPickAssetFile,
+                                        onValueChange = { setSlotPath(meta, it) },
+                                        onClear = {
+                                            setSlotPath(meta, "")
+                                            wallpaperTransforms = wallpaperTransforms + (meta.slotId to WallpaperTransform.DEFAULT)
+                                        },
+                                        onOpenPreview = { previewingWallpaperSlot = meta }
+                                    )
+                                }
+                                renderWallpaperSlot(ArtWallpaperSlotMeta.MAIN)
+                                renderWallpaperSlot(ArtWallpaperSlotMeta.TOP_BAR, alpha = topBarAlpha / 100f)
                                 EditorSliderRow(
                                     title = "顶栏壁纸不透明度",
                                     valueText = "${topBarAlpha}%",
@@ -391,10 +458,10 @@ internal fun ArtPackageEditorDialog(
                                     palette = mgmtPalette,
                                     onValueChange = { topBarAlpha = it }
                                 )
-                                AssetPathFieldRow("底栏壁纸", bottomBarWallpaper, onPickAssetFile) { bottomBarWallpaper = it }
-                                AssetPathFieldRow("书籍详情背景图", bookInfoWallpaper, onPickAssetFile) { bookInfoWallpaper = it }
-                                AssetPathFieldRow("弹窗面板背景图", panelWallpaper, onPickAssetFile) { panelWallpaper = it }
-                                AssetPathFieldRow("启动页背景图 (Welcome)", welcomeWallpaper, onPickAssetFile) { welcomeWallpaper = it }
+                                renderWallpaperSlot(ArtWallpaperSlotMeta.BOTTOM_BAR)
+                                renderWallpaperSlot(ArtWallpaperSlotMeta.BOOK_INFO)
+                                renderWallpaperSlot(ArtWallpaperSlotMeta.PANEL)
+                                renderWallpaperSlot(ArtWallpaperSlotMeta.WELCOME)
                             }
                             2 -> {
                                 ArtFontSlotSelectorRow(
@@ -479,6 +546,24 @@ internal fun ArtPackageEditorDialog(
                                 uiFontColor = uiFontColor.trim().ifBlank { null },
                                 titleFontColor = titleFontColor.trim().ifBlank { null }
                             )
+                            val slotHasPath = mapOf(
+                                WallpaperTransform.SLOT_MAIN to mainWallpaper.isNotBlank(),
+                                WallpaperTransform.SLOT_TOP_BAR to topBarWallpaper.isNotBlank(),
+                                WallpaperTransform.SLOT_BOTTOM_BAR to bottomBarWallpaper.isNotBlank(),
+                                WallpaperTransform.SLOT_BOOK_INFO to bookInfoWallpaper.isNotBlank(),
+                                WallpaperTransform.SLOT_PANEL to panelWallpaper.isNotBlank(),
+                                WallpaperTransform.SLOT_WELCOME to welcomeWallpaper.isNotBlank()
+                            )
+                            val cleanedTransforms = wallpaperTransforms
+                                .filter { (slot, _) -> slotHasPath[slot] == true }
+                                .mapValues { it.value.normalized() }
+                                .filterValues { !it.isDefault }
+                            val panelMode = wallpaperTransforms[WallpaperTransform.SLOT_PANEL]?.mode
+                            val updatedPanelScaleType = if (panelMode == WallpaperScaleMode.FIT) {
+                                ThemeConfig.PANEL_BG_FIT
+                            } else {
+                                ThemeConfig.PANEL_BG_CROP
+                            }
                             val updatedWallpapers = baseWallpapers.copy(
                                 main = mainWallpaper.trim().ifBlank { null },
                                 topBar = topBarWallpaper.trim().ifBlank { null },
@@ -486,7 +571,9 @@ internal fun ArtPackageEditorDialog(
                                 bottomBar = bottomBarWallpaper.trim().ifBlank { null },
                                 bookInfo = bookInfoWallpaper.trim().ifBlank { null },
                                 panel = panelWallpaper.trim().ifBlank { null },
-                                welcome = welcomeWallpaper.trim().ifBlank { null }
+                                panelScaleType = updatedPanelScaleType,
+                                welcome = welcomeWallpaper.trim().ifBlank { null },
+                                transforms = cleanedTransforms
                             )
                             val updatedTypography = baseTypography.copy(
                                 uiFontPath = uiFontPath.trim().ifBlank { null },
@@ -547,6 +634,44 @@ internal fun ArtPackageEditorDialog(
             onSelectFont = { selected ->
                 if (isUiSlot) uiFontPath = selected else titleFontPath = selected
                 pickingFontSlot = null
+            }
+        )
+    }
+
+    previewingWallpaperSlot?.let { slotMeta ->
+        val rawPath = when (slotMeta) {
+            ArtWallpaperSlotMeta.MAIN -> mainWallpaper
+            ArtWallpaperSlotMeta.TOP_BAR -> topBarWallpaper
+            ArtWallpaperSlotMeta.BOTTOM_BAR -> bottomBarWallpaper
+            ArtWallpaperSlotMeta.BOOK_INFO -> bookInfoWallpaper
+            ArtWallpaperSlotMeta.PANEL -> panelWallpaper
+            ArtWallpaperSlotMeta.WELCOME -> welcomeWallpaper
+        }
+        fun parseSlotBg(raw: String): Color =
+            ColorPaletteHelper.parseColorInput(raw)
+                ?.let { Color(it or 0xFF000000.toInt()) }
+                ?: style.surface
+        val fallbackColor = when (slotMeta) {
+            ArtWallpaperSlotMeta.MAIN,
+            ArtWallpaperSlotMeta.BOOK_INFO,
+            ArtWallpaperSlotMeta.WELCOME -> parseSlotBg(backgroundColor)
+            ArtWallpaperSlotMeta.TOP_BAR -> parseSlotBg(primaryColor)
+            ArtWallpaperSlotMeta.BOTTOM_BAR -> parseSlotBg(bottomBackground)
+            ArtWallpaperSlotMeta.PANEL -> parseSlotBg(cardColor)
+        }
+        val slotAlpha = if (slotMeta == ArtWallpaperSlotMeta.TOP_BAR) topBarAlpha / 100f else 1f
+        ArtWallpaperPreviewDialog(
+            slotMeta = slotMeta,
+            rawPath = rawPath,
+            packageDir = entry.dir,
+            baseDir = resolvedBaseDir,
+            fallbackColor = fallbackColor,
+            alpha = slotAlpha,
+            initialTransform = wallpaperTransforms[slotMeta.slotId] ?: WallpaperTransform.DEFAULT,
+            onDismiss = { previewingWallpaperSlot = null },
+            onApply = { updated ->
+                wallpaperTransforms = wallpaperTransforms + (slotMeta.slotId to updated.normalized())
+                previewingWallpaperSlot = null
             }
         )
     }

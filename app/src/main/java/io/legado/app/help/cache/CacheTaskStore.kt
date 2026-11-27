@@ -155,10 +155,7 @@ internal class CacheTaskStore(
             bookUrl = request.bookUrl,
             bookName = request.bookName,
             units = request.units.distinct().map { CacheUnitState(it, updatedAt = now) },
-            reviewEnabled = request.reviewEnabled,
-            reviewRetryTargets = request.reviewRetryTargets,
             ttsEnabled = request.ttsEnabled,
-            reviewIncremental = request.reviewIncremental,
             updatedAt = now,
         )
         val trace = CacheOperationDiagnostics.begin(
@@ -480,8 +477,7 @@ internal class CacheTaskStore(
             }
             val unfinished = task.units.any {
                 it.status == CacheUnitStatus.PENDING ||
-                    it.status == CacheUnitStatus.RUNNING ||
-                    it.status == CacheUnitStatus.REVIEW_ELIGIBLE
+                    it.status == CacheUnitStatus.RUNNING
             }
             check(!unfinished || result == CacheResult.FAILED) {
                 "cannot finish cache task with unfinished units: task=${task.taskId} result=$result"
@@ -494,8 +490,7 @@ internal class CacheTaskStore(
                 val failedKeys = task.units
                     .filter {
                         it.status == CacheUnitStatus.PENDING ||
-                            it.status == CacheUnitStatus.RUNNING ||
-                            it.status == CacheUnitStatus.REVIEW_ELIGIBLE
+                            it.status == CacheUnitStatus.RUNNING
                     }
                     .map { it.key }
                 autoFailedUnits = failedKeys
@@ -579,8 +574,7 @@ internal class CacheTaskStore(
             }
             val skippable = task.units.filter {
                 it.status == CacheUnitStatus.PENDING ||
-                    it.status == CacheUnitStatus.RUNNING ||
-                    it.status == CacheUnitStatus.REVIEW_ELIGIBLE
+                    it.status == CacheUnitStatus.RUNNING
             }
             check(skippable.size == task.units.size) {
                 "cannot skip cache task after a unit reached a terminal state: task=${task.taskId}"
@@ -651,8 +645,7 @@ internal class CacheTaskStore(
         val failed = task.units.count { it.status == CacheUnitStatus.FAILED }
         val unfinished = task.units.any {
             it.status == CacheUnitStatus.PENDING ||
-                it.status == CacheUnitStatus.RUNNING ||
-                it.status == CacheUnitStatus.REVIEW_ELIGIBLE
+                it.status == CacheUnitStatus.RUNNING
         }
         return when {
             succeeded > 0 && failed > 0 -> CacheResult.PARTIAL
@@ -702,17 +695,6 @@ internal class CacheTaskStore(
             sessions[sessionId]?.tasks?.firstOrNull {
                 it.kind == kind && it.phase == phase && it.bookUrl == bookUrl
             }
-        }
-
-    fun reviewEligibleUnits(sessionId: String, prerequisiteTaskId: String): List<CacheUnitKey> =
-        synchronized(lock) {
-            val task = requireTaskLocked(sessionId, prerequisiteTaskId)
-            require(task.kind.reviewPrerequisitePhase() == task.phase) {
-                "review eligibility requires a review-capable primary task"
-            }
-            task.units
-                .filter { it.status == CacheUnitStatus.SUCCEEDED }
-                .map { it.key }
         }
 
     private fun attachWorkerLocked(task: CacheTaskState): CacheWorkerLease {
@@ -836,7 +818,6 @@ internal class CacheTaskStore(
         CacheUnitStatus.SUCCEEDED,
         CacheUnitStatus.FAILED,
         CacheUnitStatus.SKIPPED,
-        CacheUnitStatus.REVIEW_BLOCKED,
         CacheUnitStatus.NOT_APPLICABLE,
         CacheUnitStatus.CANCELLED,
     )
@@ -925,8 +906,6 @@ internal class CacheTaskStore(
         if (from == to) return true
         return when (from) {
             CacheUnitStatus.PENDING -> to == CacheUnitStatus.RUNNING ||
-                to == CacheUnitStatus.REVIEW_ELIGIBLE ||
-                to == CacheUnitStatus.REVIEW_BLOCKED ||
                 to == CacheUnitStatus.NOT_APPLICABLE ||
                 to == CacheUnitStatus.SKIPPED ||
                 to == CacheUnitStatus.CANCELLED
@@ -934,14 +913,9 @@ internal class CacheTaskStore(
                 to == CacheUnitStatus.FAILED ||
                 to == CacheUnitStatus.SKIPPED ||
                 to == CacheUnitStatus.CANCELLED
-            CacheUnitStatus.REVIEW_ELIGIBLE -> to == CacheUnitStatus.RUNNING ||
-                to == CacheUnitStatus.REVIEW_BLOCKED ||
-                to == CacheUnitStatus.SKIPPED ||
-                to == CacheUnitStatus.CANCELLED
             CacheUnitStatus.SUCCEEDED,
             CacheUnitStatus.FAILED,
             CacheUnitStatus.SKIPPED,
-            CacheUnitStatus.REVIEW_BLOCKED,
             CacheUnitStatus.NOT_APPLICABLE,
             CacheUnitStatus.CANCELLED -> false
         }
@@ -988,33 +962,44 @@ internal class CacheTaskStore(
     private fun restore(snapshot: CacheSnapshot) {
         synchronized(lock) {
             snapshot.sessions.forEach { savedSession ->
-                val recoveredTasks = savedSession.tasks.map { task ->
-                    when (task.status) {
-                        CacheLifecycle.RUNNING -> task.copy(
-                            status = CacheLifecycle.INTERRUPTED,
-                            generation = task.generation + 1,
-                            updatedAt = System.currentTimeMillis(),
-                        )
-                        CacheLifecycle.CANCELLING -> task.copy(
-                            units = closeUnfinishedUnits(
-                                task.units,
-                                status = CacheUnitStatus.CANCELLED,
-                                error = "task cancelled during process recovery",
-                            ),
-                            status = CacheLifecycle.CANCELLED,
-                            result = CacheResult.CANCELLED,
-                            generation = task.generation + 1,
-                            terminalEffectsPending = true,
-                            updatedAt = System.currentTimeMillis(),
-                        )
-                        CacheLifecycle.PAUSING -> task.copy(
-                            status = CacheLifecycle.PAUSED,
-                            generation = task.generation + 1,
-                            updatedAt = System.currentTimeMillis(),
-                        )
-                        else -> task
+                val recoveredTasks = savedSession.tasks
+                    .filter { (it.phase as Any?) != null }
+                    .map { rawTask ->
+                        val sanitizedUnits = rawTask.units.map { unit ->
+                            if ((unit.status as Any?) == null) {
+                                unit.copy(status = CacheUnitStatus.CANCELLED)
+                            } else {
+                                unit
+                            }
+                        }
+                        val task = rawTask.copy(units = sanitizedUnits)
+                        when (task.status) {
+                            CacheLifecycle.RUNNING -> task.copy(
+                                status = CacheLifecycle.INTERRUPTED,
+                                generation = task.generation + 1,
+                                updatedAt = System.currentTimeMillis(),
+                            )
+                            CacheLifecycle.CANCELLING -> task.copy(
+                                units = closeUnfinishedUnits(
+                                    task.units,
+                                    status = CacheUnitStatus.CANCELLED,
+                                    error = "task cancelled during process recovery",
+                                ),
+                                status = CacheLifecycle.CANCELLED,
+                                result = CacheResult.CANCELLED,
+                                generation = task.generation + 1,
+                                terminalEffectsPending = true,
+                                updatedAt = System.currentTimeMillis(),
+                            )
+                            CacheLifecycle.PAUSING -> task.copy(
+                                status = CacheLifecycle.PAUSED,
+                                generation = task.generation + 1,
+                                updatedAt = System.currentTimeMillis(),
+                            )
+                            else -> task
+                        }
                     }
-                }
+                if (recoveredTasks.isEmpty()) return@forEach
                 val recovered = aggregateSession(savedSession.copy(tasks = recoveredTasks))
                 sessions[recovered.sessionId] = recovered
                 record(

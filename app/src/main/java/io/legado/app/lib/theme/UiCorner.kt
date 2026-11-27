@@ -8,6 +8,7 @@ import android.graphics.Color
 import android.graphics.ColorFilter
 import android.graphics.Matrix
 import android.graphics.Paint
+import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.RectF
 import android.graphics.Shader
@@ -21,6 +22,10 @@ import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.pkg.WallpaperScaleMode
+import io.legado.app.help.config.pkg.WallpaperTransform
+import io.legado.app.help.config.pkg.drawTransformedBitmap
+import io.legado.app.lib.theme.UiCorner
 import io.legado.app.utils.BitmapUtils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.getPrefInt
@@ -199,11 +204,17 @@ object UiCorner {
         val mode = context.getPrefString(
             if (AppConfig.isNightTheme) PreferKey.panelBgScaleTypeN else PreferKey.panelBgScaleType
         ) ?: ThemeConfig.PANEL_BG_CROP
+        val transform = WallpaperTransform.decode(
+            context.getPrefString(
+                if (AppConfig.isNightTheme) PreferKey.panelBgTransformN else PreferKey.panelBgTransform
+            )
+        ) ?: WallpaperTransform.fromLegacyPanelScaleType(mode)
         return RoundedBitmapDrawable(
             bitmap = bitmap,
             radius = radius,
-            fitInside = mode == ThemeConfig.PANEL_BG_FIT,
-            alphaMultiplier = alphaMultiplier
+            fitInside = transform.mode == WallpaperScaleMode.FIT,
+            alphaMultiplier = alphaMultiplier,
+            transform = transform
         )
     }
 
@@ -355,32 +366,44 @@ object UiCorner {
         private val bitmap: Bitmap,
         private val radius: Float,
         private val fitInside: Boolean,
-        alphaMultiplier: Float = 1f
+        alphaMultiplier: Float = 1f,
+        private val transform: WallpaperTransform = if (fitInside) {
+            WallpaperTransform(mode = WallpaperScaleMode.FIT)
+        } else {
+            WallpaperTransform.DEFAULT
+        }
     ) : Drawable() {
 
-        private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            shader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
+        private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
             alpha = (layoutAlpha() * alphaMultiplier.coerceIn(1f, 4f) * 255).toInt().coerceIn(0, 255)
         }
+        private val tileShader by lazy(LazyThreadSafetyMode.NONE) {
+            if (transform.mode == WallpaperScaleMode.TILE && !bitmap.isRecycled) {
+                BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+            } else {
+                null
+            }
+        }
         private val rect = RectF()
-        private val matrix = Matrix()
+        private val path = Path()
 
         override fun draw(canvas: Canvas) {
             val bounds = bounds
-            if (bounds.isEmpty) return
+            if (bounds.isEmpty || bitmap.isRecycled) return
             rect.set(bounds)
-            val scale = if (fitInside) {
-                minOf(bounds.width() / bitmap.width.toFloat(), bounds.height() / bitmap.height.toFloat())
-            } else {
-                maxOf(bounds.width() / bitmap.width.toFloat(), bounds.height() / bitmap.height.toFloat())
-            }
-            val dx = bounds.left + (bounds.width() - bitmap.width * scale) / 2f
-            val dy = bounds.top + (bounds.height() - bitmap.height * scale) / 2f
-            matrix.reset()
-            matrix.setScale(scale, scale)
-            matrix.postTranslate(dx, dy)
-            paint.shader?.setLocalMatrix(matrix)
-            canvas.drawRoundRect(rect, radius, radius, paint)
+            path.reset()
+            path.addRoundRect(rect, radius, radius, Path.Direction.CW)
+            val saveCount = canvas.save()
+            canvas.clipPath(path)
+            drawTransformedBitmap(
+                canvas = canvas,
+                bitmap = bitmap,
+                bounds = rect,
+                transform = transform,
+                paint = paint,
+                tileShader = tileShader
+            )
+            canvas.restoreToCount(saveCount)
         }
 
         override fun setAlpha(alpha: Int) {

@@ -8,12 +8,11 @@ import androidx.webkit.WebViewFeature
 import io.legado.app.help.config.AppConfig
 
 /**
- * 配置 WebView 是否只允许离线资源。
+ * 配置 WebView 的离线资源加载隔离。
  *
- * [WebSettings.blockNetworkImage] 不能用于离线隔离：它会在
- * WebViewClient.shouldInterceptRequest 之前拦掉 review-resource:// 图片。
- * http/https 的隔离统一交给 [WebSettings.blockNetworkLoads]，自定义 scheme
- * 仍可进入应用自己的资源解析器。
+ * 通过 [WebSettings.blockNetworkLoads] 控制是否拦截所有外部网络请求；
+ * 离线快照按纯文降级展示，仅保留内联 `data:` 内容，不启用
+ * [WebSettings.blockNetworkImage] 以保持内联图片与在线模式行为一致。
  */
 fun WebSettings.configureOfflineResourceLoading(offline: Boolean) {
     blockNetworkLoads = offline

@@ -24,11 +24,15 @@ import io.legado.app.model.ReadBookChapterIndexPolicy
 import io.legado.app.help.cache.CacheLifecycle
 import io.legado.app.help.cache.CachePhase
 import io.legado.app.help.cache.CacheSubmission
+import io.legado.app.help.review.ReviewSnapshotStore
+import io.legado.app.help.review.ReviewWindowPrefetcher
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.cloud.S3ContainerScope
 import io.legado.app.lib.dialogs.AndroidAlertBuilder
+import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.primaryTextColor
+import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.gone
 import io.legado.app.utils.cnCompare
 import io.legado.app.utils.applyTint
@@ -444,7 +448,35 @@ class CacheManageActivity :
     }
 
     private fun openReviewSnapshots(item: CacheBookItem) {
-        showDialogFragment(ReviewSnapshotStatusDialog.newInstance(item.book))
+        lifecycleScope.launch {
+            val (chapterCount, totalBytes) = withContext(Dispatchers.IO) {
+                ReviewSnapshotStore.chapterUrls(item.book).size to
+                    ReviewSnapshotStore.totalBytes(item.book)
+            }
+            if (chapterCount == 0 && totalBytes == 0L) {
+                toastOnUi(R.string.cache_manage_review_empty)
+                return@launch
+            }
+            val sizeText = ConvertUtils.formatFileSize(totalBytes)
+            val statsLine = getString(R.string.cache_manage_review_stats, chapterCount, sizeText)
+            val confirmBody = getString(R.string.cache_manage_review_clear_confirm, sizeText)
+            alert(
+                getString(R.string.cache_manage_review_clear),
+                "$statsLine\n\n$confirmBody",
+            ) {
+                yesButton {
+                    lifecycleScope.launch {
+                        val removed = withContext(Dispatchers.IO) {
+                            ReviewWindowPrefetcher.clearCooldown(item.book.bookUrl)
+                            ReviewSnapshotStore.clearAll(item.book)
+                        }
+                        toastOnUi(getString(R.string.cache_manage_review_cleared, removed))
+                        viewModel.load()
+                    }
+                }
+                noButton()
+            }
+        }
     }
 
     private fun selectSource(item: CacheBookItem) {

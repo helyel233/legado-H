@@ -47,6 +47,7 @@ import io.legado.app.data.dao.SearchKeywordDao
 import io.legado.app.data.dao.ServerDao
 import io.legado.app.data.dao.SourceRecycleBinDao
 import io.legado.app.data.dao.PendingReviewCommentDao
+import io.legado.app.data.dao.ReviewCacheDao
 import io.legado.app.data.dao.BookCollectionDao
 import io.legado.app.data.dao.HomepageCustomSetDao
 import io.legado.app.data.dao.BookIllustrationDao
@@ -82,6 +83,7 @@ import io.legado.app.data.entities.KeyboardAssist
 import io.legado.app.data.entities.ParagraphRule
 import io.legado.app.data.entities.ParagraphRuleVar
 import io.legado.app.data.entities.PendingReviewComment
+import io.legado.app.data.entities.ReviewCache
 import io.legado.app.data.entities.BookCollection
 import io.legado.app.data.entities.BookCollectionChild
 import io.legado.app.data.entities.BookCollectionItem
@@ -124,7 +126,7 @@ val appDb by lazy {
 }
 
 @Database(
-    version = 118,
+    version = 119,
     exportSchema = true,
     entities = [Book::class, BookGroup::class, BookSource::class, BookChapter::class,
         ReplaceRule::class, SearchBook::class, SearchKeyword::class, Cookie::class,
@@ -144,6 +146,7 @@ val appDb by lazy {
         AiMemoryItem::class, AiMemoryFragment::class, AiMemoryItemFts::class, AiMemoryFragmentFts::class,
         LibraryContentFts::class,
         AutoTaskRule::class, SourceRecycleBin::class, PendingReviewComment::class,
+        ReviewCache::class,
         BookCollection::class, BookCollectionItem::class, BookCollectionChild::class,
         HomepageModule::class, HomepageCustomSet::class, BookIllustration::class],
     views = [BookSourcePart::class],
@@ -238,6 +241,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract val autoTaskRuleDao: AutoTaskRuleDao
     abstract val sourceRecycleBinDao: SourceRecycleBinDao
     abstract val pendingReviewCommentDao: PendingReviewCommentDao
+    abstract val reviewCacheDao: ReviewCacheDao
 
     abstract val bookCollectionDao: BookCollectionDao
     abstract val bookIllustrationDao: BookIllustrationDao

@@ -29,6 +29,7 @@ import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.TopBarConfig
+import io.legado.app.help.config.pkg.WallpaperTransform
 import io.legado.app.lib.theme.ThemeTokenCompiler
 import io.legado.app.lib.theme.TopBarChromeSpec
 import io.legado.app.lib.theme.TopBarSearchStyle
@@ -740,13 +741,18 @@ class MainTopBarView @JvmOverloads constructor(
                 fallbackColor = Color.TRANSPARENT
             )
         } else {
-            val file = TopBarConfig.currentWallpaperFile(context, AppConfig.isNightTheme)
+            val isNight = AppConfig.isNightTheme
+            val file = TopBarConfig.currentWallpaperFile(context, isNight)
             val alpha = config.wallpaperAlpha.coerceIn(0, 100) / 100f
+            val transform = WallpaperTransform.decode(
+                context.getPrefString(if (isNight) PreferKey.topBarBgTransformN else PreferKey.topBarBgTransform)
+            )
             ComposeThemeImageState(
                 file = file,
                 animated = ImageTypeUtils.isAnimatedImage(file),
                 alpha = alpha,
                 crop = topBarWallpaperCrop(config),
+                transform = transform,
                 fallbackColor = TopBarConfig.withOpacity(
                     TopBarConfig.resolveBackgroundColor(config),
                     config.wallpaperAlpha

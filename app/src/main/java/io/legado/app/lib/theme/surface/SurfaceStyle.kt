@@ -7,6 +7,7 @@ import io.legado.app.R
 import io.legado.app.constant.PreferKey
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.pkg.WallpaperTransform
 import io.legado.app.lib.theme.ThemeTokenCompiler
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.utils.ColorUtils
@@ -26,7 +27,8 @@ data class SurfaceStyle(
     val strokeWidthPx: Float = 0f,
     val blurRadiusPx: Int = 0,
     val backdropImagePath: String? = null,
-    val backdropImageFitInside: Boolean = false
+    val backdropImageFitInside: Boolean = false,
+    val backdropImageTransform: WallpaperTransform? = null
 )
 
 enum class SurfaceCorners {
@@ -67,6 +69,15 @@ object SurfaceStyles {
         return context.getPrefString(key) == ThemeConfig.PANEL_BG_FIT
     }
 
+    fun themePanelImageTransform(context: Context): WallpaperTransform? {
+        if (AppConfig.isEInkMode) return null
+        val transformKey = if (AppConfig.isNightTheme) PreferKey.panelBgTransformN else PreferKey.panelBgTransform
+        val decoded = WallpaperTransform.decode(context.getPrefString(transformKey))
+        if (decoded != null) return decoded
+        val modeKey = if (AppConfig.isNightTheme) PreferKey.panelBgScaleTypeN else PreferKey.panelBgScaleType
+        return WallpaperTransform.fromLegacyPanelScaleType(context.getPrefString(modeKey))
+    }
+
     fun dialog(context: Context, corners: SurfaceCorners = SurfaceCorners.ALL): SurfaceStyle {
         val tokens = ThemeTokenCompiler.compileFromContext(context)
         val dialogScope = tokens.dialog
@@ -102,7 +113,8 @@ object SurfaceStyles {
             },
             blurRadiusPx = blurPx,
             backdropImagePath = themePanelImagePath(context),
-            backdropImageFitInside = themePanelImageFitInside(context)
+            backdropImageFitInside = themePanelImageFitInside(context),
+            backdropImageTransform = themePanelImageTransform(context)
         )
     }
 

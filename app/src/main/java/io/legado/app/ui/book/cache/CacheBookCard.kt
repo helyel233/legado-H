@@ -190,70 +190,95 @@ internal fun CacheBookCard(
                 }
             }
             Spacer(modifier = Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                CacheActionButton(
-                    text = stringResource(R.string.cache_manage_chapters),
-                    palette = palette,
-                    actionRadius = actionRadius,
-                    modifier = Modifier.weight(1f),
-                    enabled = hasLocalCache,
-                    accent = true,
-                    onClick = { onOpenChapters(item) }
+            val actions = buildList {
+                add(
+                    CacheBookActionSpec(
+                        text = stringResource(R.string.cache_manage_chapters),
+                        enabled = hasLocalCache,
+                        accent = true,
+                        onClick = { onOpenChapters(item) }
+                    )
                 )
-                CacheActionButton(
-                    text = stringResource(uploadActionLabelRes(item)),
-                    palette = palette,
-                    actionRadius = actionRadius,
-                    modifier = Modifier.weight(1f),
-                    enabled = (hasLocalCache || hasRemoteCache) && !taskLocked,
-                    onClick = {
-                        when {
-                            hasLocalCache && hasRemoteCache -> onSelectSyncAction(item)
-                            hasRemoteCache && !hasLocalCache -> onDownload(item)
-                            else -> onUpload(item)
+                add(
+                    CacheBookActionSpec(
+                        text = stringResource(uploadActionLabelRes(item)),
+                        enabled = (hasLocalCache || hasRemoteCache) && !taskLocked,
+                        onClick = {
+                            when {
+                                hasLocalCache && hasRemoteCache -> onSelectSyncAction(item)
+                                hasRemoteCache && !hasLocalCache -> onDownload(item)
+                                else -> onUpload(item)
+                            }
                         }
-                    }
+                    )
                 )
-                CacheActionButton(
-                    text = stringResource(R.string.cache_manage_review_snapshots),
-                    palette = palette,
-                    actionRadius = actionRadius,
-                    modifier = Modifier.weight(1f),
-                    onClick = { onOpenReviews(item) }
+                add(
+                    CacheBookActionSpec(
+                        text = stringResource(R.string.cache_manage_review_snapshots),
+                        onClick = { onOpenReviews(item) }
+                    )
                 )
                 if (item.manifest != null && hasLocalCache) {
-                    CacheActionButton(
-                        text = stringResource(
-                            if (item.inBookshelf) R.string.cache_manage_use_cache
-                            else R.string.cache_manage_add_bookshelf
-                        ),
-                        palette = palette,
-                        actionRadius = actionRadius,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onRestore(item) }
+                    add(
+                        CacheBookActionSpec(
+                            text = stringResource(
+                                if (item.inBookshelf) R.string.cache_manage_use_cache
+                                else R.string.cache_manage_add_bookshelf
+                            ),
+                            onClick = { onRestore(item) }
+                        )
                     )
                 }
                 if (isCaching || isPaused) {
-                    CacheActionButton(
-                        text = stringResource(if (isPaused) R.string.resume else R.string.pause),
-                        palette = palette,
-                        actionRadius = actionRadius,
-                        modifier = Modifier.weight(1f),
-                        onClick = { onStopAudio(item) }
+                    add(
+                        CacheBookActionSpec(
+                            text = stringResource(if (isPaused) R.string.resume else R.string.pause),
+                            onClick = { onStopAudio(item) }
+                        )
                     )
                 }
-                CacheActionButton(
-                    text = stringResource(R.string.delete),
-                    palette = palette,
-                    actionRadius = actionRadius,
-                    modifier = Modifier.weight(1f),
-                    enabled = (hasLocalCache || hasRemoteCache) && !taskLocked,
-                    onClick = { onDelete(item) }
+                add(
+                    CacheBookActionSpec(
+                        text = stringResource(R.string.delete),
+                        enabled = (hasLocalCache || hasRemoteCache) && !taskLocked,
+                        onClick = { onDelete(item) }
+                    )
                 )
+            }
+            val columns = if (actions.size == 4) 2 else 3
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                actions.chunked(columns).forEach { rowActions ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        rowActions.forEach { action ->
+                            CacheActionButton(
+                                text = action.text,
+                                palette = palette,
+                                actionRadius = actionRadius,
+                                modifier = Modifier.weight(1f),
+                                enabled = action.enabled,
+                                accent = action.accent,
+                                onClick = action.onClick
+                            )
+                        }
+                    }
+                }
             }
         }
     }
 }
+
+private data class CacheBookActionSpec(
+    val text: String,
+    val enabled: Boolean = true,
+    val accent: Boolean = false,
+    val onClick: () -> Unit
+)
 
 private fun uploadActionLabelRes(item: CacheBookItem): Int = when {
     item.localCachedCount > 0 && item.hasRemoteCache() -> R.string.cache_manage_sync_action

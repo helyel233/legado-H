@@ -56,7 +56,7 @@ import io.legado.app.help.book.ParagraphRuleJsExtensions
 import io.legado.app.help.WebCacheManager
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
-import io.legado.app.help.review.ReviewPreheatCoordinator
+import io.legado.app.help.review.ReviewWindowPrefetcher
 import io.legado.app.help.webView.PooledWebView
 import io.legado.app.help.webView.WebJsExtensions
 import io.legado.app.help.webView.WebJsExtensions.Companion.basicJs
@@ -86,6 +86,7 @@ import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.imageHttpClient
 import io.legado.app.help.http.readingHttpClient as okHttpClient
 import io.legado.app.help.http.text
+import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.themeColorOrNull
 import io.legado.app.help.webView.WebJsExtensions.Companion.JS_URL
 import io.legado.app.help.webView.WebJsExtensions.Companion.nameUrl
@@ -118,22 +119,14 @@ import io.legado.app.data.entities.Book
 import io.legado.app.help.review.REVIEW_ERROR_BRIDGE_NAME
 import io.legado.app.help.review.ReviewErrorKind
 import io.legado.app.help.review.ReviewErrorPageContent
+import io.legado.app.help.review.ReviewLiteTemplate
 import io.legado.app.help.review.ReviewParaContentInjector
-import io.legado.app.help.review.ReviewSnapshotImages
 import io.legado.app.help.review.ReviewSnapshotManager
 import io.legado.app.help.review.ReviewSnapshotRefreshPolicy
-import io.legado.app.help.review.ReviewSnapshotResourceStore
 import io.legado.app.help.review.ReviewSnapshotStore
-import io.legado.app.help.review.ReviewSupplementInjector
 import io.legado.app.help.review.SyntheticParaContent
 import io.legado.app.help.review.classifyReviewError
-import io.legado.app.help.review.injectSnapshotImageDeferralStyle
 import io.legado.app.help.review.reviewErrorPageHtml
-import io.legado.app.help.review.reviewPageIdentity
-import io.legado.app.help.review.reviewoutbox.ReviewOutboxBridge
-import io.legado.app.help.review.reviewoutbox.ReviewOutboxContext
-import io.legado.app.help.review.reviewoutbox.ReviewOutboxStore
-import io.legado.app.help.review.reviewoutbox.ReviewOutboxWireUp
 import io.legado.app.help.webView.WebViewHtmlStore
 import io.legado.app.utils.configureOfflineResourceLoading
 import io.legado.app.utils.gone
@@ -172,12 +165,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
          * 「慢但在动」和「完全不动」：前者继续等，后者 12 秒就给重试入口。
          */
         const val LOAD_STALL_TIMEOUT_MS = 12_000L
-
-        /**
-         * 「快照页发评要先开离线评论模式」引导的延后时长：
-         * 让网络失败兜底时那条「已切换到缓存」先弹，避免两条 toast 叠在一起。
-         */
-        const val SNAPSHOT_HINT_DELAY_MS = 1_200L
     }
 
     /**
@@ -304,13 +291,13 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     }
 
     /**
-     * 离线模式（仅使用快照/快照兜底已启用）：WebView 禁止一切 http/https 网络请求，
-     * 残余外部资源一律拦截，只允许 data: 与 review-resource:// 本地资源离线渲染。
+     * 离线模式（仅使用快照/快照兜底已启用）：离线纯文降级渲染，
+     * 仅允许 data: 内联内容，拦截外部 http/https 资源。
      */
     private var offlineMode = false
     private var webJsBridgeToken: String = WebJsExtensions.newBridgeToken()
 
-    /** Set only for review snapshots that may contain review-resource:// references. */
+    /** 评论快照所属书籍身份，用于恢复快照归属与离线降级渲染。 */
     private var reviewResourceBook: Book? = null
 
     /**
@@ -318,7 +305,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
      *
      * 身份定义（越权禁令）：
      * - 快照内容 = 唯一来源 [io.legado.app.help.review.ReviewSnapshotStore]，
-     *   抓取端已剥离 script、冻结 DOM、资源 review-resource 化，身份为离线；
+     *   抓取端已剥离 script、冻结 DOM，离线纯文降级渲染（仅允许 data: 内联内容，拦截外部 http/https 资源），身份为离线；
      *   仅它允许离线接管（资源拦截、章评/书评补充注入、楼中楼收展）。
      * - 在线内容 = showBrowser/网络带回的活页 HTML（脚本存活、评论靠 AJAX），
      *   身份为在线；禁止一切离线接管。
@@ -327,9 +314,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
      */
     @Volatile
     private var displayingSnapshotHtml = false
-
-    /** 离线评论入队上下文：非空时页面加载完成后注入离线评论接管脚本 */
-    private var outboxContext: ReviewOutboxContext? = null
 
     /** 合成段评入口（无泡段落）的目标段落：页面加载完成后注入段落原文回填脚本 */
     private var syntheticParaContent: SyntheticParaContent? = null
@@ -340,10 +324,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
 
     /** 检测到有新评论待用户/平滑应用的新版 (url, html) */
     private var pendingNetworkRefresh: Pair<String, String>? = null
-
-    /** 后台协程预处理的章评/书评补充注入脚本 */
-    private var preparedSupplementsDeferred: Deferred<String?>? = null
-    private var preparedSupplementsContextKey: String? = null
 
     private val mHandler = android.os.Handler(android.os.Looper.getMainLooper())
 
@@ -361,7 +341,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         fallbackSavedAt: Long = 0L,
         offlineOnly: Boolean = false,
         reviewResourceBook: Book? = null,
-        outboxContext: ReviewOutboxContext? = null,
         syntheticParaContent: SyntheticParaContent? = null,
         isSnapshotHtml: Boolean = false,
         htmlFileReference: String? = null,
@@ -388,7 +367,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         this.snapshotSavedAt = snapshotSavedAt
         offlineMode = offlineOnly
         this.reviewResourceBook = reviewResourceBook
-        this.outboxContext = outboxContext
         this.syntheticParaContent = syntheticParaContent
         arguments = Bundle().apply {
             putString("sourceKey", sourceKey)
@@ -408,7 +386,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             putString(ARG_SNAPSHOT_CHAPTER_URL, snapshotChapterUrl)
             putString(ARG_SNAPSHOT_BUTTON_SRC, snapshotButtonSrc)
             putLong(ARG_SNAPSHOT_SAVED_AT, snapshotSavedAt)
-            outboxContext?.putTo(this)
             syntheticParaContent?.putTo(this)
         }
     }
@@ -850,7 +827,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             // 必须从 arguments 恢复，不能依赖构造时赋值的字段。
             @Suppress("DEPRECATION")
             reviewResourceBook = args.getParcelable(ARG_REVIEW_RESOURCE_BOOK)
-            outboxContext = ReviewOutboxContext.fromBundle(args)
             syntheticParaContent = SyntheticParaContent.fromBundle(args)
             // 快照身份从 arguments 恢复：进程重建后 htmlDirect 丢失，靠它重新读本地快照
             snapshotChapterUrl = args.getString(ARG_SNAPSHOT_CHAPTER_URL) ?: snapshotChapterUrl
@@ -1000,8 +976,16 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                             if (headEnd >= 0) StringBuilder(html).insert(headEnd + 1, JS_URL).toString()
                             else JS_URL + html
                         }
-                        // 快照页图片让位：视口外图片不参与首屏布局与解码，正文先出来
-                        if (displayingSnapshotHtml) injectSnapshotImageDeferralStyle(spliced) else spliced
+                        if (displayingSnapshotHtml) {
+                            ReviewLiteTemplate.apply(
+                                spliced,
+                                AppConfig.isNightTheme,
+                                snapshotAccentHex(),
+                                offlineMode = offlineMode,
+                            )
+                        } else {
+                            spliced
+                        }
                     }
                     Triple(analyzeUrl.url, analyzeUrl.headerMap, spliceHtml)
                 }
@@ -1012,9 +996,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
                     initWebViewForUrl(document.first, document.second, bookType, lease)
                 } else {
                     displayedDocumentHtml = html
-                    if (displayingSnapshotHtml) {
-                        prepareReviewSupplementsIfNeeded(lease)
-                    }
                     val session = webViewSession
                     // 预热阶段可能已经把这一页渲染好了：内容指纹一致就直接接管，
                     // 省掉 loadDataWithBaseURL 的整段「跨进程传 HTML + 解析 + 布局 + 首帧」
@@ -1344,26 +1325,13 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         syntheticParaContent?.let { entry ->
             view.evaluateJavascript(ReviewParaContentInjector.buildJs(entry), null)
         }
-        // 离线评论模式：页面加载完成后注入接管脚本（快照=全接管，在线=拦截发评请求），
-        // 快照优先的在线覆盖页同样生效；注入幂等，脚本内部自带安装标记
-        val context = outboxContext
-        if (context != null && AppConfig.offlineReviewMode) {
-            view.evaluateJavascript(ReviewOutboxWireUp.buildJs(), null)
-            AppLog.putDebug(
-                "${ReviewOutboxStore.LogTag} 接管脚本已注入 " +
-                    "url=${url ?: ""} 书=${context.bookName} 章=${context.chapterTitle}"
-            )
-        }
-        // 快照显示中：立即同步主题并安装图片预览与预处理的章评/书评补充脚本，
-        // 避免首帧后再延迟 120ms 改变弹窗高度造成跳变
+        // 快照显示中：立即同步主题
         if (displayingSnapshotHtml) {
             val themeAttr = if (AppConfig.isNightTheme) "dark" else "light"
             view.evaluateJavascript(
                 "document.documentElement.setAttribute('data-theme', '$themeAttr');",
                 null
             )
-            ReviewSnapshotImages.install(view)
-            applyPreparedReviewSupplements(view, lease)
         }
         // 骨架收起的兜底：主流机型在 onPageCommitVisible 就已收起，API 21/22
         // 没有该回调，靠这里在加载结束时收起，避免占位条一直盖着内容。
@@ -1405,7 +1373,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
 
     private fun isReviewSheetContext(args: Bundle? = arguments): Boolean {
         return displayingSnapshotHtml ||
-            outboxContext != null ||
             networkRefresher != null ||
             fallbackHtml != null ||
             reviewResourceBook != null ||
@@ -1417,9 +1384,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     private fun updateReviewHeader(args: Bundle? = arguments) {
         val binding = currentBinding ?: return
         if (isReviewSheetContext(args)) {
-            binding.reviewHeaderTitle.text = outboxContext?.chapterTitle
-                ?.takeIf { it.isNotBlank() }
-                ?: getString(R.string.review)
+            binding.reviewHeaderTitle.text = getString(R.string.review)
             binding.reviewHeaderBar.visible()
             binding.reviewHeaderDivider.visible()
         } else {
@@ -1491,57 +1456,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         }
     }
 
-    /**
-     * 在后台协程提前完成数据库章节查询、快照读取与 Jsoup 解析预处理，
-     * 避免页面加载完成后在主线程或首帧后等待 IO/Jsoup。
-     */
-    private fun prepareReviewSupplementsIfNeeded(lease: WebViewRequestLifecycle) {
-        val context = outboxContext ?: return
-        val book = reviewResourceBook ?: return
-        val contextKey = "${book.bookUrl}|${context.chapterUrl}"
-        if (preparedSupplementsDeferred != null && preparedSupplementsContextKey == contextKey) {
-            return
-        }
-        preparedSupplementsDeferred?.cancel()
-        preparedSupplementsContextKey = contextKey
-        preparedSupplementsDeferred = lease.scope.async(IO) {
-            runCatching {
-                val chapter = context.chapterUrl.takeIf { it.isNotBlank() }?.let { chapterUrl ->
-                    appDb.bookChapterDao.getChapterByUrl(book.bookUrl, chapterUrl)
-                }
-                val chapterTab = chapter?.let {
-                    ReviewSnapshotStore.getChapterTab(book, it)
-                }
-                val bookTab = ReviewSnapshotStore.getBookTab(book)
-                withContext(Dispatchers.Default) {
-                    ReviewSupplementInjector.buildInjectionJs(chapterTab, bookTab)
-                }
-            }.getOrNull()
-        }
-    }
-
-    /**
-     * 注入后台预处理好的章评/书评补充脚本；若尚未启动预处理则立即触发后注入。
-     */
-    private fun applyPreparedReviewSupplements(view: WebView, lease: WebViewRequestLifecycle) {
-        val context = outboxContext ?: return
-        if (reviewResourceBook == null) return
-        prepareReviewSupplementsIfNeeded(lease)
-        val deferred = preparedSupplementsDeferred ?: return
-        lease.scope.launch(Dispatchers.Main) {
-            val js = deferred.await() ?: return@launch
-            if (!ownsLease(lease) || view !== currentWebView || !isAdded || isHidden) {
-                return@launch
-            }
-            view.evaluateJavascript(js) { result ->
-                AppLog.putDebug(
-                    "[评论快照] 章评/书评补充注入：${result ?: "null"} " +
-                        "书=${context.bookName} 章=${context.chapterTitle}"
-                )
-            }
-        }
-    }
-
     /** 内容已可见：收起加载骨架。重复调用无副作用。 */
     private fun hideLoadingSkeleton() {
         // 兜底任务（超时/失败页）可能在视图销毁后仍被投递到主线程，
@@ -1589,15 +1503,9 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         currentWebView.webChromeClient = CustomWebChromeClient(lease)
         currentWebView.addJavascriptInterface(JSInterface(this, lease), nameBasic)
         currentWebView.webViewClient = CustomWebViewClient(lease)
-        outboxContext?.let { context ->
-            currentWebView.addJavascriptInterface(
-                ReviewOutboxBridge(context),
-                ReviewOutboxWireUp.bridgeName
-            )
-        }
         currentWebView.settings.userAgentString = headerMap.get(AppConst.UA_NAME, true)
         currentWebView.settings.setDarkeningAllowed(AppConfig.isNightTheme)
-        // 离线快照禁止 http/https，但必须让 review-resource:// 图片进入资源拦截器。
+        // 离线纯文降级渲染：仅允许 data: 内联内容，拦截外部 http/https 资源。
         currentWebView.settings.configureOfflineResourceLoading(offlineMode)
         if (offlineMode) {
             currentWebView.removeJavascriptInterface(nameJava)
@@ -1648,30 +1556,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     private fun markDisplayingSnapshot(savedAt: Long) {
         displayingSnapshotHtml = true
         if (savedAt > 0L) snapshotSavedAt = savedAt
-        maybeHintOfflineReviewMode()
-    }
-
-    /**
-     * 快照页是离线身份：没开「离线评论模式」时，页面里的发评/点赞没有网络可发，
-     * 用户敲完字点发送只会石沉大海。第一次遇到快照时提示一次（记在 LocalConfig），
-     * 之后不再打扰——这是引导，不是每次开窗都弹的告诫。
-     *
-     * 延后一会儿再弹：网络失败切快照的路径紧接着要弹「已切换到缓存评论」，
-     * 立即弹会叠成两条；[notifyFallbackShown] 会撤掉这条待弹提示。
-     */
-    private fun maybeHintOfflineReviewMode() {
-        if (AppConfig.offlineReviewMode) return
-        if (LocalConfig.reviewSnapshotOfflineHintShown) return
-        mHandler.removeCallbacks(snapshotHintRunnable)
-        mHandler.postDelayed(snapshotHintRunnable, SNAPSHOT_HINT_DELAY_MS)
-    }
-
-    private val snapshotHintRunnable = Runnable {
-        if (AppConfig.offlineReviewMode) return@Runnable
-        if (LocalConfig.reviewSnapshotOfflineHintShown) return@Runnable
-        if (!isAdded || activity == null) return@Runnable
-        LocalConfig.reviewSnapshotOfflineHintShown = true
-        activity?.toastOnUi(R.string.review_snapshot_offline_hint)
     }
 
     private fun cancelFallbackTimeout() {
@@ -1679,13 +1563,25 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         fallbackTimeoutRunnable = null
     }
 
+    private fun snapshotAccentHex(): String {
+        return runCatching {
+            val color = context?.accentColor ?: return "#3B82F6"
+            String.format("#%06X", 0xFFFFFF and color)
+        }.getOrDefault("#3B82F6")
+    }
+
     /** 网络优先兑底：网络加载失败/真正超时后切换为本地评论快照 */
     private fun applyFallbackSnapshot() {
-        val html = fallbackHtml ?: return
+        val rawHtml = fallbackHtml ?: return
         if (fallbackApplied) return
         fallbackApplied = true
         cancelFallbackTimeout()
-        val lease = requestLifecycle?.takeIf(::ownsLease) ?: return
+        val html = ReviewLiteTemplate.apply(
+            rawHtml,
+            AppConfig.isNightTheme,
+            snapshotAccentHex(),
+            offlineMode = true,
+        )
         // 兑底快照属于离线内容：切换后禁止一切网络请求
         offlineMode = true
         markDisplayingSnapshot(fallbackSnapshotSavedAt)
@@ -1693,7 +1589,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         hideUpdateBanner()
         updateReviewHeader()
         expandSnapshotSheet(force = true)
-        prepareReviewSupplementsIfNeeded(lease)
         // 内容来源从在线换成了缓存：得让用户知道「现在看到的是旧内容」，
         // 否则会把过期评论当成最新状态去点赞/回复
         notifyFallbackShown()
@@ -1718,8 +1613,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
      */
     /**
      * 快照来源标识：显示的是缓存快照时浮出「快照」徽章，
-     * 让用户知道当前看到的不是实时内容（尤其 SNAPSHOT_FIRST 被静默替换、
-     * SNAPSHOT_ONLY 直接打开旧快照的场景）。在线覆盖后收起。
+     * 让用户知道当前看到的不是实时内容（尤其 SNAPSHOT_FIRST 缓存秒开或网络失败兜底的场景）。
+     * 在线覆盖后收起。
      */
     private fun updateSourceBadge() {
         val badge = currentBinding?.reviewSourceBadge ?: return
@@ -1736,7 +1631,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
             }
             // 超过保鲜期（TTL>0 且 savedAt 有效）才标「已过期」；
             // savedAt=0 说明抓取时间未知，不武断标记
-            val stale = snapshotSavedAt > 0L && ReviewPreheatCoordinator.isStale(
+            val stale = snapshotSavedAt > 0L && ReviewWindowPrefetcher.isStale(
                 snapshotSavedAt, System.currentTimeMillis(), AppConfig.reviewSnapshotTtlDays
             )
             badge.text = if (stale) {
@@ -1753,8 +1648,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     private fun notifyFallbackShown() {
         if (fallbackNoticeShown) return
         fallbackNoticeShown = true
-        // 这条本身就是「内容是缓存」的说明，离线评论引导让位（下次直接开快照时再提示）
-        mHandler.removeCallbacks(snapshotHintRunnable)
         activity?.toastOnUi(getString(R.string.review_fallback_snapshot_toast))
     }
 
@@ -1790,9 +1683,8 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         if (!ownsPage(lease, page)) return
         val context = requireContext()
         Coroutine.async(page.scope) {
-            val local = ReviewSnapshotImages.readLocal(reviewResourceBook, webPic)
-            val fileName = "${AppConst.fileNameFormat.format(Date(System.currentTimeMillis()))}.${local?.first ?: "jpg"}"
-            val byteArray = local?.second ?: webData2bitmap(webPic) ?: throw NoStackTraceException("NULL")
+            val fileName = "${AppConst.fileNameFormat.format(Date(System.currentTimeMillis()))}.jpg"
+            val byteArray = webData2bitmap(webPic) ?: throw NoStackTraceException("NULL")
             uri.writeBytes(context, fileName, byteArray)
         }.onError {
             if (!ownsPage(lease, page)) return@onError
@@ -1821,10 +1713,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
     }
 
     override fun onDestroyView() {
-        mHandler.removeCallbacks(snapshotHintRunnable)
-        preparedSupplementsDeferred?.cancel()
-        preparedSupplementsDeferred = null
-        preparedSupplementsContextKey = null
         pendingNetworkRefresh = null
         displayedDocumentHtml = null
         closeViewRequests()
@@ -2237,9 +2125,6 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         private fun shouldOverrideUrlLoading(url: Uri): Boolean {
             val page = lease.currentPage() ?: return true
             if (!ownsPage(lease, page)) return true
-            if (displayingSnapshotHtml &&
-                ReviewSnapshotImages.open(requireActivity(), reviewResourceBook, url)
-            ) return true
             return when (url.scheme) {
                 "http", "https" -> false
                 "legado", "yuedu" -> {
@@ -2273,13 +2158,7 @@ class BottomWebViewDialog() : BottomSheetDialogFragment(R.layout.dialog_web_view
         ): WebResourceResponse? {
             if (!ownsLease(lease) || view !== currentWebView) return cancelledResponse()
             val url = request.url.toString()
-            ReviewSnapshotResourceStore.keyFromReference(url)?.let { key ->
-                val resource = reviewResourceBook?.let { ReviewSnapshotResourceStore.open(it, key) }
-                    ?: return emptyResponse()
-                return WebResourceResponse(resource.mimeType, null, resource.inputStream)
-            }
-            // 仅使用快照/快照兑底（离线模式）：http/https 请求一律拦掉，
-            // 快照只允许 data:// 或 review-resource:// 本地资源离线渲染，残余外部资源不联网
+            // 离线纯文降级渲染（仅使用快照/快照兜底）：仅允许 data: 内联内容，拦截外部 http/https 资源
             if (offlineMode &&
                 (request.url.scheme == "http" || request.url.scheme == "https")
             ) {

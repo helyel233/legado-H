@@ -69,39 +69,9 @@ class AudioTaskProjectionTest {
     }
 
     @Test
-    fun activeMediaWinsOverActiveReview() {
-        val media = task(phase = CachePhase.MEDIA, status = CacheLifecycle.RUNNING)
-        val review = task(phase = CachePhase.REVIEW, status = CacheLifecycle.RUNNING)
-        val projected = projectAll(media, review).getValue(media.bookUrl)
-
-        assertEquals(CacheTaskStatus.CACHING, projected.status)
-        assertEquals(media.units.size, projected.totalChapters)
-    }
-
-    @Test
-    fun activeReviewWinsOverTerminalMedia() {
-        val media = task(
-            phase = CachePhase.MEDIA,
-            status = CacheLifecycle.COMPLETED,
-            updatedAt = 100L,
-            units = listOf(unit("book", 0), unit("book", 1)),
-        )
-        val review = task(
-            phase = CachePhase.REVIEW,
-            status = CacheLifecycle.RUNNING,
-            updatedAt = 10L,
-            units = listOf(unit("book", 0)),
-        )
-        val projected = projectAll(media, review).getValue("book")
-
-        assertEquals(CacheTaskStatus.CACHING, projected.status)
-        assertEquals(1, projected.totalChapters)
-    }
-
-    @Test
     fun latestTerminalTaskSelectedWhenNoActiveTasks() {
         val older = task(
-            phase = CachePhase.REVIEW,
+            phase = CachePhase.MEDIA,
             status = CacheLifecycle.COMPLETED,
             updatedAt = 50L,
         )
@@ -185,7 +155,7 @@ class AudioTaskProjectionTest {
     @Test
     fun onlyAudioDomainTasksAreProjected() {
         val textBody = task(kind = CacheKind.TEXT, phase = CachePhase.BODY)
-        val textReview = task(kind = CacheKind.TEXT, phase = CachePhase.REVIEW)
+        val textReview = task(kind = CacheKind.TEXT, phase = CachePhase.TTS)
         val video = task(kind = CacheKind.VIDEO, phase = CachePhase.MEDIA, bookUrl = "video")
 
         val result = projectAll(textBody, textReview, video)

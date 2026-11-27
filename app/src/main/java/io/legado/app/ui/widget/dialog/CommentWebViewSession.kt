@@ -16,8 +16,6 @@ import android.webkit.WebViewClient
 import io.legado.app.data.entities.Book
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.review.REVIEW_ERROR_BRIDGE_NAME
-import io.legado.app.help.review.ReviewSnapshotResourceStore
-import io.legado.app.help.review.reviewPageIdentity
 import io.legado.app.help.webView.PooledWebView
 import io.legado.app.help.webView.WebJsExtensions
 import io.legado.app.ui.rss.read.VisibleWebView
@@ -165,7 +163,6 @@ class CommentWebViewSession {
         pooled.prerenderIdentity = identity
         pooled.prerenderReady = false
         pooled.prerenderTime = System.currentTimeMillis()
-        val book = request.book
         val html = request.html
         val baseUrl = request.baseUrl
         webView.run {
@@ -185,13 +182,6 @@ class CommentWebViewSession {
                     request: WebResourceRequest,
                 ): WebResourceResponse? {
                     if (pooled.prerenderIdentity != identity || pooled.isInUse) return null
-                    val url = request.url.toString()
-                    val key = ReviewSnapshotResourceStore.keyFromReference(url)
-                    if (key != null) {
-                        val resource = book?.let { ReviewSnapshotResourceStore.open(it, key) }
-                            ?: return emptyResponse()
-                        return WebResourceResponse(resource.mimeType, null, resource.inputStream)
-                    }
                     // 离线快照页不联网：图片、字体等外部请求一律空应答
                     val scheme = request.url.scheme
                     if (scheme == "http" || scheme == "https") return emptyResponse()
@@ -274,7 +264,7 @@ class CommentWebViewSession {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             domStorageEnabled = true
             mediaPlaybackRequiresUserGesture = false
-            // 禁 content://（同 WebViewPool）；快照图片走 review-resource:// 定制 scheme
+            // 禁 content://（同 WebViewPool）
             allowContentAccess = false
             builtInZoomControls = true
             displayZoomControls = false
@@ -440,3 +430,21 @@ class CommentWebViewSession {
         private const val PRERENDER_TTL_MS = 5 * 60 * 1000L
     }
 }
+
+/**
+ * 快照页内容指纹：只有内容与渲染条件完全一致，才允许复用已经渲染好的 WebView。
+ *
+ * 参与指纹的除了 HTML 内容本身，还有会影响渲染结果的两个外部条件：
+ * 夜间模式（算法暗化会改写绘制）与文字缩放比例（会改写布局）。
+ * 任何一项变化都必须判定为不同页面，否则会拿到上一种配色/字号的成品页。
+ */
+internal fun reviewPageIdentity(html: String, nightMode: Boolean, textZoom: Int): String =
+    buildString(48) {
+        append(html.length)
+        append(':')
+        append(html.hashCode())
+        append(':')
+        append(if (nightMode) 'N' else 'D')
+        append(':')
+        append(textZoom)
+    }

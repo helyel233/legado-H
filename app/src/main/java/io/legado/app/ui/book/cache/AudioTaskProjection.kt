@@ -54,9 +54,9 @@ data class AudioTaskMessageFacts(
 /**
  * 缓存协调器状态 → 缓存管理页音频任务展示模型的投影。
  *
- * 每本书最多生成一个代表任务：活跃任务优先（MEDIA 优先于 REVIEW），
+ * 每本书最多生成一个代表任务：活跃任务优先，
  * 无活跃任务时取最近更新的终态任务，供列表完成刷新与卡片终态消息使用。
- * 投影只覆盖音视频领域（AUDIO/VIDEO 的 MEDIA/REVIEW 任务），正文与 TTS 任务不会进入音频卡片。
+ * 投影只覆盖音视频领域（AUDIO/VIDEO 的 MEDIA 任务），正文与 TTS 任务不会进入音频卡片。
  */
 object AudioTaskProjection {
 
@@ -107,13 +107,13 @@ object AudioTaskProjection {
 
     private fun CacheTaskState.isAudioDomainTask(): Boolean {
         return (kind == CacheKind.AUDIO || kind == CacheKind.VIDEO) &&
-            (phase == CachePhase.MEDIA || phase == CachePhase.REVIEW)
+            phase == CachePhase.MEDIA
     }
 
     private fun List<CacheTaskState>.representativeTask(): CacheTaskState? {
         val active = filterNot { CacheLifecycleRules.isTerminal(it.status) }
         if (active.isNotEmpty()) {
-            return active.firstOrNull { it.phase == CachePhase.MEDIA } ?: active.first()
+            return active.first()
         }
         return maxByOrNull { it.updatedAt }
     }

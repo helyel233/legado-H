@@ -1,6 +1,7 @@
 package io.legado.app.lib.theme.surface
 
 import android.graphics.Bitmap
+import android.graphics.BitmapShader
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.Outline
@@ -9,7 +10,10 @@ import android.graphics.Path
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.drawable.Drawable
+import io.legado.app.help.config.pkg.WallpaperScaleMode
+import io.legado.app.help.config.pkg.drawTransformedBitmap
 import kotlin.math.roundToInt
 
 /**
@@ -33,6 +37,14 @@ class SurfaceDrawable(
         strokeWidth = this@SurfaceDrawable.style.strokeWidthPx
     }
     private var drawableAlpha = 255
+    private val tileShader by lazy(LazyThreadSafetyMode.NONE) {
+        val t = this@SurfaceDrawable.style.backdropImageTransform
+        if (t?.mode == WallpaperScaleMode.TILE && backdrop != null && !backdrop.isRecycled) {
+            BitmapShader(backdrop, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        } else {
+            null
+        }
+    }
 
     override fun onBoundsChange(bounds: Rect) {
         super.onBoundsChange(bounds)
@@ -45,7 +57,17 @@ class SurfaceDrawable(
         canvas.clipPath(path)
         backdrop?.takeUnless(Bitmap::isRecycled)?.let {
             backdropPaint.alpha = drawableAlpha
-            if (style.backdropImageFitInside) {
+            val customTransform = style.backdropImageTransform
+            if (customTransform != null) {
+                drawTransformedBitmap(
+                    canvas = canvas,
+                    bitmap = it,
+                    bounds = boundsF,
+                    transform = customTransform,
+                    paint = backdropPaint,
+                    tileShader = tileShader
+                )
+            } else if (style.backdropImageFitInside) {
                 canvas.drawBitmap(it, null, fitCenterRect(it, boundsF), backdropPaint)
             } else {
                 canvas.drawBitmap(it, centerCropSrcRect(it, boundsF), bounds, backdropPaint)

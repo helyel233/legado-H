@@ -2586,6 +2586,19 @@ object UnifiedPackageRepository {
     }
 
     private fun captureWallpapers(context: Context, isNight: Boolean): ArtWallpapersSpec {
+        val transforms = buildMap {
+            fun putTransform(slot: String, key: String) {
+                WallpaperTransform.decode(context.getPrefString(key))
+                    ?.takeUnless { it.isDefault }
+                    ?.let { put(slot, it) }
+            }
+            putTransform(WallpaperTransform.SLOT_MAIN, if (isNight) PreferKey.bgImageTransformN else PreferKey.bgImageTransform)
+            putTransform(WallpaperTransform.SLOT_TOP_BAR, if (isNight) PreferKey.topBarBgTransformN else PreferKey.topBarBgTransform)
+            putTransform(WallpaperTransform.SLOT_BOTTOM_BAR, if (isNight) PreferKey.bottomBarBgTransformN else PreferKey.bottomBarBgTransform)
+            putTransform(WallpaperTransform.SLOT_BOOK_INFO, if (isNight) PreferKey.bookInfoBgTransformN else PreferKey.bookInfoBgTransform)
+            putTransform(WallpaperTransform.SLOT_PANEL, if (isNight) PreferKey.panelBgTransformN else PreferKey.panelBgTransform)
+            putTransform(WallpaperTransform.SLOT_WELCOME, if (isNight) PreferKey.welcomeBgTransformN else PreferKey.welcomeBgTransform)
+        }
         return ArtWallpapersSpec(
             main = context.getPrefString(if (isNight) PreferKey.bgImageN else PreferKey.bgImage),
             mainCrop = context.getPrefString(if (isNight) PreferKey.bgImageNCrop else PreferKey.bgImageCrop),
@@ -2595,11 +2608,14 @@ object UnifiedPackageRepository {
                 if (isNight) PreferKey.topBarWallpaperAlphaN else PreferKey.topBarWallpaperAlpha,
                 100
             ),
+            bottomBar = context.getPrefString(if (isNight) PreferKey.bottomBarBgImageN else PreferKey.bottomBarBgImage)
+                ?: NavigationBarIconConfig.currentBottomWallpaperPath(isNight),
             bookInfo = context.getPrefString(if (isNight) PreferKey.bookInfoBgImageN else PreferKey.bookInfoBgImage),
             panel = context.getPrefString(if (isNight) PreferKey.panelBgImageN else PreferKey.panelBgImage),
             panelScaleType = context.getPrefString(if (isNight) PreferKey.panelBgScaleTypeN else PreferKey.panelBgScaleType)
                 ?: ThemeConfig.PANEL_BG_CROP,
-            welcome = context.getPrefString(if (isNight) PreferKey.welcomeImageDark else PreferKey.welcomeImage)
+            welcome = context.getPrefString(if (isNight) PreferKey.welcomeImageDark else PreferKey.welcomeImage),
+            transforms = transforms
         )
     }
 
@@ -2727,6 +2743,13 @@ object UnifiedPackageRepository {
         isNight: Boolean,
         w: ArtWallpapersSpec
     ) {
+        fun applyTransformPref(slot: String, key: String) {
+            val encoded = w.transforms[slot]
+                ?.normalized()
+                ?.takeUnless { it.isDefault }
+                ?.encode()
+            putOrRemovePref(context, key, encoded)
+        }
         putOrRemovePref(
             context,
             if (isNight) PreferKey.bgImageN else PreferKey.bgImage,
@@ -2737,10 +2760,18 @@ object UnifiedPackageRepository {
             if (isNight) PreferKey.bgImageNCrop else PreferKey.bgImageCrop,
             w.mainCrop
         )
+        applyTransformPref(
+            WallpaperTransform.SLOT_MAIN,
+            if (isNight) PreferKey.bgImageTransformN else PreferKey.bgImageTransform
+        )
         putOrRemovePref(
             context,
             if (isNight) PreferKey.topBarBgImageN else PreferKey.topBarBgImage,
             resolvePackageAssetPath(packageDir, baseDir, w.topBar)
+        )
+        applyTransformPref(
+            WallpaperTransform.SLOT_TOP_BAR,
+            if (isNight) PreferKey.topBarBgTransformN else PreferKey.topBarBgTransform
         )
         w.topBarAlpha?.let {
             context.putPrefInt(
@@ -2750,18 +2781,38 @@ object UnifiedPackageRepository {
         }
         putOrRemovePref(
             context,
+            if (isNight) PreferKey.bottomBarBgImageN else PreferKey.bottomBarBgImage,
+            resolvePackageAssetPath(packageDir, baseDir, w.bottomBar)
+        )
+        applyTransformPref(
+            WallpaperTransform.SLOT_BOTTOM_BAR,
+            if (isNight) PreferKey.bottomBarBgTransformN else PreferKey.bottomBarBgTransform
+        )
+        putOrRemovePref(
+            context,
             if (isNight) PreferKey.bookInfoBgImageN else PreferKey.bookInfoBgImage,
             resolvePackageAssetPath(packageDir, baseDir, w.bookInfo)
+        )
+        applyTransformPref(
+            WallpaperTransform.SLOT_BOOK_INFO,
+            if (isNight) PreferKey.bookInfoBgTransformN else PreferKey.bookInfoBgTransform
         )
         putOrRemovePref(
             context,
             if (isNight) PreferKey.panelBgImageN else PreferKey.panelBgImage,
             resolvePackageAssetPath(packageDir, baseDir, w.panel)
         )
+        val resolvedPanelScaleType = w.transforms[WallpaperTransform.SLOT_PANEL]?.let {
+            if (it.mode == WallpaperScaleMode.FIT) ThemeConfig.PANEL_BG_FIT else ThemeConfig.PANEL_BG_CROP
+        } ?: w.panelScaleType ?: ThemeConfig.PANEL_BG_CROP
         putOrRemovePref(
             context,
             if (isNight) PreferKey.panelBgScaleTypeN else PreferKey.panelBgScaleType,
-            w.panelScaleType ?: ThemeConfig.PANEL_BG_CROP
+            resolvedPanelScaleType
+        )
+        applyTransformPref(
+            WallpaperTransform.SLOT_PANEL,
+            if (isNight) PreferKey.panelBgTransformN else PreferKey.panelBgTransform
         )
         w.welcome?.let {
             putOrRemovePref(
@@ -2770,6 +2821,10 @@ object UnifiedPackageRepository {
                 resolvePackageAssetPath(packageDir, baseDir, it)
             )
         }
+        applyTransformPref(
+            WallpaperTransform.SLOT_WELCOME,
+            if (isNight) PreferKey.welcomeBgTransformN else PreferKey.welcomeBgTransform
+        )
     }
 
     private fun applyTypography(

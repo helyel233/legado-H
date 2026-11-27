@@ -89,15 +89,22 @@ object NightKeyPairs {
     /** Remaining top-bar, navigation-bar, welcome, and misc Day/Night pairs audited by `check_night_key_pairs.py`. */
     val miscDayNightPairs: List<Pair<String, String>> = listOf(
         PreferKey.bgImageCrop to PreferKey.bgImageNCrop,
+        PreferKey.bgImageTransform to PreferKey.bgImageTransformN,
         PreferKey.dThemeName to PreferKey.dNThemeName,
         PreferKey.dThemeDirName to PreferKey.dNThemeDirName,
         PreferKey.topBarBgImage to PreferKey.topBarBgImageN,
+        PreferKey.topBarBgTransform to PreferKey.topBarBgTransformN,
         PreferKey.topBarWallpaperAlpha to PreferKey.topBarWallpaperAlphaN,
+        PreferKey.bottomBarBgImage to PreferKey.bottomBarBgImageN,
+        PreferKey.bottomBarBgTransform to PreferKey.bottomBarBgTransformN,
+        PreferKey.bookInfoBgTransform to PreferKey.bookInfoBgTransformN,
+        PreferKey.panelBgTransform to PreferKey.panelBgTransformN,
         PreferKey.defaultCover to PreferKey.defaultCoverDark,
         PreferKey.defaultGroupCover to PreferKey.defaultGroupCoverDark,
         PreferKey.navigationBarPackageDay to PreferKey.navigationBarPackageNight,
         PreferKey.topBarPackageDay to PreferKey.topBarPackageNight,
         PreferKey.welcomeImage to PreferKey.welcomeImageDark,
+        PreferKey.welcomeBgTransform to PreferKey.welcomeBgTransformN,
         PreferKey.welcomeShowText to PreferKey.welcomeShowTextDark,
         PreferKey.welcomeShowIcon to PreferKey.welcomeShowIconDark,
         PreferKey.editTheme to PreferKey.editThemeDark

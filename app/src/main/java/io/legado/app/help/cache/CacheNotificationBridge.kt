@@ -6,7 +6,6 @@ import io.legado.app.R
 import io.legado.app.constant.AppConst
 import io.legado.app.constant.NotificationId
 import io.legado.app.data.appDb
-import io.legado.app.help.config.AppConfig
 import io.legado.app.ui.book.cache.CacheActivity
 import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.activityPendingIntent
@@ -42,22 +41,17 @@ internal object CacheNotificationBridge {
             ?.let { sessionId -> activeSessions.firstOrNull { it.sessionId == sessionId } }
             ?: activeSessions.first()
         val activeTasks = session.tasks.filter { !CacheLifecycleRules.isTerminal(it.status) }
-        // 评论缓存静默时，通知里不允许出现评论内容：只展示非评论任务。
-        val visibleTasks = CacheNotificationPolicy.visibleTasks(
-            activeTasks,
-            reviewNotificationSilenced,
-        )
-        if (visibleTasks.isEmpty()) return
+        if (activeTasks.isEmpty()) return
         val display = progress.display?.takeIf { state ->
-            visibleTasks.any { task ->
+            activeTasks.any { task ->
                 task.sessionId == state.sessionId &&
                     task.taskId == state.taskId &&
                     task.generation == state.generation
             }
         }
         val task = display?.let { state ->
-            visibleTasks.first { it.taskId == state.taskId }
-        } ?: visibleTasks.first()
+            activeTasks.first { it.taskId == state.taskId }
+        } ?: activeTasks.first()
         val taskProgress = display ?: progress.states.firstOrNull { state ->
             state.sessionId == task.sessionId &&
                 state.taskId == task.taskId &&
@@ -102,27 +96,6 @@ internal object CacheNotificationBridge {
         val active = snapshot.sessions.filter { activeSession ->
             activeSession.tasks.any { !CacheLifecycleRules.isTerminal(it.status) }
         }
-        // 评论缓存静默时，只剩评论任务在跑（或刚跑完）就不再打扰通知栏。
-        // 但如果刚完成的是正文/媒体任务，仍旧给一条完成通知。
-        val silenced = reviewNotificationSilenced
-        if (silenced && !CacheNotificationPolicy.hasVisibleActiveTask(
-                active.flatMap { it.tasks },
-                silenced,
-                { CacheLifecycleRules.isTerminal(it.status) },
-            )
-        ) {
-            if (CacheNotificationPolicy.allowsTerminalNotice(task, silenced)) {
-                notify(
-                    title,
-                    text,
-                    ongoing = false,
-                    submission = null,
-                    paused = false,
-                    progress = task?.let(::chapterProgress),
-                )
-            }
-            return
-        }
         if (active.isNotEmpty()) {
             renderActive(active, progress)
             return
@@ -142,8 +115,6 @@ internal object CacheNotificationBridge {
         progress: CacheProgressState?,
     ): Presentation = when {
         task.kind == CacheKind.TEXT && task.phase == CachePhase.BODY -> bodyPresentation(task, progress)
-        task.phase == CachePhase.REVIEW && task.kind.reviewPrerequisitePhase() != null ->
-            reviewPresentation(task, progress)
         task.phase == CachePhase.MEDIA &&
             (task.kind == CacheKind.AUDIO || task.kind == CacheKind.VIDEO) ->
             mediaPresentation(task, progress)
@@ -177,24 +148,6 @@ internal object CacheNotificationBridge {
                 "${formatBytes(downloadedBytes)} / ${totalBytes?.let(::formatBytes) ?: "?"} " +
                 chapterText(completedChapters(task), task.units.size),
             progress = byteProgress(downloadedBytes, totalBytes),
-        )
-    }
-
-    private fun reviewPresentation(
-        task: CacheTaskState,
-        progress: CacheProgressState?,
-    ): Presentation {
-        val completed = progress?.current?.toInt() ?: 0
-        val total = progress?.total?.toInt()
-        val failed = progress?.failed?.toInt() ?: 0
-        val chapters = reviewChapterProgress(task)
-        val snapshotText = total?.let { "$completed/$it" } ?: appCtx.getString(R.string.svc_progress)
-        return Presentation(
-            title = appCtx.getString(R.string.menu_sync_cache_review),
-            text = appCtx.getString(R.string.svc_snapshot_failed, displayUnitText(task, progress), snapshotText, failed) +
-                chapterText(chapters.completed, chapters.total),
-            progress = total?.let { chapterProgress(it, completed) }
-                ?: Progress(max = 0, current = 0, indeterminate = true),
         )
     }
 
@@ -311,22 +264,13 @@ internal object CacheNotificationBridge {
         val unit = progress?.unitKey
             ?: task.units.firstOrNull {
                 it.status == CacheUnitStatus.PENDING ||
-                    it.status == CacheUnitStatus.RUNNING ||
-                    it.status == CacheUnitStatus.REVIEW_ELIGIBLE
+                    it.status == CacheUnitStatus.RUNNING
             }?.key
             ?: return appCtx.getString(R.string.svc_current_chapter_none)
         val chapter = appDb.bookChapterDao.getChapter(task.bookUrl, unit.chapterIndex)
         return chapter?.title?.takeIf { it.isNotBlank() }?.let { title ->
             appCtx.getString(R.string.svc_chapter, unit.chapterIndex + 1, title)
         } ?: appCtx.getString(R.string.svc_chapter_2, unit.chapterIndex + 1)
-    }
-
-    /** REVIEW owns its eligible chapter set, so both numerator and denominator come from it. */
-    private fun reviewChapterProgress(review: CacheTaskState): ChapterProgress {
-        return ChapterProgress(
-            completed = completedChapters(review),
-            total = review.units.size,
-        )
     }
 
     /** TTS 同样只认自己任务的章节集，x/y章 不借用前置 BODY 任务的总数。 */
@@ -340,10 +284,6 @@ internal object CacheNotificationBridge {
     private fun chapterText(current: Int, total: Int): String = appCtx.getString(R.string.svc_chapters, current, total)
 
     private fun formatBytes(bytes: Long): String = ConvertUtils.formatFileSize(bytes.coerceAtLeast(0L))
-
-    /** 评论缓存的通知开关：开启后评论缓存的进度/完成都不进通知栏。 */
-    private val reviewNotificationSilenced: Boolean
-        get() = AppConfig.cacheReviewSilent
 
     private data class Presentation(
         val title: String,

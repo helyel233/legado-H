@@ -1749,6 +1749,10 @@
     <string name="review_config_title">评论抓取</string>
     <string name="review_config_summary">评论抓取、缓存与下载调优</string>
     <string name="review_cache_section">评论缓存</string>
+    <string name="review_cache_clear_all">清空全部评论缓存</string>
+    <string name="review_cache_clear_all_summary">当前占用：%1$s</string>
+    <string name="review_cache_clear_all_summary_loading">正在统计占用…</string>
+    <string name="review_cache_clear_all_confirm">确定清空全部书籍的评论缓存（占用 %1$s）？之后阅读时将重新联网加载。</string>
     <string name="cache_review_silent">评论缓存不显示通知</string>
     <string name="cache_review_silent_summary">评论缓存的进度、完成与失败都不再出现在通知栏里。</string>
     <string name="review_download_engine_section">评论下载 · 抓取引擎</string>
@@ -2897,19 +2901,15 @@ SVG 模板支持 ${color} 和 ${num} 两个占位。
     <string name="menu_offline_review_mode">离线评论模式</string>
     <string name="menu_review_preheat_wifi_only">仅WiFi预热段评</string>
     <string name="menu_review_open_mode">评论打开方式</string>
-    <string name="menu_review_open_mode_network">网络优先（快照秒开）</string>
-    <string name="menu_review_open_mode_network_only">纯联网（不用快照）</string>
-    <string name="menu_review_open_mode_snapshot_first">快照优先（先看缓存）</string>
-    <string name="menu_review_open_mode_snapshot_only">仅快照（不联网）</string>
+    <string name="menu_review_open_mode_network">联网优先（失败用缓存兜底）</string>
+    <string name="menu_review_open_mode_snapshot_first">缓存优先（秒开并后台刷新）</string>
     <string name="menu_review_snapshot_ttl">段评快照保鲜期</string>
     <string name="menu_review_snapshot_ttl_days">%1$d 天</string>
     <string name="menu_review_snapshot_ttl_never">不保鲜</string>
     <!-- 三点菜单标题里的当前值短标签（长括注留给选择弹窗） -->
     <string name="review_current_value">当前：%1$s</string>
-    <string name="review_open_mode_short_network">网络优先</string>
-    <string name="review_open_mode_short_network_only">纯联网</string>
-    <string name="review_open_mode_short_snapshot_first">快照优先</string>
-    <string name="review_open_mode_short_snapshot_only">仅快照</string>
+    <string name="review_open_mode_short_network">联网优先</string>
+    <string name="review_open_mode_short_snapshot_first">缓存优先</string>
     <!-- 跨段选区时标出段评目标段位 -->
     <string name="review_menu_target_suffix">·第 %1$d 段</string>
     <string name="review_snapshot_offline_hint">这是离线快照（不联网）：发评前可先在三点菜单开启「离线评论模式」，评论会记录下来、之后统一发送</string>

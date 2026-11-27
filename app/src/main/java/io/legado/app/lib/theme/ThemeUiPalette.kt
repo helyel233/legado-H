@@ -61,6 +61,8 @@ private val themeUiShapeKeys = listOf(
     PreferKey.panelBgImageN,
     PreferKey.panelBgScaleType,
     PreferKey.panelBgScaleTypeN,
+    PreferKey.panelBgTransform,
+    PreferKey.panelBgTransformN,
     PreferKey.uiCornerScale,
     PreferKey.uiCornerScaleN,
     PreferKey.uiCornerSearchFollow,
@@ -385,10 +387,12 @@ fun fileStamp(path: String): String {
 private fun Context.themePanelImageSignature(): String {
     val imageKey = if (AppConfig.isNightTheme) PreferKey.panelBgImageN else PreferKey.panelBgImage
     val scaleKey = if (AppConfig.isNightTheme) PreferKey.panelBgScaleTypeN else PreferKey.panelBgScaleType
+    val transformKey = if (AppConfig.isNightTheme) PreferKey.panelBgTransformN else PreferKey.panelBgTransform
     val path = getPrefString(imageKey).orEmpty()
     val mode = getPrefString(scaleKey).orEmpty()
+    val transform = getPrefString(transformKey).orEmpty()
     val fileKey = fileStamp(path)
-    return "$fileKey|$mode|${UiCorner.layoutAlpha()}"
+    return "$fileKey|$mode|$transform|${UiCorner.layoutAlpha()}"
 }
 
 @ColorInt

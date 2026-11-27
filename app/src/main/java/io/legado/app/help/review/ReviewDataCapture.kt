@@ -51,11 +51,11 @@ internal object ReviewDataCapture {
      * 书源声明的协议不是本适配器认识的类型时返回 false（让上层回退网页引擎），
      * 而不是用 require 把整次抓取炸掉——协议是书源侧的声明，不该成为崩溃点。
      */
-    fun supports(url: String, html: String?, tab: ReviewSnapshotCapture.ReviewTab?, protocol: String): Boolean {
+    fun supports(url: String, html: String?, protocol: String): Boolean {
         val declared = protocol.trim()
         if (declared.isNotEmpty() && declared != PROTOCOL) return false
         val address = url.toHttpUrlOrNull() ?: return false
-        return tab == null && address.encodedPath == "/idea_comment" &&
+        return address.encodedPath == "/idea_comment" &&
             listOf("book_id", "item_id", "para").all { address.queryParameter(it) != null } &&
             (declared == PROTOCOL || (html != null && html.contains("loadParaFromApi") && html.contains("reply_api")))
     }
@@ -109,8 +109,6 @@ internal object ReviewDataCapture {
         val text = initialHtml.orEmpty()
         return buildString {
             append(url).append('|').append(AppConfig.cacheReviewReplies)
-            append('|').append(AppConfig.cacheReviewAvatars)
-            append('|').append(AppConfig.cacheReviewImages)
             append('|').append(AppConfig.isNightTheme)
             append('|').append(text.length).append('|').append(text.hashCode())
             headers.forEach { (name, value) -> append('|').append(name).append('=').append(value) }
@@ -135,23 +133,16 @@ internal object ReviewDataCapture {
                 headers.forEach { (key, value) -> header(key, value) }
                 header("Referer", url)
             }.build()
-            var attempt = 0
-            while (true) {
-                try {
-                    val gate = if (reply) ReviewDownloadScheduler.replies else ReviewDownloadScheduler.data
-                    val json = gate.withPermit { executeRequest(request) }
-                    trace?.mark(if (reply) "REPLY_PAGE_RECEIVED" else "DATA_PAGE_RECEIVED",
-                        CacheOperationDiagnostics.Metrics(inputChars = json.length), force = true)
-                    return withContext(Dispatchers.Default) {
-                        ReviewDownloadScheduler.heavy.withPermit { JsonParser.parseString(json).asJsonObject }
-                    }
-                } catch (error: IOException) {
-                    trace?.warn(if (reply) "REPLY_HTTP_FAILED" else "DATA_HTTP_FAILED", error)
-                    if (attempt >= ReviewDownloadConfig.Number.RETRIES.value) throw error
-                    attempt++
-                    trace?.mark("HTTP_RETRY_$attempt", force = true)
-                    delay(ReviewDownloadConfig.retryDelay(attempt))
+            try {
+                val json = executeRequest(request)
+                trace?.mark(if (reply) "REPLY_PAGE_RECEIVED" else "DATA_PAGE_RECEIVED",
+                    CacheOperationDiagnostics.Metrics(inputChars = json.length), force = true)
+                return withContext(Dispatchers.Default) {
+                    JsonParser.parseString(json).asJsonObject
                 }
+            } catch (error: IOException) {
+                trace?.warn(if (reply) "REPLY_HTTP_FAILED" else "DATA_HTTP_FAILED", error)
+                throw error
             }
         }
         val items = mutableListOf<JsonObject>()
@@ -190,7 +181,7 @@ internal object ReviewDataCapture {
             val embedded = item.getAsJsonArray("replies") ?: JsonArray()
             check(expected >= 0) { "楼中楼总数无效: $expected" }
             if (expected == 0 && embedded.size() == 0) return@async emptyList<JsonObject>()
-            if (ReviewDownloadConfig.enabled(ReviewDownloadConfig.REUSE_REPLIES) && embedded.size() >= expected) {
+            if (embedded.size() >= expected) {
                 return@async embedded.map { it.asJsonObject }
             }
             val result = mutableListOf<JsonObject>()
@@ -205,7 +196,7 @@ internal object ReviewDataCapture {
                 check(seenCursors.add(offset)) { "楼中楼游标循环: $offset" }
                 val response = fetch(true, mapOf("reply_api" to "1",
                     "comment_id" to comment.get("comment_id").asString, "cursor" to offset,
-                    "count" to ReviewDownloadConfig.Number.REPLY_SIZE.value.toString()))
+                    "count" to ReviewDownloadConfig.Number.PAGE_SIZE.value.toString()))
                 check(response.get("code")?.asInt == 0) { "楼中楼接口失败: $response" }
                 val data = response.getAsJsonObject("data") ?: error("楼中楼缺少 data")
                 val page = data.getAsJsonArray("reply_list") ?: error("楼中楼缺少 reply_list")
@@ -224,15 +215,13 @@ internal object ReviewDataCapture {
             result
         } }.awaitAll()
         withContext(Dispatchers.Default) {
-            ReviewDownloadScheduler.heavy.withPermit {
-                buildHtml(
-                    url = url,
-                    sourceText = sourceText,
-                    items = items,
-                    replies = replies,
-                    emoji = emoji,
-                )
-            }
+            buildHtml(
+                url = url,
+                sourceText = sourceText,
+                items = items,
+                replies = replies,
+                emoji = emoji,
+            )
         }
     }
 
@@ -256,7 +245,9 @@ internal object ReviewDataCapture {
             url
         )
         doc.selectFirst("html")?.attr("data-theme", if (isNightTheme) "dark" else "light")
-        doc.head().appendElement("style").text(buildTemplateCss(accentColorHex))
+        doc.head().appendElement("style")
+            .attr("id", ReviewLiteTemplate.DATA_TEMPLATE_MARKER)
+            .text(buildTemplateCss(accentColorHex))
         doc.body().attr("data-review-protocol", PROTOCOL)
 
         val header = doc.body().appendElement("header").addClass("review-header")
@@ -525,8 +516,8 @@ internal object ReviewDataCapture {
         "<svg viewBox=\"0 0 24 24\" width=\"14\" height=\"14\" fill=\"currentColor\"><path d=\"M7.41 8.59 12 13.17l4.59-4.58L18 10l-6 6-6-6z\"/></svg>"
 
     private fun safeIsNightTheme(): Boolean = runCatching { AppConfig.isNightTheme }.getOrDefault(false)
-    private fun safeCacheAvatars(): Boolean = runCatching { AppConfig.cacheReviewAvatars }.getOrDefault(true)
-    private fun safeCacheImages(): Boolean = runCatching { AppConfig.cacheReviewImages }.getOrDefault(true)
+    private fun safeCacheAvatars(): Boolean = true
+    private fun safeCacheImages(): Boolean = true
     private fun safeAccentHex(): String = runCatching {
         ParagraphBubbleRenderer.toRgbHex(ThemeStore.accentColor(appCtx))
     }.getOrDefault("#3B82F6")

@@ -76,9 +76,8 @@ class WebViewModel(application: Application) : BaseViewModel(application) {
     fun saveImage(webPic: String?, path: String) {
         webPic ?: return
         execute {
-            val local = io.legado.app.help.review.ReviewSnapshotImages.readLocal(reviewResourceBook, webPic)
-            val fileName = "${AppConst.fileNameFormat.format(Date(System.currentTimeMillis()))}.${local?.first ?: "jpg"}"
-            (local?.second ?: webData2bitmap(webPic))?.let { byteArray ->
+            val fileName = "${AppConst.fileNameFormat.format(Date(System.currentTimeMillis()))}.jpg"
+            webData2bitmap(webPic)?.let { byteArray ->
                 val fileDoc = FileDoc.fromDir(path)
                 val picFile = fileDoc.createFileIfNotExist(fileName)
                 picFile.openOutputStream().getOrThrow().use {

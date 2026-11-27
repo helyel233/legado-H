@@ -622,6 +622,16 @@ object UnifiedPackageCodec {
         putStr("panel", w.panel)
         putStr("panelScaleType", w.panelScaleType)
         putStr("welcome", w.welcome)
+        val nonDefaultTransforms = w.transforms
+            .mapValues { it.value.normalized() }
+            .filterValues { !it.isDefault }
+        if (nonDefaultTransforms.isNotEmpty()) {
+            add("transforms", JsonObject().apply {
+                nonDefaultTransforms.forEach { (slot, transform) ->
+                    addProperty(slot, transform.encode())
+                }
+            })
+        }
         appendUnknownFields(this, w.unknownFields)
     }
 
@@ -629,8 +639,15 @@ object UnifiedPackageCodec {
         val known = setOf(
             "main", "mainCrop", "topBar", "topBarCropLeft", "topBarCropTop",
             "topBarCropRight", "topBarCropBottom", "topBarAlpha", "bottomBar",
-            "sidebar", "bookInfo", "panel", "panelScaleType", "welcome"
+            "sidebar", "bookInfo", "panel", "panelScaleType", "welcome", "transforms"
         )
+        val transforms = buildMap {
+            obj.objOrNull("transforms")?.entrySet()?.forEach { (slot, el) ->
+                if (el.isJsonPrimitive) {
+                    WallpaperTransform.decode(el.asString)?.let { put(slot, it) }
+                }
+            }
+        }
         return ArtWallpapersSpec(
             main = obj.stringOrNull("main"),
             mainCrop = obj.stringOrNull("mainCrop"),
@@ -646,6 +663,7 @@ object UnifiedPackageCodec {
             panel = obj.stringOrNull("panel"),
             panelScaleType = obj.stringOrNull("panelScaleType"),
             welcome = obj.stringOrNull("welcome"),
+            transforms = transforms,
             unknownFields = collectUnknownFields(obj, known)
         )
     }

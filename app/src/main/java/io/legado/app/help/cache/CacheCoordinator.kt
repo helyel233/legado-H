@@ -8,20 +8,9 @@ import kotlinx.coroutines.launch
 import io.legado.app.constant.AppLog
 import io.legado.app.data.appDb
 import io.legado.app.data.entities.Book
-import io.legado.app.data.entities.BookChapter
-import io.legado.app.help.book.AudioOfflineState
-import io.legado.app.help.book.BodyOfflineState
 import io.legado.app.help.book.BookHelp
 import io.legado.app.help.book.isAudio
 import io.legado.app.help.book.isVideo
-import io.legado.app.help.config.AppConfig
-import io.legado.app.help.book.isLocal
-import io.legado.app.help.exoplayer.ExoPlayerHelper
-import io.legado.app.help.review.ReviewPreheatCoordinator
-import io.legado.app.help.review.ReviewResourceEpoch
-import io.legado.app.help.review.ReviewSnapshotManager
-import io.legado.app.help.review.ReviewSnapshotResourceStore
-import io.legado.app.help.review.ReviewSnapshotStore
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
 
@@ -157,20 +146,14 @@ object CacheCoordinator : CacheUiPort {
 
     private val workerDispatcher: CacheWorkerDispatcher =
         CacheWorkerDispatcherImpl(workerPort)
-    private val reviewTaskLock = Any()
     private val automaticSubmitLock = Any()
-    private val resourceGcScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val terminalEffectsScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val recoveryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    /** 防止同一本书在短时间内重复排队 GC。 */
-    private val resourceGcScheduled = ConcurrentHashMap.newKeySet<String>()
     private val terminalEffectsInProgress = ConcurrentHashMap.newKeySet<String>()
     private val terminalEffectsRetryAttempts = ConcurrentHashMap<String, Int>()
     private val terminalEffectsRetryScheduled = ConcurrentHashMap.newKeySet<String>()
-    private const val ZOMBIE_REVIEW_GRACE_MS = 10_000L
 
     init {
-        ReviewPreheatCoordinator.setActiveReviewTaskChecker(::hasActiveReviewTask)
         recoveryScope.launch {
             replayPendingTerminalEffects()
             workerDispatcher.recover(snapshot.value)
@@ -179,7 +162,6 @@ object CacheCoordinator : CacheUiPort {
 
     override fun submit(request: CacheRequest): CacheSubmission {
         validateUiRequest(request)
-        validateReaderReviewPrerequisite(request)
         validateReaderTtsPrerequisite(request)
         val session = store.createSession(request.bookName)
         val task = store.addTask(session.sessionId, request)
@@ -202,13 +184,11 @@ object CacheCoordinator : CacheUiPort {
         book: Book,
         chapterIndexes: Iterable<Int>,
         source: CacheRequestSource,
-        reviewEnabled: Boolean = AppConfig.syncCacheReview,
-        reviewIncremental: Boolean = false,
     ): CacheSubmission {
         return if (book.isAudio || book.isVideo) {
-            submitMediaDownload(book, chapterIndexes, source, reviewEnabled, reviewIncremental)
+            submitMediaDownload(book, chapterIndexes, source)
         } else {
-            submitTextDownload(book, chapterIndexes, source, reviewEnabled, reviewIncremental)
+            submitTextDownload(book, chapterIndexes, source)
         }
     }
 
@@ -217,9 +197,7 @@ object CacheCoordinator : CacheUiPort {
         book: Book,
         chapterIndexes: Iterable<Int>,
         source: CacheRequestSource,
-        reviewEnabled: Boolean = AppConfig.syncCacheReview,
         ttsEnabled: Boolean = false,
-        reviewIncremental: Boolean = false,
     ): CacheSubmission {
         require(!book.isAudio && !book.isVideo) {
             "text download is invalid for media book: ${book.bookUrl}"
@@ -234,9 +212,7 @@ object CacheCoordinator : CacheUiPort {
                 bookUrl = book.bookUrl,
                 bookName = book.name,
                 units = indexes.map { CacheUnitKey(book.bookUrl, it) },
-                reviewEnabled = reviewEnabled,
                 ttsEnabled = ttsEnabled,
-                reviewIncremental = reviewIncremental,
             )
         )
     }
@@ -246,8 +222,6 @@ object CacheCoordinator : CacheUiPort {
         book: Book,
         chapterIndexes: Iterable<Int>,
         source: CacheRequestSource,
-        reviewEnabled: Boolean = AppConfig.syncCacheReview,
-        reviewIncremental: Boolean = false,
     ): CacheSubmission {
         require(book.isAudio || book.isVideo) { "media download requires an audio or video book" }
         val indexes = chapterIndexes.distinct().sorted()
@@ -260,8 +234,6 @@ object CacheCoordinator : CacheUiPort {
                 bookUrl = book.bookUrl,
                 bookName = book.name,
                 units = indexes.map { CacheUnitKey(book.bookUrl, it) },
-                reviewEnabled = book.isAudio && !book.isLocal && reviewEnabled,
-                reviewIncremental = book.isAudio && !book.isLocal && reviewIncremental,
             )
         )
     }
@@ -281,22 +253,20 @@ object CacheCoordinator : CacheUiPort {
     }
 
     /**
-     * Automatic review download never creates a competing same-domain session for the book.
-     * Text waits for BODY; audio waits for MEDIA, which resolves raw lyric before REVIEW starts.
+     * Automatic book download never creates a competing same-domain session for the book.
      */
     fun submitAutomaticBookDownload(
         book: Book,
         chapterIndexes: Iterable<Int>,
         source: CacheRequestSource,
     ): CacheSubmission? = synchronized(automaticSubmitLock) {
-        require(!book.isVideo) { "automatic review download is invalid for video book" }
+        require(!book.isVideo) { "automatic book download is invalid for video book" }
         val kind = if (book.isAudio) CacheKind.AUDIO else CacheKind.TEXT
         if (hasActiveDownload(book.bookUrl, kind)) return@synchronized null
-        val reviewEnabled = AppConfig.syncCacheReview && AppConfig.autoDownloadReview
         if (book.isAudio) {
-            submitMediaDownload(book, chapterIndexes, source, reviewEnabled)
+            submitMediaDownload(book, chapterIndexes, source)
         } else {
-            submitTextDownload(book, chapterIndexes, source, reviewEnabled)
+            submitTextDownload(book, chapterIndexes, source)
         }
     }
 
@@ -335,242 +305,12 @@ object CacheCoordinator : CacheUiPort {
 
     fun cancelAll(): Int = commandAll { cancel(it) }
 
-    /** Record a reader-requested review refresh without exposing the queue manager. */
-    fun markReviewRefresh(bookUrl: String, chapterIndex: Int) {
-        ReviewSnapshotManager.markUserRefresh(bookUrl, chapterIndex)
-    }
-
-    /** Cache-management retry boundary for one chapter's recorded failed review buttons. */
-    fun retryReviewSnapshots(book: Book, chapter: BookChapter): Boolean {
-        return retryReviewSnapshots(book, listOf(chapter)) == 1
-    }
-
-    /** Retries recorded failed buttons, or sends status-less/incomplete chapters through the normal cache path. */
-    fun retryReviewSnapshots(book: Book, chapters: List<BookChapter>): Int {
-        return (retryReviewSnapshotsWithResult(book, chapters) as? ReviewRetryResult.Started)?.count ?: 0
-    }
-
-    /** Structured retry entrypoint distinguishing switch-off, unsupported book, active task, and empty targets. */
-    fun retryReviewSnapshotsWithResult(book: Book, chapters: List<BookChapter>): ReviewRetryResult {
-        if (!AppConfig.syncCacheReview) return ReviewRetryResult.SwitchDisabled
-        if (book.isLocal || book.isVideo) return ReviewRetryResult.UnsupportedBook
-        val reviewKind = if (book.isAudio) CacheKind.AUDIO else CacheKind.TEXT
-        val requested = chapters
-            .asSequence()
-            .filterNot { it.isVolume }
-            .distinctBy { it.index }
-            .toList()
-        if (requested.isEmpty()) return ReviewRetryResult.NothingToRetry
-        val statusesByChapterUrl = ReviewSnapshotStore.chapterStatuses(book)
-            .associateBy { it.chapterUrl.trim() }
-        // A chapter takes the ordinary BODY refresh path when it has no sidecar status
-        // (no safe failed-button identities) or when its primary artifact is incomplete:
-        // a READER REVIEW submission for it would be rejected by the prerequisite
-        // validation, so the artifact must be refreshed first.
-        val (refreshChapters, retryChapters) = requested.partition { chapter ->
-            chapter.url.trim() !in statusesByChapterUrl ||
-                !isPrimaryArtifactComplete(book, chapter, reviewKind)
-        }
-        if (refreshChapters.isNotEmpty()) {
-            // Reuse the ordinary one-chapter BODY -> REVIEW path so the existing snapshot is
-            // retained and a fresh chapter status is written by the normal review worker.
-            submitBookDownload(
-                book = book,
-                chapterIndexes = refreshChapters.map { it.index },
-                source = CacheRequestSource.CACHE_MANAGE,
-                reviewEnabled = true,
-            )
-        }
-        val retryTargets = retryChapters.mapNotNull { chapter ->
-            val failedButtonSources = statusesByChapterUrl[chapter.url.trim()]
-                ?.failedButtonSourcesForRetry()
-                ?: return@mapNotNull null
-            CacheReviewRetryTarget(
-                unitKey = CacheUnitKey(book.bookUrl, chapter.index),
-                buttonSources = failedButtonSources,
-            )
-        }
-        if (retryTargets.isEmpty()) {
-            return if (refreshChapters.isNotEmpty()) {
-                ReviewRetryResult.Started(refreshChapters.size)
-            } else {
-                ReviewRetryResult.NothingToRetry
-            }
-        }
-        synchronized(reviewTaskLock) {
-            cleanupZombieReviewTasks(book.bookUrl, reviewKind)
-            val activeIndexes = snapshot.value.sessions.asSequence()
-                .flatMap { it.tasks.asSequence() }
-                .filter {
-                    it.kind == reviewKind &&
-                        it.phase == CachePhase.REVIEW &&
-                        it.bookUrl == book.bookUrl &&
-                        !CacheLifecycleRules.isTerminal(it.status) &&
-                        it.status != CacheLifecycle.PAUSED
-                }
-                .flatMap { task ->
-                    task.runnableUnits().asSequence().map { it.key.chapterIndex }
-                }
-                .toHashSet()
-            val unownedTargets = retryTargets.filterNot { target ->
-                target.unitKey.chapterIndex in activeIndexes
-            }
-            if (unownedTargets.isEmpty() && refreshChapters.isEmpty()) {
-                return ReviewRetryResult.AlreadyInProgress
-            }
-            if (unownedTargets.isNotEmpty()) {
-                submit(
-                    CacheRequest(
-                        source = CacheRequestSource.READER,
-                        kind = reviewKind,
-                        phase = CachePhase.REVIEW,
-                        bookUrl = book.bookUrl,
-                        bookName = book.name,
-                        units = unownedTargets.map { it.unitKey },
-                        reviewEnabled = true,
-                        reviewRetryTargets = unownedTargets,
-                    )
-                )
-            }
-            return ReviewRetryResult.Started(refreshChapters.size + unownedTargets.size)
-        }
-    }
-
-    /** REVIEW targets require the complete primary artifact; incomplete ones refresh first. */
-    private fun isPrimaryArtifactComplete(book: Book, chapter: BookChapter, kind: CacheKind): Boolean {
-        return when (kind) {
-            CacheKind.TEXT -> BodyOfflineState.isComplete(book, chapter)
-            CacheKind.AUDIO -> AudioOfflineState.isComplete(book, chapter)
-            else -> true
-        }
-    }
-
-    private fun cleanupZombieReviewTasks(bookUrl: String, reviewKind: CacheKind) {
-        val now = System.currentTimeMillis()
-        snapshot.value.sessions.asSequence()
-            .flatMap { it.tasks.asSequence() }
-            .filter { task ->
-                task.kind == reviewKind &&
-                    task.phase == CachePhase.REVIEW &&
-                    task.bookUrl == bookUrl &&
-                    task.status == CacheLifecycle.RUNNING &&
-                    !CacheReviewWorkerRegistry.hasActiveBinding(task.sessionId, task.taskId) &&
-                    now - task.updatedAt >= ZOMBIE_REVIEW_GRACE_MS
-            }
-            .toList()
-            .forEach { zombie ->
-                AppLog.put("清理失联评论缓存任务: ${zombie.sessionId}/${zombie.taskId}")
-                cancel(CacheSubmission(zombie.sessionId, zombie.taskId))
-            }
-    }
-
-    fun cancelActiveReviewTasks(bookUrl: String): Int {
-        val targets = snapshot.value.sessions.asSequence()
-            .flatMap { it.tasks.asSequence() }
-            .filter { task ->
-                task.phase == CachePhase.REVIEW &&
-                    task.bookUrl == bookUrl &&
-                    !CacheLifecycleRules.isTerminal(task.status)
-            }
-            .map { CacheSubmission(it.sessionId, it.taskId) }
-            .toList()
-        return targets.count(::cancel)
-    }
-
-    fun activeReviewProgress(bookUrl: String): Pair<Int, Int>? {
-        val activeTasks = snapshot.value.sessions.asSequence()
-            .flatMap { it.tasks.asSequence() }
-            .filter { task ->
-                task.phase == CachePhase.REVIEW &&
-                    task.bookUrl == bookUrl &&
-                    !CacheLifecycleRules.isTerminal(task.status) &&
-                    task.status != CacheLifecycle.PAUSED
-            }
-            .toList()
-        if (activeTasks.isEmpty()) return null
-        val total = activeTasks.sumOf { it.units.size }
-        val finished = activeTasks.sumOf { task ->
-            task.units.count { unit ->
-                unit.status != CacheUnitStatus.PENDING &&
-                    unit.status != CacheUnitStatus.RUNNING &&
-                    unit.status != CacheUnitStatus.REVIEW_ELIGIBLE
-            }
-        }
-        return finished to total
-    }
-
-    /**
-     * 等待“取消并重试”把旧任务真正停下。
-     *
-     * `beginCancel` 先把状态置为 CANCELLING，而 CANCELLING 不算终态、它占用的章节也仍被
-     * 视为活跃；此时立刻 retry 会被判成 AlreadyInProgress，弹窗重开、用户再点一次就是死循环。
-     * 这里以 100ms 粒度轮询到没有活跃 REVIEW 任务为止。
-     */
-    suspend fun awaitReviewTasksStopped(bookUrl: String, timeoutMs: Long): Boolean {
-        val deadline = System.currentTimeMillis() + timeoutMs
-        while (System.currentTimeMillis() < deadline) {
-            if (activeReviewProgress(bookUrl) == null) return true
-            kotlinx.coroutines.delay(100L)
-        }
-        return activeReviewProgress(bookUrl) == null
-    }
-
     private fun commandAll(command: (CacheSubmission) -> Boolean): Int {
         val submissions = snapshot.value.sessions
             .flatMap { it.tasks }
             .filter { !CacheLifecycleRules.isTerminal(it.status) }
             .map { CacheSubmission(it.sessionId, it.taskId) }
         return submissions.count(command)
-    }
-
-    /** Append REVIEW only after the same domain's primary artifact has reached a terminal state. */
-    internal fun appendReviewTask(
-        sessionId: String,
-        prerequisiteTaskId: String,
-    ): CacheSubmission? {
-        val prerequisite = store.currentTask(sessionId, prerequisiteTaskId)
-            ?: error("unknown review prerequisite: session=$sessionId task=$prerequisiteTaskId")
-        require(prerequisite.kind.reviewPrerequisitePhase() == prerequisite.phase) {
-            "review task cannot follow ${prerequisite.kind}/${prerequisite.phase}"
-        }
-        require(prerequisite.reviewEnabled) {
-            "${prerequisite.phase} task did not request review caching"
-        }
-        require(
-            prerequisite.status == CacheLifecycle.COMPLETED ||
-                prerequisite.status == CacheLifecycle.FAILED
-        ) { "review task cannot be appended before prerequisite completion" }
-        require(prerequisite.result != CacheResult.SKIPPED) {
-            "review task cannot follow a skipped prerequisite"
-        }
-        store.findTask(
-            sessionId,
-            prerequisite.kind,
-            CachePhase.REVIEW,
-            prerequisite.bookUrl,
-        )?.let {
-            return CacheSubmission(sessionId, it.taskId)
-        }
-        val eligible = store.reviewEligibleUnits(sessionId, prerequisiteTaskId)
-        if (eligible.isEmpty()) return null
-        val request = CacheRequest(
-            source = prerequisite.source,
-            kind = prerequisite.kind,
-            phase = CachePhase.REVIEW,
-            bookUrl = prerequisite.bookUrl,
-            bookName = prerequisite.bookName,
-            units = eligible,
-            reviewEnabled = true,
-            reviewIncremental = prerequisite.reviewIncremental,
-        )
-        val task = store.addTask(sessionId, request)
-        record(
-            CacheLogEventType.TASK_QUEUED,
-            sessionId,
-            task.taskId,
-            "appended=REVIEW units=${task.units.size}",
-        )
-        return CacheSubmission(sessionId, task.taskId).also(workerDispatcher::start)
     }
 
     internal fun currentTask(submission: CacheSubmission): CacheTaskState? {
@@ -598,17 +338,8 @@ object CacheCoordinator : CacheUiPort {
                 return
             }
         try {
-            if (
-                task.kind.reviewPrerequisitePhase() == task.phase &&
-                task.reviewEnabled &&
-                task.result != CacheResult.SKIPPED &&
-                task.status in setOf(CacheLifecycle.COMPLETED, CacheLifecycle.FAILED)
-            ) {
-                appendReviewTask(task.sessionId, task.taskId)
-            }
             val finalTask = currentTask(submission)
                 ?: error("terminal task disappeared: ${submission.sessionId}/${submission.taskId}")
-            maybeScheduleReviewResourceGc(finalTask)
             CacheNotificationBridge.finished(
                 snapshot = snapshot.value,
                 progress = progress.value,
@@ -674,89 +405,8 @@ object CacheCoordinator : CacheUiPort {
         }
     }
 
-    /**
-     * 本轮“正文 → 评论”收尾钩子：
-     * 只有当整本书最后一个 REVIEW task 进入终态、且同书已无其它在跑/排队的
-     * REVIEW task 时，才在后台做一次评论资源 GC。BODY 结束后还会追加 REVIEW，
-     * 因此 BODY 终态不会触发（[finalTask] 已切换为新追加的 REVIEW task）。
-     * 每本书同一时刻至多排一次，避免终态通知风暴重复 GC。
-     *
-     * 并发：扫描开始前快照 [ReviewResourceEpoch]；REVIEW worker 真正启动时会推进
-     * epoch，因此即使扫描期间有“快速开始又快速结束”的 REVIEW，删除阶段也会因
-     * epoch 已变化而放弃本次 GC，绝不基于过期引用集合误删新资源。
-     */
-    private fun maybeScheduleReviewResourceGc(task: CacheTaskState?) {
-        if (task == null ||
-            task.phase != CachePhase.REVIEW ||
-            !CacheLifecycleRules.isTerminal(task.status)
-        ) {
-            return
-        }
-        val bookUrl = task.bookUrl
-        if (hasActiveReviewTask(bookUrl)) return
-        if (!resourceGcScheduled.add(bookUrl)) return
-        // 排队成功瞬间快照基准 epoch：协程之后才真正执行，但基准必须固定在
-        // “排队这一刻”。从此刻起的任何 REVIEW 启动都会推进 epoch，让本次 GC
-        // 在扫描前/删除前的检查中放弃；绝不能在协程启动后才读 epoch（那会把
-        // 排队后、执行前启动的 REVIEW 误当成自己的基准，ABA 窗口依旧存在）。
-        val epoch = ReviewResourceEpoch.current()
-        resourceGcScope.launch {
-            try {
-                val book = appDb.bookDao.getBook(bookUrl) ?: return@launch
-                val result = ReviewSnapshotResourceStore.gc(
-                    book = book,
-                    expectedEpoch = epoch,
-                ) {
-                    !hasActiveReviewTask(bookUrl)
-                }
-                AppLogCacheLogSink.record(
-                    CacheLogEvent(
-                        type = CacheLogEventType.REVIEW_RESOURCE_GC,
-                        detail = "book=$bookUrl " +
-                            "aborted=${result.aborted} " +
-                            "snapshots=${result.scannedSnapshots} " +
-                            "blobs=${result.scannedBlobs} " +
-                            "referenced=${result.referencedKeys} " +
-                            "removedBlobs=${result.removedBlobs} " +
-                            "removedEntries=${result.removedEntries} " +
-                            "removedBytes=${result.removedBytes}",
-                    )
-                )
-            } catch (error: Throwable) {
-                // 任何一个快照缺 resourceKeys / 读取失败都会让 GC 放弃：
-                // 记录原因，不删任何文件，等待下一次 REVIEW 终态再触发。
-                AppLogCacheLogSink.record(
-                    CacheLogEvent(
-                        type = CacheLogEventType.REVIEW_RESOURCE_GC,
-                        detail = "book=$bookUrl gc-abort reason=${error.localizedMessage}",
-                    )
-                )
-            } finally {
-                resourceGcScheduled.remove(bookUrl)
-            }
-        }
-    }
-
-    private fun hasActiveReviewTask(bookUrl: String): Boolean {
-        return snapshot.value.sessions.asSequence()
-            .flatMap { it.tasks.asSequence() }
-            .any {
-                it.phase == CachePhase.REVIEW &&
-                    it.bookUrl == bookUrl &&
-                    !CacheLifecycleRules.isTerminal(it.status)
-            }
-    }
-
     private fun validateUiRequest(request: CacheRequest) {
         when (request.phase) {
-            CachePhase.REVIEW -> {
-                require(request.kind.reviewPrerequisitePhase() != null) {
-                    "${request.kind} requests cannot use REVIEW phase"
-                }
-                require(request.source == CacheRequestSource.READER) {
-                    "REVIEW tasks must be appended by the coordinator or submitted by READER"
-                }
-            }
             CachePhase.TTS -> {
                 require(request.kind.ttsPrerequisitePhase() != null) {
                     "${request.kind} requests cannot use TTS phase"
@@ -774,43 +424,6 @@ object CacheCoordinator : CacheUiPort {
             }
         }
         validateCommon(request)
-    }
-
-    /** READER may submit REVIEW only when the primary offline artifact is already complete. */
-    private fun validateReaderReviewPrerequisite(request: CacheRequest) {
-        if (request.phase != CachePhase.REVIEW || request.source != CacheRequestSource.READER) return
-        val book = appDb.bookDao.getBook(request.bookUrl)
-            ?: error("reader review prerequisite book not found: ${request.bookUrl}")
-        val expectedKind = when {
-            book.isAudio -> CacheKind.AUDIO
-            book.isVideo -> CacheKind.VIDEO
-            else -> CacheKind.TEXT
-        }
-        require(request.kind == expectedKind) {
-            "reader review kind ${request.kind} does not match book kind $expectedKind"
-        }
-        require(request.kind != CacheKind.VIDEO) {
-            "video books do not support REVIEW artifacts"
-        }
-        val chaptersByIndex = request.units.associate { unit ->
-            unit.chapterIndex to appDb.bookChapterDao.getChapter(request.bookUrl, unit.chapterIndex)
-        }
-        require(chaptersByIndex.values.all { it != null }) {
-            "reader review prerequisite chapter is missing: ${request.bookUrl}"
-        }
-        val incomplete = request.units.mapNotNull { unit ->
-            val chapter = requireNotNull(chaptersByIndex[unit.chapterIndex])
-            val complete = when (request.kind) {
-                CacheKind.TEXT -> BodyOfflineState.isComplete(book, chapter)
-                CacheKind.AUDIO -> AudioOfflineState.isComplete(book, chapter)
-                CacheKind.VIDEO -> ExoPlayerHelper.isVideoCached(chapter.resourceUrl, book)
-            }
-            unit.takeUnless { complete }
-        }
-        require(incomplete.isEmpty()) {
-            "reader review prerequisite artifact incomplete: " +
-                incomplete.joinToString { it.chapterIndex.toString() }
-        }
     }
 
     /** READER may submit TTS only when the same chapter's body text is already available. */
@@ -847,32 +460,8 @@ object CacheCoordinator : CacheUiPort {
         require(request.units.all { it.bookUrl == request.bookUrl }) {
             "cache request contains units from another book"
         }
-        if (request.reviewRetryTargets.isNotEmpty()) {
-            require(request.phase == CachePhase.REVIEW) {
-                "review retry targets require a REVIEW task"
-            }
-            val unitKeys = request.units.toSet()
-            require(request.reviewRetryTargets.all { target ->
-                target.unitKey in unitKeys &&
-                    target.buttonSources.isNotEmpty() &&
-                    target.buttonSources.all { it.isNotBlank() } &&
-                    target.buttonSources.distinct().size == target.buttonSources.size
-            }) { "review retry targets are invalid" }
-            require(request.reviewRetryTargets.map { it.unitKey }.distinct().size ==
-                request.reviewRetryTargets.size) {
-                "review retry target units are duplicated"
-            }
-        }
         require(request.kind.supports(request.phase)) {
             "unsupported cache artifact ${request.kind}/${request.phase}"
-        }
-        if (request.reviewEnabled) {
-            require(
-                request.phase == CachePhase.REVIEW ||
-                    request.kind.reviewPrerequisitePhase() == request.phase
-            ) {
-                "${request.kind}/${request.phase} cannot enable review caching"
-            }
         }
         if (request.ttsEnabled) {
             require(

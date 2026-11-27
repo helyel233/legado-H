@@ -16,12 +16,11 @@ import io.legado.app.help.http.BackstageWebView
 import io.legado.app.help.http.StrResponse
 import io.legado.app.help.review.ReviewSnapshot
 import io.legado.app.help.review.ReviewParagraphTemplate
-import io.legado.app.help.review.ReviewPreheatCoordinator
+import io.legado.app.help.review.ReviewWindowPrefetcher
 import io.legado.app.help.review.ReviewSnapshotCapture
 import io.legado.app.help.review.ReviewSnapshotManager
 import io.legado.app.help.review.ReviewSnapshotStore
 import io.legado.app.help.review.SyntheticParaContent
-import io.legado.app.help.review.reviewoutbox.ReviewOutboxContext
 import io.legado.app.help.source.SourceVerificationHelp
 import io.legado.app.model.ReadBook
 import io.legado.app.model.analyzeRule.AnalyzeRule
@@ -34,7 +33,6 @@ import io.legado.app.ui.widget.dialog.BottomWebViewDialog
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonObject
 import io.legado.app.utils.showDialogFragment
-import io.legado.app.utils.toastOnUi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlin.coroutines.coroutineContext
@@ -43,21 +41,12 @@ import splitties.init.appCtx
 /**
  * 图片/评论点击统一入口。
  *
- * “评论打开方式”四模式（[AppConfig.reviewOpenMode]，默认网络优先）：
- * - 网络优先：点击评论立即按原 click/js 正常打开真实评论页；若该按钮已有
- *   **保鲜期内**快照且能构造后台刷新器，则先用快照秒开（0 秒可见），同时后台
- *   解析真实评论页覆盖——在线结果是终态，快照只是这段等待期间的替代显示，
- *   不改变「网络优先」的语义（无新鲜快照 → 完全走原链路）；
- *   网络加载失败/超时且有快照 → 自动切换快照；无快照 → 正常错误；
- * - 纯联网：任何快照都不参与「打开」这一步（不秒开、不闪一版离线内容），始终
- *   执行 click/js 加载在线页；只有在线加载失败/超时且本地有快照时才切快照兜底。
- *   给「不接受先看到离线内容」的用户保留的出口，语义等同加入快照秒开之前的
- *   网络优先；
- * - 快照优先：有快照 → 立即显示快照（0 秒可见），后台继续执行原 click/js 解析
- *   并加载最新网络评论页，成功后当前窗口覆盖为在线页；失败/超时停留快照；
- *   无快照 → 正常网络打开；
- * - 仅使用快照：有快照 → 打开快照，绝不执行 click/js、绝不联网；无快照 →
- *   明确提示“当前章节没有缓存评论”，不回退网络。
+ * “评论打开方式”二模式（[AppConfig.reviewOpenMode]，默认联网优先）：
+ * - 联网优先（[AppConfig.ReviewOpenMode.NETWORK]）：点击评论直接执行原 click/js
+ *   加载在线评论页；若该按钮存在本地快照，则在网络加载失败/超时时自动用缓存兜底，
+ *   无快照则展示正常错误；
+ * - 缓存优先（[AppConfig.ReviewOpenMode.SNAPSHOT_FIRST]）：命中缓存立即用快照秒开
+ *   （0 秒可见），同时后台静默 SWR 刷新真实评论页；无缓存则按正常网络链路打开。
  *
  * 同一套 click/js 执行逻辑同时服务用户点击与后台抓取：抓取时传入拦截宿主
  * （click 分支替换 java 宿主；js 分支挂 AnalyzeRule 钩子），其余环境完全一致。
@@ -65,30 +54,6 @@ import splitties.init.appCtx
 object BookImgClick {
 
     private fun openMode(): String = AppConfig.reviewOpenMode
-
-    /** 纯联网：打开这一步不接受任何快照，快照只在网络失败/超时时兜底 */
-    private fun isPureNetwork(): Boolean =
-        openMode() == AppConfig.ReviewOpenMode.NETWORK_ONLY
-
-    /** 允许「无 click/js 可执行时直接展示离线快照」的兜底模式 */
-    private fun usesSnapshotAsOnlyOption(): Boolean {
-        val mode = openMode()
-        return mode == AppConfig.ReviewOpenMode.NETWORK ||
-            mode == AppConfig.ReviewOpenMode.NETWORK_ONLY
-    }
-
-    /**
-     * 快照是否仍在保鲜期内。
-     *
-     * 网络优先模式允许用快照先顶上，但只接受保鲜期内的内容：过期的段评先弹出来
-     * 再被在线页替换，反而会让用户读到一段已经过时的评论。快照优先/仅快照模式
-     * 不设此限制（它们的语义就是「先给能看的内容」）。
-     */
-    private fun isSnapshotFresh(savedAt: Long): Boolean {
-        return !ReviewPreheatCoordinator.isStale(
-            savedAt, System.currentTimeMillis(), AppConfig.reviewSnapshotTtlDays
-        )
-    }
 
     /** 与图片点击入口共用同一判定，避免给没有 click/js 的零评论泡暴露段评菜单。 */
     fun hasAction(src: String, click: String?): Boolean {
@@ -182,16 +147,6 @@ object BookImgClick {
                     networkRefresher = networkRefresher,
                     offlineOnly = offlineOnly,
                     reviewResourceBook = cached.book,
-                    outboxContext = ReviewOutboxContext(
-                        bookUrl = cached.book.bookUrl,
-                        bookName = cached.book.name,
-                        chapterUrl = cached.chapter.url,
-                        chapterIndex = cached.chapter.index,
-                        chapterTitle = cached.chapter.title,
-                        origin = sourceKey.ifBlank { cached.book.origin },
-                        buttonSrc = cached.snapshot.buttonSrc.ifBlank { null },
-                        pageUrl = cached.snapshot.url,
-                    ),
                     // 内容来自 ReviewSnapshotStore 的快照：身份为离线，允许离线接管
                     isSnapshotHtml = true,
                     onDismiss = onDismiss,
@@ -242,8 +197,6 @@ object BookImgClick {
      * 打开评论快照。
      * @param refreshToNetwork 快照优先：后台刷新为最新网络评论页（成功后覆盖）
      * @param offlineOnly 仅使用快照：WebView 禁止一切 http/https 网络请求
-     * @param requireFresh 网络优先：只接受保鲜期内快照，且必须能构造后台刷新器
-     *   （否则等于截断原链路）；任一条件不满足按「无快照」返回 false
      * @param pclick 段落规则点击值；非空时后台刷新走规则点击脚本解析真实评论页
      * @return true 表示已用快照打开
      */
@@ -256,35 +209,29 @@ object BookImgClick {
         syntheticPara: SyntheticParaContent? = null,
         pclick: String? = null,
         onDismiss: (() -> Unit)? = null,
-        requireFresh: Boolean = false,
     ): Boolean {
         val chapter = currentChapter(hostChapter) ?: return false
         // 先持有本地快照；网络刷新条件不得影响离线快照可用性。
         val resolvedContext = reviewContext(chapter, src) ?: return false
         val cached = cachedSnapshot(resolvedContext, src, syntheticPara) ?: return false
-        if (requireFresh && !isSnapshotFresh(cached.snapshot.savedAt)) return false
-        // 快照优先：后台解析真实评论页并加载在线内容，成功后覆盖当前快照
+        // 缓存优先：后台解析真实评论页并加载在线内容，有变化时提示更新
         val snapshotSource = resolveNetworkSource(resolvedContext)
         val refresher = if (refreshToNetwork) {
             buildNetworkRefresher(src, cached, snapshotSource, syntheticPara)
         } else {
             null
         }
-        // 网络优先：没有刷新器的「先给快照」等于把联网链路截断成离线预览，
-        // 与用户选择的模式冲突，宁可回落到原网络链路
-        if (requireFresh && refresher == null) return false
         val ruleSourceKey = pclick
             ?.let { ParagraphRuleProcessor.ruleIdOfClick(it) }
             ?.let { "paragraph_rule_$it" }
         if (offlineOnly) {
-            // 仅快照模式没有「打开时刷新」器：过期快照（超过保鲜期）由后台
-            // 刷新覆盖，弹窗本身仍纯离线渲染，先用旧快照保证 0 秒可见
+            // 纯离线兜底无打开时刷新器：过期快照由后台刷新覆盖，弹窗先用旧快照保证 0 秒可见
             val ttlDays = AppConfig.reviewSnapshotTtlDays
-            if (ReviewPreheatCoordinator.isStale(
+            if (ReviewWindowPrefetcher.isStale(
                     cached.snapshot.savedAt, System.currentTimeMillis(), ttlDays
                 )
             ) {
-                ReviewPreheatCoordinator.refreshButton(cached.book, cached.chapter, src)
+                ReviewWindowPrefetcher.refreshButton(cached.book, cached.chapter, src)
             }
         }
         // 快照 HTML 内存直传对话框：不过 Bundle、不写临时文件，
@@ -299,14 +246,12 @@ object BookImgClick {
     /**
      * 段评图标直点路径的**同步热命中**快速通道（点击即弹）。
      *
-     * 只做一次 stat（校验快照文件仍在）+ 进程内快照内存缓存查询（无解析、
-     * 无协程调度），命中即在调用线程（主线程）直接构造并显示对话框——从点击
-     * 到窗口出现只剩一次内存查询 + Fragment 事务，是快照模式的最快路径。
+     * 仅在缓存优先模式（[AppConfig.ReviewOpenMode.SNAPSHOT_FIRST]）生效：只做一次
+     * stat + 进程内快照内存缓存查询（无解析、无协程调度），命中即在主线程直接构造并
+     * 显示对话框，并挂上后台 SWR 刷新器；联网优先模式直接返回 false 走原链路。
      *
      * 未命中返回 false：调用方按原链路走 IO 协程读文件（首次/被淘汰），
      * 那次读入后会热缓存，下次同一按钮即走本通道。
-     * 网络优先模式只在「快照未过期 + 能构造后台刷新器」时命中：先给 0 秒可见的
-     * 快照，同时后台拿真实评论页覆盖，不改变该模式以在线内容为终态的含义。
      *
      * @param pclick 段落规则点击值；图标直点段落规则段评时传入，用于弹窗源键
      * @param onDismiss 快照弹窗关闭回调（调用方据此复位防重入标记）
@@ -323,8 +268,7 @@ object BookImgClick {
         onDismiss: (() -> Unit)? = null,
     ): Boolean {
         if (context.isFinishing || context.isDestroyed) return false
-        // 纯联网：连内存快照都不查，直接把点击交回原 click/js 链路
-        if (isPureNetwork()) return false
+        if (openMode() != AppConfig.ReviewOpenMode.SNAPSHOT_FIRST) return false
         // 主线程快速通道：只认调用方给的内存章节，不做任何数据库回退
         val chapter = hostChapter ?: return false
         val resolvedContext = reviewContext(chapter, src) ?: return false
@@ -337,35 +281,13 @@ object BookImgClick {
                 )
             }
             ?: return false
-        val mode = openMode()
-        // 仅快照模式：过期快照仍先用（保证 0 秒可见），后台刷新照常触发
-        if (mode == AppConfig.ReviewOpenMode.SNAPSHOT_ONLY) {
-            val ttlDays = AppConfig.reviewSnapshotTtlDays
-            if (ReviewPreheatCoordinator.isStale(
-                    cached.snapshot.savedAt, System.currentTimeMillis(), ttlDays
-                )
-            ) {
-                ReviewPreheatCoordinator.refreshButton(cached.book, cached.chapter, src)
-            }
-        }
         val snapshotSource = resolveNetworkSource(resolvedContext)
-        // 网络优先：过期快照不做「先顶一下」，直接回落原网络链路
-        if (mode == AppConfig.ReviewOpenMode.NETWORK && !isSnapshotFresh(cached.snapshot.savedAt)) {
-            return false
-        }
-        // 快照优先模式同样保留后台刷新器：同步通道只省掉 IO，不改语义
-        val refresher = if (mode != AppConfig.ReviewOpenMode.SNAPSHOT_ONLY) {
-            buildNetworkRefresher(src, cached, snapshotSource)
-        } else {
-            null
-        }
-        // 网络优先：没有刷新器就不能用快照顶上（否则等于丢掉联网链路）
-        if (mode == AppConfig.ReviewOpenMode.NETWORK && refresher == null) return false
+        val refresher = buildNetworkRefresher(src, cached, snapshotSource)
         return showSnapshot(
             context, cached,
             source = snapshotSource,
             networkRefresher = refresher,
-            offlineOnly = mode == AppConfig.ReviewOpenMode.SNAPSHOT_ONLY,
+            offlineOnly = false,
             sourceKeyOverride = pclick
                 ?.let { ParagraphRuleProcessor.ruleIdOfClick(it) }
                 ?.let { "paragraph_rule_$it" },
@@ -375,12 +297,11 @@ object BookImgClick {
     }
 
     /**
-     * 段评图标直点路径的快照消费（与选中文字后的段评菜单同一套四模式语义）：
-     * - 仅使用快照：有快照 → 立即打开；无快照 → 提示且不回落网络；
-     * - 快照优先：有快照 → 立即打开（后台刷新最新网络页）；无快照 → 回落网络；
-     * - 网络优先（默认）：保鲜期内且有后台刷新器 → 快照秒开并同时刷新；
-     *   否则返回 NotConsumed，由调用方按原 click/js 链路打开真实评论页；
-     * - 纯联网：任何快照都不参与打开这一步，直接返回 NotConsumed。
+     * 段评图标直点路径的快照消费（与选中文字后的段评菜单同一套二模式语义）：
+     * - 缓存优先（[AppConfig.ReviewOpenMode.SNAPSHOT_FIRST]）：有缓存 → 立即打开并后台
+     *   SWR 刷新，返回 [ReviewSnapshotConsumption.Opened]；无缓存 → 返回 NotConsumed 回落网络；
+     * - 联网优先（[AppConfig.ReviewOpenMode.NETWORK]，默认）：直接返回 NotConsumed，
+     *   由调用方按原 click/js 链路联网加载，并在失败/超时时用缓存兜底。
      *
      * 在 IO 线程调用（内部会读快照文件），弹窗经 runOnUiThread 展示。
      * 热路径请先试 [tryOpenCachedSnapshotImmediately]（同步内存命中直开）。
@@ -395,44 +316,20 @@ object BookImgClick {
         pclick: String? = null,
         onDismiss: (() -> Unit)? = null,
     ): ReviewSnapshotConsumption {
-        // 纯联网：打开这一步不用快照，交回调用方的 click/js 链路
-        if (isPureNetwork()) return ReviewSnapshotConsumption.NotConsumed
-        when (openMode()) {
-            AppConfig.ReviewOpenMode.SNAPSHOT_ONLY -> {
-                val opened = openSnapshotIfCached(
-                    context, src, hostChapter,
-                    refreshToNetwork = false, offlineOnly = true,
-                    pclick = pclick, onDismiss = onDismiss
-                )
-                if (opened) return ReviewSnapshotConsumption.Opened
-                context.toastOnUi(R.string.review_no_cached_snapshot)
-                return ReviewSnapshotConsumption.Miss
-            }
+        return when (openMode()) {
             AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
                 val opened = openSnapshotIfCached(
                     context, src, hostChapter,
                     refreshToNetwork = true, offlineOnly = false,
                     pclick = pclick, onDismiss = onDismiss
                 )
-                return if (opened) {
+                if (opened) {
                     ReviewSnapshotConsumption.Opened
                 } else {
                     ReviewSnapshotConsumption.NotConsumed
                 }
             }
-            else -> {
-                // 网络优先：过期快照/无刷新器一律不消费，保持原联网链路
-                val opened = openSnapshotIfCached(
-                    context, src, hostChapter,
-                    refreshToNetwork = true, offlineOnly = false,
-                    pclick = pclick, onDismiss = onDismiss, requireFresh = true
-                )
-                return if (opened) {
-                    ReviewSnapshotConsumption.Opened
-                } else {
-                    ReviewSnapshotConsumption.NotConsumed
-                }
-            }
+            else -> ReviewSnapshotConsumption.NotConsumed
         }
     }
 
@@ -443,9 +340,6 @@ object BookImgClick {
 
         /** 未消费：调用方继续执行 click/js 网络链路 */
         object NotConsumed : ReviewSnapshotConsumption
-
-        /** 仅快照模式且无快照：已提示用户，调用方应停止 */
-        object Miss : ReviewSnapshotConsumption
     }
 
     /**
@@ -463,17 +357,6 @@ object BookImgClick {
     ) {
         // 合成入口只复用缓存地址创建本段本地模板，不展示锚点段的评论。
         when (openMode()) {
-            AppConfig.ReviewOpenMode.SNAPSHOT_ONLY -> {
-                // 仅使用快照：绝不执行 click/js，也绝不允许快照内残留资源联网
-                if (openSnapshotIfCached(
-                        context, src, hostChapter,
-                        refreshToNetwork = false, offlineOnly = true, syntheticPara = syntheticPara
-                    )
-                ) {
-                    return
-                }
-                context.toastOnUi(R.string.review_no_cached_snapshot)
-            }
             AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
                 if (openSnapshotIfCached(
                         context, src, hostChapter,
@@ -504,7 +387,7 @@ object BookImgClick {
         if (parsed == null) {
             // 旧源选项 JSON 损坏时，网络链路没有可执行的 click/js。若已缓存，仍应
             // 直接展示持有的离线评论；无快照则交回原图片链路暴露其原始失败。
-            return if (usesSnapshotAsOnlyOption() && paramPattern.matcher(src).find()) {
+            return if (paramPattern.matcher(src).find()) {
                 openSnapshotIfCached(
                     context, src, hostChapter,
                     refreshToNetwork = false, offlineOnly = true
@@ -517,25 +400,12 @@ object BookImgClick {
         val click = options["click"]
         val js = options["js"]
         if (click.isNullOrBlank() && js.isNullOrBlank()) {
-            return if (usesSnapshotAsOnlyOption()) {
-                openSnapshotIfCached(
-                    context, src, hostChapter,
-                    refreshToNetwork = false, offlineOnly = true
-                )
-            } else {
-                false
-            }
+            return openSnapshotIfCached(
+                context, src, hostChapter,
+                refreshToNetwork = false, offlineOnly = true
+            )
         }
         when (openMode()) {
-            AppConfig.ReviewOpenMode.SNAPSHOT_ONLY -> {
-                if (!openSnapshotIfCached(
-                        context, src, hostChapter,
-                        refreshToNetwork = false, offlineOnly = true
-                    )
-                ) {
-                    context.toastOnUi(R.string.review_no_cached_snapshot)
-                }
-            }
             AppConfig.ReviewOpenMode.SNAPSHOT_FIRST -> {
                 if (!openSnapshotIfCached(
                         context, src, hostChapter,
@@ -828,21 +698,11 @@ object BookImgClick {
                         fallbackSavedAt = fallbackSavedAt,
                         reviewResourceBook = reviewResourceBook,
                         syntheticParaContent = syntheticPara,
-                        outboxContext = ReviewOutboxContext(
-                            bookUrl = reviewResourceBook.bookUrl,
-                            bookName = reviewResourceBook.name,
-                            chapterUrl = chapter?.url.orEmpty(),
-                            chapterIndex = chapter?.index ?: 0,
-                            chapterTitle = chapter?.title.orEmpty(),
-                            origin = getSource()?.getKey(),
-                            buttonSrc = buttonSrc,
-                            pageUrl = url,
-                        ),
                     )
                 )
             }
             if (chapter != null && !buttonSrc.isNullOrBlank()) {
-                ReviewPreheatCoordinator.captureFromClick(
+                ReviewWindowPrefetcher.captureFromClick(
                     reviewResourceBook, chapter, buttonSrc, url, html, preloadJs
                 )
             }

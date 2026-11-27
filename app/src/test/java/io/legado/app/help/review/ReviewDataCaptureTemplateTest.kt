@@ -151,37 +151,4 @@ class ReviewDataCaptureTemplateTest {
         assertEquals("2023-11-14 22:13", ReviewDataCapture.formatReviewTimestamp("1700000000000", now, tz))
         assertEquals("昨天 18:00", ReviewDataCapture.formatReviewTimestamp("昨天 18:00", now, tz))
     }
-
-    @Test
-    fun `built HTML integrates cleanly with ReviewSnapshotMerger`() {
-        val now = 1_700_600_000_000L
-        val baseHtml = ReviewDataCapture.buildHtml(
-            url = "https://example.com/idea_comment?book_id=1&item_id=2&para=3",
-            sourceText = "正文段",
-            items = listOf(sampleCommentItem("c1", "甲", "第一条评论", 1_700_000_000L, 1)),
-            replies = listOf(emptyList()),
-            emoji = emptyMap(),
-            nowMillis = now,
-            isNightTheme = false,
-            accentColorHex = "#3B82F6",
-        )
-        val incomingHtml = ReviewDataCapture.buildHtml(
-            url = "https://example.com/idea_comment?book_id=1&item_id=2&para=3",
-            sourceText = "正文段",
-            items = listOf(
-                sampleCommentItem("c2", "乙", "新增评论", 1_700_001_000L, 0),
-                sampleCommentItem("c1", "甲", "第一条评论", 1_700_000_000L, 1),
-            ),
-            replies = listOf(emptyList(), emptyList()),
-            emoji = emptyMap(),
-            nowMillis = now,
-            isNightTheme = false,
-            accentColorHex = "#3B82F6",
-        )
-        val merged = ReviewSnapshotMerger.merge(baseHtml, incomingHtml)
-        assertNotNull(merged)
-        assertEquals(1, merged!!.addedCount)
-        val doc = Jsoup.parse(merged.html)
-        assertEquals(2, doc.select(".comment-card[data-comment-id]").size)
-    }
 }

@@ -12,6 +12,9 @@ import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.drawable.Drawable
 import io.legado.app.help.config.ThemeConfig
+import io.legado.app.help.config.pkg.WallpaperScaleMode
+import io.legado.app.help.config.pkg.WallpaperTransform
+import io.legado.app.help.config.pkg.drawTransformedBitmap
 import io.legado.app.lib.theme.UiCorner
 
 class GroupPanelImageDrawable(
@@ -20,20 +23,27 @@ class GroupPanelImageDrawable(
     private val groupHeight: Int,
     private val offsetY: Int,
     private val topRadius: Float,
-    private val bottomRadius: Float
+    private val bottomRadius: Float,
+    private val transform: WallpaperTransform = WallpaperTransform.fromLegacyPanelScaleType(mode)
 ) : Drawable() {
 
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         alpha = (UiCorner.layoutAlpha() * 255).toInt().coerceIn(0, 255)
     }
-    private val clampShader = BitmapShader(bitmap, Shader.TileMode.CLAMP, Shader.TileMode.CLAMP)
-    private val matrix = Matrix()
+    private val tileShader by lazy(LazyThreadSafetyMode.NONE) {
+        if (transform.mode == WallpaperScaleMode.TILE && !bitmap.isRecycled) {
+            BitmapShader(bitmap, Shader.TileMode.REPEAT, Shader.TileMode.REPEAT)
+        } else {
+            null
+        }
+    }
     private val rect = RectF()
+    private val groupRect = RectF()
     private val path = Path()
 
     override fun draw(canvas: Canvas) {
         val bounds = bounds
-        if (bounds.isEmpty || groupHeight <= 0) return
+        if (bounds.isEmpty || groupHeight <= 0 || bitmap.isRecycled) return
         rect.set(bounds)
         path.reset()
         path.addRoundRect(
@@ -46,23 +56,22 @@ class GroupPanelImageDrawable(
             ),
             Path.Direction.CW
         )
-        val groupWidth = bounds.width().toFloat().coerceAtLeast(1f)
-        val groupHeightF = groupHeight.toFloat().coerceAtLeast(1f)
-        val scale = if (mode == ThemeConfig.PANEL_BG_FIT) {
-            minOf(groupWidth / bitmap.width, groupHeightF / bitmap.height)
-        } else {
-            maxOf(groupWidth / bitmap.width, groupHeightF / bitmap.height)
-        }
-        val dx = bounds.left + (groupWidth - bitmap.width * scale) / 2f
-        val dy = bounds.top - offsetY + (groupHeightF - bitmap.height * scale) / 2f
-        matrix.reset()
-        matrix.setScale(scale, scale)
-        matrix.postTranslate(dx, dy)
-        paint.shader = clampShader
-        paint.shader?.setLocalMatrix(matrix)
+        groupRect.set(
+            bounds.left.toFloat(),
+            (bounds.top - offsetY).toFloat(),
+            bounds.right.toFloat(),
+            (bounds.top - offsetY + groupHeight).toFloat()
+        )
         val saveCount = canvas.save()
         canvas.clipPath(path)
-        canvas.drawRect(rect, paint)
+        drawTransformedBitmap(
+            canvas = canvas,
+            bitmap = bitmap,
+            bounds = groupRect,
+            transform = transform,
+            paint = paint,
+            tileShader = tileShader
+        )
         canvas.restoreToCount(saveCount)
     }
 
