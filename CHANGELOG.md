@@ -1,5 +1,27 @@
 # 更新日志
 
+## 3.1.1 版（2026-11-27）
+
+段评快照链路整体重写为 Room 单表真相源，缓存与通知链路大幅瘦身；主题新增六槽壁纸变换与日夜键，包预设支持导入导出。**新增特性 → minor + 0.1，跳过 3.1.0。**
+
+### 架构重构
+
+- 段评快照：新建 ReviewCache 表 / DAO / 数据库迁移 119 作为唯一真相源，ReviewSnapshotStore 收敛为 Room 读写与淘汰，支持旧 JSON 快照只读导入
+- 删除十余个旧段评组件（ReviewWorkerAdapter、ReviewPreheatCoordinator、ResourceStore/Index/Merger、reviewoutbox 全套等）与配套状态弹窗，移除 REVIEW 缓存阶段，缓存链路只保留正文 / 媒体 / TTS
+- 新增轻量模板注入日夜样式、指纹判定的 SWR 重绘策略，以及本章 + 下一章预取、点击缓存与单飞冷却的窗口预取器
+- 段评抓拍改为直拉干净 DOM、不再内联资源；设置项从 25 项精简到 4 项
+
+### 新增功能
+
+- 主题壁纸变换：六槽（顶栏 / 底栏 / 欢迎页 / 全局背景 / 书籍详情 / 面板）各支持四种缩放与位移，日夜独立，缓存按解码键复用
+- 包预设：统一包编解码 / 模型 / 仓库支持壁纸变换导入导出，兼容旧 panelScaleType；美术图点击归一为联网 / 缓存优先两种模式
+
+### 修复与稳定性
+
+- 浏览器与评论链路：BottomWebViewDialog 改用模板渲染、移除离线发评与图片代理；ReadBookActivity 移除离线评论入口；阅读菜单与 WebView 设置同步收敛
+- 主题与控件：UiCorner / SurfaceDrawable / GroupPanelImageDrawable 等收口圆角与表面绘制，NightKeyPairs 补登记六组变换日夜键
+- 测试：移除对应已删实现的 6 个旧单测，新增 ReviewCache 键、轻量模板与窗口预取策略三个定向测试；UI token 基线同步为 69 条零新增
+
 ## 3.0.2 版（2026-11-26）
 
 修复批次：段评快照的并发状态一致性、评论页抓拍回退与登录态补齐，调整资源下载要求的默认值，并把正式包构建提速（lintVital 移交 CI 单独跑）。
