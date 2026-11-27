@@ -12,11 +12,41 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-enum class WallpaperScaleMode(val id: String, val label: String) {
-    CROP("crop", "裁切"),
-    FIT("fit", "等比例"),
-    FILL("fill", "适应屏幕"),
-    TILE("tile", "平铺");
+enum class WallpaperScaleMode(
+    val id: String,
+    val label: String,
+    val minScale: Float,
+    val maxScale: Float,
+    val description: String
+) {
+    CROP(
+        id = "crop",
+        label = "裁切",
+        minScale = 1.0f,
+        maxScale = 4.0f,
+        description = "保持原图比例铺满并裁切多余边缘，拖动选取原图任意区域（无黑边）"
+    ),
+    FIT(
+        id = "fit",
+        label = "等比例",
+        minScale = 0.5f,
+        maxScale = 4.0f,
+        description = "保持原图比例完整显示，不裁切原图，留白处透出主题底色"
+    ),
+    FILL(
+        id = "fill",
+        label = "适应屏幕",
+        minScale = 1.0f,
+        maxScale = 4.0f,
+        description = "整张原图贴合目标区域宽高铺满，无留白无黑边（放大后可平移）"
+    ),
+    TILE(
+        id = "tile",
+        label = "平铺",
+        minScale = 0.25f,
+        maxScale = 4.0f,
+        description = "按原图比例无缝重复平铺（100% 时单块长边约占区域宽度的 35%），缩放调密度，拖动调偏移"
+    );
 
     companion object {
         fun fromId(raw: String?): WallpaperScaleMode {
@@ -33,7 +63,11 @@ data class WallpaperTransform(
     val offsetY: Float = 0f
 ) {
     fun normalized(): WallpaperTransform {
-        val safeScale = if (scale.isFinite()) scale.coerceIn(MIN_SCALE, MAX_SCALE) else 1f
+        val safeScale = if (scale.isFinite()) {
+            scale.coerceIn(mode.minScale, mode.maxScale)
+        } else {
+            1f.coerceIn(mode.minScale, mode.maxScale)
+        }
         val safeX = if (offsetX.isFinite()) offsetX.coerceIn(MIN_OFFSET, MAX_OFFSET) else 0f
         val safeY = if (offsetY.isFinite()) offsetY.coerceIn(MIN_OFFSET, MAX_OFFSET) else 0f
         return copy(scale = safeScale, offsetX = safeX, offsetY = safeY)
@@ -105,19 +139,33 @@ data class WallpaperTransform(
     }
 }
 
-fun buildWallpaperMatrix(
+data class WallpaperPanBounds(
+    val sx: Float,
+    val sy: Float,
+    val drawnWidth: Float,
+    val drawnHeight: Float,
+    val maxShiftX: Float,
+    val maxShiftY: Float,
+    val isTile: Boolean
+)
+
+fun computeWallpaperPanBounds(
     srcWidth: Float,
     srcHeight: Float,
     dstWidth: Float,
     dstHeight: Float,
-    transform: WallpaperTransform,
-    dstLeft: Float = 0f,
-    dstTop: Float = 0f,
-    outMatrix: Matrix = Matrix()
-): Matrix {
+    transform: WallpaperTransform
+): WallpaperPanBounds {
     if (srcWidth <= 0f || srcHeight <= 0f || dstWidth <= 0f || dstHeight <= 0f) {
-        outMatrix.reset()
-        return outMatrix
+        return WallpaperPanBounds(
+            sx = 1f,
+            sy = 1f,
+            drawnWidth = 0f,
+            drawnHeight = 0f,
+            maxShiftX = 0f,
+            maxShiftY = 0f,
+            isTile = transform.mode == WallpaperScaleMode.TILE
+        )
     }
     val t = transform.normalized()
     val baseSx: Float
@@ -138,17 +186,90 @@ fun buildWallpaperMatrix(
             baseSy = dstHeight / srcHeight
         }
         WallpaperScaleMode.TILE -> {
-            val b = minOf(dstWidth / srcWidth, dstHeight / srcHeight) * 0.5f
+            val b = (dstWidth * 0.35f) / maxOf(srcWidth, srcHeight)
             baseSx = b
             baseSy = b
         }
     }
     val sx = baseSx * t.scale
     val sy = baseSy * t.scale
-    val dx = dstLeft + (dstWidth - srcWidth * sx) / 2f + t.offsetX * dstWidth
-    val dy = dstTop + (dstHeight - srcHeight * sy) / 2f + t.offsetY * dstHeight
+    val drawnW = srcWidth * sx
+    val drawnH = srcHeight * sy
+    val isTile = t.mode == WallpaperScaleMode.TILE
+    val maxShiftX = if (isTile) drawnW else abs(dstWidth - drawnW) / 2f
+    val maxShiftY = if (isTile) drawnH else abs(dstHeight - drawnH) / 2f
+    return WallpaperPanBounds(
+        sx = sx,
+        sy = sy,
+        drawnWidth = drawnW,
+        drawnHeight = drawnH,
+        maxShiftX = maxShiftX,
+        maxShiftY = maxShiftY,
+        isTile = isTile
+    )
+}
+
+fun applyWallpaperPan(
+    transform: WallpaperTransform,
+    panX: Float,
+    panY: Float,
+    srcWidth: Float,
+    srcHeight: Float,
+    dstWidth: Float,
+    dstHeight: Float
+): WallpaperTransform {
+    val t = transform.normalized()
+    val bounds = computeWallpaperPanBounds(srcWidth, srcHeight, dstWidth, dstHeight, t)
+    val nextX: Float
+    val nextY: Float
+    if (bounds.isTile) {
+        val rawX = t.offsetX + if (bounds.maxShiftX > 0.5f) panX / bounds.maxShiftX else 0f
+        val rawY = t.offsetY + if (bounds.maxShiftY > 0.5f) panY / bounds.maxShiftY else 0f
+        nextX = wrapTileOffset(rawX)
+        nextY = wrapTileOffset(rawY)
+    } else {
+        nextX = if (bounds.maxShiftX > 0.5f) {
+            (t.offsetX + panX / bounds.maxShiftX).coerceIn(WallpaperTransform.MIN_OFFSET, WallpaperTransform.MAX_OFFSET)
+        } else {
+            0f
+        }
+        nextY = if (bounds.maxShiftY > 0.5f) {
+            (t.offsetY + panY / bounds.maxShiftY).coerceIn(WallpaperTransform.MIN_OFFSET, WallpaperTransform.MAX_OFFSET)
+        } else {
+            0f
+        }
+    }
+    return t.copy(offsetX = nextX, offsetY = nextY).normalized()
+}
+
+private fun wrapTileOffset(value: Float): Float {
+    if (!value.isFinite()) return 0f
+    var v = value
+    while (v > 1f) v -= 2f
+    while (v < -1f) v += 2f
+    return v
+}
+
+fun buildWallpaperMatrix(
+    srcWidth: Float,
+    srcHeight: Float,
+    dstWidth: Float,
+    dstHeight: Float,
+    transform: WallpaperTransform,
+    dstLeft: Float = 0f,
+    dstTop: Float = 0f,
+    outMatrix: Matrix = Matrix()
+): Matrix {
+    if (srcWidth <= 0f || srcHeight <= 0f || dstWidth <= 0f || dstHeight <= 0f) {
+        outMatrix.reset()
+        return outMatrix
+    }
+    val t = transform.normalized()
+    val bounds = computeWallpaperPanBounds(srcWidth, srcHeight, dstWidth, dstHeight, t)
+    val dx = dstLeft + (dstWidth - bounds.drawnWidth) / 2f + t.offsetX * bounds.maxShiftX
+    val dy = dstTop + (dstHeight - bounds.drawnHeight) / 2f + t.offsetY * bounds.maxShiftY
     outMatrix.reset()
-    outMatrix.setScale(sx, sy)
+    outMatrix.setScale(bounds.sx, bounds.sy)
     outMatrix.postTranslate(dx, dy)
     return outMatrix
 }
