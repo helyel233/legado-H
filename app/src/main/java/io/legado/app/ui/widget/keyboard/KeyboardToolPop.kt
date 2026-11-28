@@ -23,7 +23,7 @@ import io.legado.app.databinding.ItemFilletTextBinding
 import io.legado.app.databinding.PopupKeyboardToolBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.SelectItem
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.lib.theme.filletControlBackground
 import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.lib.theme.uiTypeface
@@ -163,7 +163,11 @@ class KeyboardToolPop(
             SelectItem(context.getString(R.string.assists_key_config), "keyConfig")
         )
         items.addAll(callBack.helpActions())
-        context.selector(context.getString(R.string.help), items) { _, selectItem, _ ->
+        context.showComposeChoiceListDialog(
+            title = context.getString(R.string.help),
+            labels = items.map { it.toString() }
+        ) { index ->
+            val selectItem = items[index]
             when (selectItem.value) {
                 "keyConfig" -> config()
                 else -> callBack.onHelpActionSelect(selectItem.value)

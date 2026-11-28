@@ -27,7 +27,6 @@ import io.legado.app.databinding.ActivityBookSourceEditBinding
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.backgroundColor
@@ -41,6 +40,7 @@ import io.legado.app.ui.code.CodeEditActivity
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.qrcode.QrCodeResult
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.dialog.UrlOptionDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.keyboard.KeyboardToolPop
@@ -731,8 +731,11 @@ class BookSourceEditActivity :
             val groups = withContext(IO) {
                 appDb.bookSourceDao.allGroups()
             }
-            selector(groups) { _, s, _ ->
-                sendText(s)
+            showComposeChoiceListDialog(
+                title = getString(R.string.ui_book_insert_group),
+                labels = groups
+            ) { index ->
+                sendText(groups[index])
             }
         }
     }

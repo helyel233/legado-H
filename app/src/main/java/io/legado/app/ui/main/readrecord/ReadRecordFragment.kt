@@ -24,7 +24,7 @@ import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.ThemeConfig
 import io.legado.app.help.config.TopBarConfig
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
@@ -549,10 +549,11 @@ class ReadRecordFragment : BaseFragment(R.layout.activity_read_record) {
 
     private fun showYearSelector() {
         val years = ((selectedDate.year - 5)..(selectedDate.year + 1)).toList()
-        requireContext().selector(
-            getString(R.string.read_record_select_year),
-            years.map { getString(R.string.read_record_year_value, it) }
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.read_record_select_year),
+            labels = years.map { getString(R.string.read_record_year_value, it) },
+            selectedIndex = years.indexOf(selectedDate.year)
+        ) { index ->
             val targetYear = years[index]
             val targetMonth = YearMonth.of(targetYear, selectedDate.monthValue)
             selectedDate = targetMonth.atDay(selectedDate.dayOfMonth.coerceAtMost(targetMonth.lengthOfMonth()))

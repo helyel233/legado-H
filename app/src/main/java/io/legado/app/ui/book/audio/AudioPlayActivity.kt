@@ -1,6 +1,7 @@
 package io.legado.app.ui.book.audio
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
@@ -62,8 +63,12 @@ import io.legado.app.ui.book.audio.config.AudioSkipCredits
 import com.dirror.lyricviewx.OnPlayClickListener
 import io.legado.app.lib.theme.ThemeStore.Companion.accentColor
 import io.legado.app.lib.theme.UiCorner
+import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.ui.book.audio.SliderPopup.Companion.SPEED
 import io.legado.app.ui.book.audio.SliderPopup.Companion.TIMER
+import io.legado.app.ui.glass.BackdropCropGravity
+import io.legado.app.ui.glass.ContentBackdropHost
+import io.legado.app.ui.glass.captureViewBackdrop
 import io.legado.app.model.SourceCallBack
 import io.legado.app.utils.gone
 import splitties.init.appCtx
@@ -75,12 +80,28 @@ import splitties.init.appCtx
 class AudioPlayActivity :
     VMBaseActivity<ActivityAudioPlayBinding, AudioPlayViewModel>(toolBarTheme = Theme.Dark),
     ChangeBookSourceDialog.CallBack,
-    AudioPlay.CallBack {
+    AudioPlay.CallBack,
+    ContentBackdropHost {
 
     override val binding by viewBinding(ActivityAudioPlayBinding::inflate)
 
     /** 本页背景是满屏封面 + 黑色压暗层（`iv_bg` / `vw_bg`），不是主题壁纸。 */
     override val showsWallpaperBehindContent: Boolean get() = false
+
+    override fun captureContentBackdrop(
+        gravity: BackdropCropGravity,
+        targetWidth: Int,
+        targetHeight: Int,
+        blurRadius: Int
+    ): Bitmap? = captureViewBackdrop(
+        source = binding.ivBg,
+        gravity = gravity,
+        targetWidth = targetWidth,
+        targetHeight = targetHeight,
+        blurRadius = blurRadius
+    )
+
+    override fun contentGlassTintBaseColor(): Int = bottomBackground
     override val viewModel by viewModels<AudioPlayViewModel>()
     private val cacheViewModel by viewModels<CacheManageViewModel>()
     private val timerSliderPopup by lazy { SliderPopup(this, TIMER) }

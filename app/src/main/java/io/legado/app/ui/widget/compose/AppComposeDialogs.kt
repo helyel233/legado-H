@@ -1,6 +1,7 @@
 package io.legado.app.ui.widget.compose
 
 import android.content.DialogInterface
+import android.graphics.Rect as AndroidRect
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -43,6 +44,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -55,10 +57,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -89,10 +95,15 @@ import io.legado.app.lib.theme.themeDividerColorOrDefault
 import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.lib.theme.titleTypeface
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.lib.theme.surface.SurfaceCorners
 import io.legado.app.utils.ColorUtils
+import io.legado.app.ui.glass.BackdropCropGravity
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.GlassSurface
+import io.legado.app.ui.glass.buildContentGlassBackdrop
+import io.legado.app.ui.glass.findContentBackdropHost
+import io.legado.app.ui.glass.isContentGlassAllowed
 import io.legado.app.ui.glass.rememberGlassConfigSignature
 import io.legado.app.ui.main.GlassMaterialPreset
 import kotlin.math.roundToInt
@@ -144,10 +155,21 @@ fun rememberAppDialogStyle(): AppDialogStyle {
         dialogScope.alphaFraction
     }
     val glassSignature = rememberGlassConfigSignature()
-    val dialogGlass = remember(context, glassSignature, dialogScope.materialMode, isEInk) {
+    val dialogGlass = remember(
+        context,
+        glassSignature,
+        dialogScope.materialMode,
+        dialogScope.isCustomOverride,
+        isEInk
+    ) {
         !isEInk &&
             dialogScope.usesGlassSampling &&
-            GlassSurface.dialogGlassAllowed(context)
+            (GlassSurface.dialogGlassAllowed(context) ||
+                (context.findContentBackdropHost() != null &&
+                    isContentGlassAllowed(
+                        context,
+                        dialogScope.materialMode.takeIf { dialogScope.isCustomOverride }
+                    )))
     }
     val uiFontPath = AppConfig.uiFontPath
     val titleFontPath = AppConfig.titleFontPath
@@ -232,6 +254,41 @@ fun AppDialogFrame(
                 (!dialogScope.isCustomOverride && GlassSurface.dialogClearAllowed(context))
             )
     }
+    val contentGlass = remember(
+        context,
+        glassEnabled,
+        dialogClear,
+        dialogTokens.env.isEInk,
+        dialogScope.usesGlassSampling,
+        dialogScope.materialMode,
+        dialogScope.isCustomOverride,
+        glassSignature,
+        style.panelRadius,
+        style.stroke,
+        density
+    ) {
+        if (glassEnabled || dialogClear || dialogTokens.env.isEInk || !dialogScope.usesGlassSampling) {
+            return@remember null
+        }
+        val host = context.findContentBackdropHost() ?: return@remember null
+        val metrics = context.resources.displayMetrics
+        buildContentGlassBackdrop(
+            context = context,
+            host = host,
+            targetWidthPx = (metrics.widthPixels * 0.88f).toInt().coerceAtLeast(1),
+            targetHeightPx = (metrics.heightPixels * 0.45f).toInt().coerceAtLeast(1),
+            cornerRadiusPx = with(density) { style.panelRadius.toPx() },
+            corners = SurfaceCorners.ALL,
+            gravity = BackdropCropGravity.CENTER,
+            strokeColor = style.stroke.toArgb(),
+            strokeWidthPx = with(density) { 1.dp.roundToPx() }.coerceAtLeast(1),
+            modeOverride = dialogScope.materialMode.takeIf { dialogScope.isCustomOverride },
+            includeClearShell = false
+        )
+    }
+    DisposableEffect(contentGlass) {
+        onDispose { contentGlass?.bitmap?.recycle() }
+    }
     val dialogShadow = when {
         dialogTokens.env.isEInk -> 0.dp
         dialogScope.isCustomOverride -> dialogScope.shadowElevationDp.coerceAtLeast(0).dp
@@ -302,7 +359,7 @@ fun AppDialogFrame(
         LocalLegadoTokens provides dialogTokens,
         LocalLayoutTokens provides dialogTokens.layout,
         LocalTextStyle provides LocalTextStyle.current.copy(fontFamily = style.bodyFontFamily),
-        LocalMiuixContainerSurfaceColor provides if (glassEnabled) Color.Unspecified else frameSurfaceColor
+        LocalMiuixContainerSurfaceColor provides if (glassEnabled || contentGlass != null) Color.Unspecified else frameSurfaceColor
     ) {
         if (glassEnabled) {
             GlassPanel(
@@ -314,6 +371,35 @@ fun AppDialogFrame(
                 modifier = outerModifier.clip(frameShape)
             ) {
                 // 玻璃接管表面后卡片必须让出填充色；外层 GlassPanel 已负责描边，禁止双重描边。
+                LegadoMiuixCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = Color.Transparent,
+                    contentColor = style.primaryText,
+                    cornerRadius = style.panelRadius,
+                    insidePadding = PaddingValues(horizontal = 18.dp, vertical = 18.dp),
+                    outline = false,
+                    content = frame
+                )
+            }
+        } else if (contentGlass != null) {
+            Box(
+                modifier = outerModifier
+                    .then(
+                        if (dialogShadow > 0.dp) Modifier.shadow(dialogShadow, frameShape, clip = false)
+                        else Modifier
+                    )
+                    .clip(frameShape)
+                    .drawBehind {
+                        val drawable = contentGlass.drawable
+                        drawable.bounds = AndroidRect(
+                            0,
+                            0,
+                            size.width.toInt().coerceAtLeast(1),
+                            size.height.toInt().coerceAtLeast(1)
+                        )
+                        drawIntoCanvas { canvas -> drawable.draw(canvas.nativeCanvas) }
+                    }
+            ) {
                 LegadoMiuixCard(
                     modifier = Modifier.fillMaxWidth(),
                     color = Color.Transparent,
@@ -372,7 +458,7 @@ private fun AppDialogMessageText(
 }
 
 @Composable
-private fun AppDialogTextField(
+fun AppDialogTextField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,

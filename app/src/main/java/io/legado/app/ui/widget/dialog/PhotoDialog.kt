@@ -23,7 +23,7 @@ import io.legado.app.help.book.BookHelp
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.glide.OkHttpModelLoader
 import io.legado.app.help.illustration.IllustrationHelp
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.model.BookCover
 import io.legado.app.model.ImageProvider
 import io.legado.app.model.ReadBook
@@ -106,9 +106,10 @@ class PhotoDialog() : BaseDialogFragment(R.layout.dialog_photo_view) {
     }
 
     private fun showSaveSheet(src: String) {
-        requireContext().selector(
-            listOf(getString(R.string.illustration_save_to_album))
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.save_image),
+            labels = listOf(getString(R.string.illustration_save_to_album))
+        ) { index ->
             if (index == 0) saveToAlbum(src)
         }
     }

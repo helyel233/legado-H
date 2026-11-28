@@ -59,8 +59,8 @@ import io.legado.app.help.ai.AiChapterSummaryService
 import io.legado.app.help.ai.AiContentConsent
 import io.legado.app.help.ai.AiTaskKeepAlive
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.uiTypeface
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.glass.LiquidGlassSpec
 import io.legado.app.ui.glass.applyLiquidGlassSpec
 import io.legado.app.ui.glass.contentLiquidGlassSpec
@@ -315,14 +315,15 @@ class ReadAiSummaryPanel @JvmOverloads constructor(
             return
         }
         val providerNameMap = AppConfig.aiProviderList.associateBy({ it.id }, { it.name })
-        context.selector(
-            context.getString(R.string.ai_current_model),
-            models.map { model ->
+        context.showComposeChoiceListDialog(
+            title = context.getString(R.string.ai_current_model),
+            labels = models.map { model ->
                 providerNameMap[model.providerId]?.takeIf { it.isNotBlank() }
                     ?.let { "${model.modelId} - $it" }
                     ?: model.modelId
-            }
-        ) { _, _, index ->
+            },
+            selectedIndex = models.indexOfFirst { it.id == AppConfig.aiSummaryModelId }
+        ) { index ->
             AppConfig.aiSummaryModelId = models[index].id
             uiState = uiState.copy(modelLabel = currentModelLabel())
         }

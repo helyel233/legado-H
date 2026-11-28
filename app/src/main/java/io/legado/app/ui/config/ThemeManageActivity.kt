@@ -82,7 +82,7 @@ import io.legado.app.help.config.ThemePackageManager
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.lib.dialogs.AndroidAlertBuilder
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.lib.theme.ThemeRuntimeKeys
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.cloud.CloudStorageType
@@ -544,10 +544,10 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                     .show(this)
             },
             onPickOptionalColor = { targetId, titleRes, currentHex ->
-                selector(
-                    getString(titleRes),
-                    listOf(getString(R.string.theme_value_follow_default), getString(R.string.select_color))
-                ) { _, index ->
+                showComposeChoiceListDialog(
+                    title = getString(titleRes),
+                    labels = listOf(getString(R.string.theme_value_follow_default), getString(R.string.select_color))
+                ) { index ->
                     if (index == 0) {
                         setOptionalColor(targetId, null)
                     } else {
@@ -625,10 +625,10 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             ThemeEditImageTarget.BOOK_INFO -> R.string.theme_image_book_info_background
             ThemeEditImageTarget.PANEL -> R.string.theme_image_panel_background
         }
-        selector(
-            getString(title),
-            actions.map { getString(it.titleRes) }
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(title),
+            labels = actions.map { getString(it.titleRes) }
+        ) { index ->
             when (actions[index]) {
                 ThemeImageAction.BLUR -> showBlurDialog()
                 ThemeImageAction.SELECT -> selectImage.launch {
@@ -684,24 +684,25 @@ class ThemeManageActivity : BaseActivity<ActivityThemeManageBinding>(),
 
     private fun showPanelScaleModeSelector() {
         val modes = listOf(ThemeConfig.PANEL_BG_CROP, ThemeConfig.PANEL_BG_FIT)
-        selector(
-            getString(R.string.theme_image_panel_background_mode),
-            modes.map { mode ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.theme_image_panel_background_mode),
+            labels = modes.map { mode ->
                 getString(
                     if (mode == ThemeConfig.PANEL_BG_FIT) R.string.theme_image_mode_fit
                     else R.string.theme_image_mode_crop
                 )
-            }
-        ) { _, index ->
+            },
+            selectedIndex = modes.indexOf(editingDraftState?.panelBackgroundScaleType)
+        ) { index ->
             editingDraftState = editingDraftState?.copy(panelBackgroundScaleType = modes[index])
         }
     }
 
     private fun showBorderColorSelector() {
-        selector(
-            getString(R.string.theme_panel_border_color),
-            listOf(getString(R.string.theme_border_follow_accent), getString(R.string.select_color))
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.theme_panel_border_color),
+            labels = listOf(getString(R.string.theme_border_follow_accent), getString(R.string.select_color))
+        ) { index ->
             if (index == 0) {
                 removePref(PreferKey.glassStrokeColor)
                 editingDraftState = editingDraftState?.copy(panelBorderColor = null)

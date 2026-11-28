@@ -1,9 +1,7 @@
 package io.legado.app.ui.book.read
 
 import android.annotation.SuppressLint
-import android.app.DatePickerDialog
 import android.content.pm.ActivityInfo
-import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Bundle
 import android.view.KeyEvent
@@ -21,19 +19,13 @@ import io.legado.app.constant.AppConst.charsets
 import io.legado.app.constant.PageAnim
 import io.legado.app.constant.PreferKey
 import io.legado.app.databinding.ActivityBookReadBinding
-import io.legado.app.databinding.DialogDownloadChoiceBinding
-import io.legado.app.databinding.DialogEditTextBinding
-import io.legado.app.databinding.DialogSimulatedReadingBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.config.LocalConfig
 import io.legado.app.help.config.ReadBookConfig
 import io.legado.app.help.cache.CacheCoordinator
 import io.legado.app.help.cache.CacheRequestSource
 import io.legado.app.help.storage.ReaderDataRepair
-import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.ThemeStore
-import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.model.ReadBook
 import io.legado.app.model.localBook.epubcore.template.EpubReaderTemplateStore
@@ -41,11 +33,15 @@ import io.legado.app.ui.book.read.config.BgTextConfigDialog
 import io.legado.app.ui.book.read.config.ClickActionConfigDialog
 import io.legado.app.ui.book.read.config.PaddingConfigDialog
 import io.legado.app.ui.book.read.config.PageKeyDialog
+import io.legado.app.ui.book.read.config.ReaderDownloadDialog
 import io.legado.app.ui.book.read.config.ReaderTemplateDialog
+import io.legado.app.ui.book.read.config.SimulatedReadingDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.glass.readerGlassMenuWantsE2e
 import io.legado.app.ui.glass.readerGlassNavBarColor
 import io.legado.app.ui.glass.readerNavStripYieldsToGlass
+import io.legado.app.ui.widget.ModernActionPopup
+import io.legado.app.ui.widget.compose.showComposeSuggestionTextInputDialog
 import io.legado.app.utils.ColorUtils
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.dpToPx
@@ -58,11 +54,18 @@ import io.legado.app.utils.setLightStatusBar
 import io.legado.app.utils.setNavigationBarColorAuto
 import io.legado.app.utils.setOnApplyWindowInsetsListenerCompat
 import io.legado.app.utils.showDialogFragment
+import io.legado.app.utils.statusBarHeight
 import io.legado.app.utils.toastOnUi
 import io.legado.app.utils.viewbindingdelegate.viewBinding
-import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import splitties.init.appCtx
+
+internal data class PopupAnchorRect(
+    val left: Int,
+    val top: Int,
+    val right: Int,
+    val bottom: Int
+)
 
 /**
  * 阅读界面
@@ -88,6 +91,9 @@ abstract class BaseReadBookActivity :
                 onBottomDialogChange()
             }
         }
+    internal var readerMenuPopupHandle: ModernActionPopup.Handle? = null
+    internal var readerOverflowAnchor: PopupAnchorRect? = null
+    internal var readerRefreshAnchor: PopupAnchorRect? = null
     private val selectBookFolderResult = registerForActivityResult(HandleFileContract()) {
         it.uri?.let { uri ->
             ReadBook.book?.let { book ->
@@ -415,19 +421,37 @@ abstract class BaseReadBookActivity :
         }
     }
 
-    /**
-     * bg_edit 是静态 @color/btn_bg_press 描边，主题包「边框线色」改色对它不生效。
-     * 输入框只是复用这张 XML 底图，这里在 inflate 出的实底 drawable 上只覆盖 stroke
-     * 颜色，填充/圆角/padding 全部保持 XML 原值（与其余 View 描边同一取色入口）。
-     */
-    private fun applyThemeEditBorder(vararg fields: android.widget.EditText) {
-        fields.forEach { field ->
-            (field.background as? GradientDrawable)
-                ?.setStroke(1.dpToPx(), UiCorner.borderLineColor(field.context))
-        }
+    internal fun showReaderActionPopup(
+        actions: List<ModernActionPopup.Action>,
+        anchor: PopupAnchorRect? = readerOverflowAnchor
+    ) {
+        val resolved = anchor ?: defaultTopRightPopupAnchor()
+        readerMenuPopupHandle = ModernActionPopup.show(
+            context = this,
+            anchorLeft = resolved.left,
+            anchorTop = resolved.top,
+            anchorRight = resolved.right,
+            anchorBottom = resolved.bottom,
+            actions = actions,
+            previousPopup = readerMenuPopupHandle
+        )
     }
 
-    @SuppressLint("InflateParams", "SetTextI18n")
+    private fun defaultTopRightPopupAnchor(): PopupAnchorRect {
+        val screenWidth = window?.decorView?.width?.takeIf { it > 0 }
+            ?: resources.displayMetrics.widthPixels
+        val sizePx = 44.dpToPx()
+        val right = (screenWidth - 12.dpToPx()).coerceAtLeast(sizePx)
+        val left = (right - sizePx).coerceAtLeast(0)
+        val top = statusBarHeight + 8.dpToPx()
+        return PopupAnchorRect(
+            left = left,
+            top = top,
+            right = right,
+            bottom = top + sizePx
+        )
+    }
+
     fun showDownloadDialog() {
         ReadBook.book?.let { book ->
             // 起点取内存里的实时阅读进度：book.durChapterIndex 是落库进度，
@@ -436,109 +460,55 @@ abstract class BaseReadBookActivity :
             // 末章 clamp：目录刷新变短后 durChapterIndex 可能越界，反向区间会让提交直接报错
             val startIndex = maxOf(ReadBook.durChapterIndex, book.durChapterIndex)
                 .coerceAtMost((book.totalChapterNum - 1).coerceAtLeast(0))
-            alert(titleResource = R.string.offline_cache) {
-                val alertBinding = DialogDownloadChoiceBinding.inflate(layoutInflater).apply {
-                    editStart.setText((startIndex + 1).toString())
-                    editEnd.setText(book.totalChapterNum.toString())
-                    applyThemeEditBorder(editStart, editEnd)
-                }
-                customView { alertBinding.root }
-                okButton {
-                    alertBinding.run {
-                        val start = editStart.text!!.toString().let {
-                            if (it.isEmpty()) 0 else it.toInt()
-                        }
-                        val end = editEnd.text!!.toString().let {
-                            if (it.isEmpty()) book.totalChapterNum else it.toInt()
-                        }
-                        runCatching {
-                            CacheCoordinator.submitBookDownload(
-                                book = book,
-                                chapterIndexes = (start - 1)..(end - 1),
-                                source = CacheRequestSource.READER,
-                            )
-                        }.onFailure {
-                            toastOnUi(R.string.error)
-                        }
+            showDialogFragment(
+                ReaderDownloadDialog.create(
+                    startChapter = startIndex + 1,
+                    endChapter = book.totalChapterNum
+                ) { start, end ->
+                    runCatching {
+                        CacheCoordinator.submitBookDownload(
+                            book = book,
+                            chapterIndexes = (start - 1)..(end - 1),
+                            source = CacheRequestSource.READER,
+                        )
+                    }.onFailure {
+                        toastOnUi(R.string.error)
                     }
                 }
-                cancelButton()
-            }
+            )
         }
     }
 
     fun showSimulatedReading() {
         val book = ReadBook.book ?: return
         val dateFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd")
-        val alertBinding = DialogSimulatedReadingBinding.inflate(layoutInflater).apply {
-            srEnabled.isChecked = book.getReadSimulating()
-            editStart.setText(book.getStartChapter().toString())
-            editNum.setText(book.getDailyChapters().toString())
-            applyThemeEditBorder(editStart, editNum)
-            startDate.setText(book.getStartDate()?.format(dateFormatter))
-            startDate.isFocusable = false // 设置为false，不允许获得焦点
-            startDate.isCursorVisible = false // 不显示光标
-            startDate.setOnClickListener {
-                // 获取当前日期
-                val localStartDate = LocalDate.parse(startDate.text)
-                // 创建 DatePickerDialog
-                val datePickerDialog = DatePickerDialog(
-                    root.context,
-                    { _, yy, mm, dayOfMonth ->
-                        // 使用Java 8的日期和时间API来格式化日期
-                        val date = LocalDate.of(yy, mm + 1, dayOfMonth) // Java 8的LocalDate，月份从1开始
-                        val formattedDate = date.format(dateFormatter)
-                        startDate.setText(formattedDate)
-                    }, localStartDate.year,
-                    localStartDate.monthValue - 1,
-                    localStartDate.dayOfMonth
-                )
-                datePickerDialog.show()
+        showDialogFragment(
+            SimulatedReadingDialog.create(
+                enabled = book.getReadSimulating(),
+                startDate = book.getStartDate()?.format(dateFormatter).orEmpty(),
+                startChapter = book.getStartChapter(),
+                dailyChapters = book.getDailyChapters(),
+                totalChapters = book.totalChapterNum
+            ) { enabled, date, start, num ->
+                book.setStartDate(date)
+                book.setDailyChapters(num)
+                book.setStartChapter(start)
+                book.setReadSimulating(enabled)
+                book.save()
+                ReadBook.clearTextChapter()
+                viewModel.initData(intent)
             }
-        }
-        alert(titleResource = R.string.simulated_reading) {
-            customView { alertBinding.root }
-            okButton {
-                alertBinding.run {
-                    val start = editStart.text!!.toString().let {
-                        if (it.isEmpty()) 0 else it.toInt()
-                    }
-                    val num = editNum.text!!.toString().let {
-                        if (it.isEmpty()) book.totalChapterNum else it.toInt()
-                    }
-                    val enabled = srEnabled.isChecked
-                    val date = startDate.text!!.toString().let {
-                        if (it.isEmpty()) LocalDate.now()
-                        else LocalDate.parse(it, dateFormatter)
-                    }
-                    book.setStartDate(date)
-                    book.setDailyChapters(num)
-                    book.setStartChapter(start)
-                    book.setReadSimulating(enabled)
-                    book.save()
-                    ReadBook.clearTextChapter()
-                    viewModel.initData(intent)
-                }
-            }
-            cancelButton()
-        }
+        )
     }
 
     fun showCharsetConfig() {
-        alert(R.string.set_charset) {
-            val alertBinding = DialogEditTextBinding.inflate(layoutInflater).apply {
-                editView.hint = "charset"
-                editView.setFilterValues(charsets)
-                editView.setText(ReadBook.book?.charset)
-            }
-            customView { alertBinding.root }
-            okButton {
-                alertBinding.editView.text?.toString()?.let {
-                    ReadBook.setCharset(it)
-                }
-            }
-            cancelButton()
-        }
+        showComposeSuggestionTextInputDialog(
+            title = getString(R.string.set_charset),
+            hint = "charset",
+            initialValue = ReadBook.book?.charset.orEmpty(),
+            suggestions = charsets.toList(),
+            onPositive = { ReadBook.setCharset(it) }
+        )
     }
 
     fun showPageAnimConfig(success: (previousPageAnim: Int) -> Unit) {
@@ -558,19 +528,31 @@ abstract class BaseReadBookActivity :
             getString(R.string.page_anim_scroll) to PageAnim.scrollPageAnim,
             getString(R.string.page_anim_none) to PageAnim.noAnim
         )
-        selector(R.string.page_anim, items.map { it.first }) { _, i ->
-            val previousPageAnim = ReadBook.pageAnim()
-            val selected = items.getOrNull(i)?.second
-            if (ReadBook.usesPageTemplate()) {
-                val templateId = ReadBookConfig.config.readerTemplateId.ifEmpty { EpubReaderTemplateStore.defaultId }
-                EpubReaderTemplateStore.savePageAnimation(templateId, selected)
-            } else {
-                ReadBook.book?.setPageAnim(selected ?: -1)
-            }
-            if (ReadBook.pageAnim() != previousPageAnim) {
-                success(previousPageAnim)
-            }
+        val currentSelected: Int? = if (ReadBook.usesPageTemplate()) {
+            val templateId = ReadBookConfig.config.readerTemplateId.ifEmpty { EpubReaderTemplateStore.defaultId }
+            EpubReaderTemplateStore.pageAnimation(templateId)
+        } else {
+            ReadBook.book?.config?.pageAnim?.takeIf { it >= 0 }
         }
+        showReaderActionPopup(
+            actions = items.map { (label, selected) ->
+                ModernActionPopup.Action(
+                    title = label,
+                    checked = selected == currentSelected
+                ) {
+                    val previousPageAnim = ReadBook.pageAnim()
+                    if (ReadBook.usesPageTemplate()) {
+                        val templateId = ReadBookConfig.config.readerTemplateId.ifEmpty { EpubReaderTemplateStore.defaultId }
+                        EpubReaderTemplateStore.savePageAnimation(templateId, selected)
+                    } else {
+                        ReadBook.book?.setPageAnim(selected ?: -1)
+                    }
+                    if (ReadBook.pageAnim() != previousPageAnim) {
+                        success(previousPageAnim)
+                    }
+                }
+            }
+        )
     }
 
     fun isPrevKey(keyCode: Int): Boolean {

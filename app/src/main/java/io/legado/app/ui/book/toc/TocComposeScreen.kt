@@ -89,7 +89,6 @@ import io.legado.app.help.glide.ImageLoader
 import io.legado.app.help.illustration.IllustrationHelp
 import io.legado.app.help.illustration.imageSrcsFromJson
 import io.legado.app.model.ImageProvider
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.rememberResolvedThemeTokens
 import io.legado.app.model.localBook.epubcore.facade.EpubChapterMetadata
@@ -105,6 +104,7 @@ import io.legado.app.ui.widget.compose.LegadoComposeTheme
 import io.legado.app.ui.widget.compose.appSettingPanelBackground
 import io.legado.app.ui.widget.compose.rememberAppManagementPalette
 import io.legado.app.ui.widget.compose.rememberHasUsableBgImage
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.glass.GlassPanel
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.glass.rememberGlassConfigSignature
@@ -516,16 +516,16 @@ fun TocComposeScreen(
                                         val srcs = record.imageSrcsFromJson()
                                         (context as? android.app.Activity)?.run {
                                             val activity = this
-                                            selector(
+                                            showComposeChoiceListDialog(
                                                 title = record.chapterName.ifBlank {
                                                     getString(R.string.menu_illustration)
                                                 },
-                                                items = listOf(
+                                                labels = listOf(
                                                     getString(R.string.illustration_save_to_album),
                                                     getString(R.string.illustration_save_all),
                                                     getString(R.string.illustration_delete)
                                                 )
-                                            ) { _, which ->
+                                            ) { which ->
                                                 when (which) {
                                                     0 -> scope.launch(Dispatchers.IO) {
                                                         val currentBook = book ?: return@launch

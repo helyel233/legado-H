@@ -26,6 +26,8 @@ import io.legado.app.model.ReadBook
 import io.legado.app.ui.about.ReadRecordWidgetStore
 import io.legado.app.ui.book.read.epub.EpubReadView
 import io.legado.app.ui.book.read.page.ReadView
+import io.legado.app.ui.glass.BackdropCropGravity
+import io.legado.app.ui.glass.computeBackdropTranslateY
 import io.legado.app.utils.BookIntroUtils
 import io.legado.app.utils.share
 import io.legado.app.utils.stackBlurSoftware
@@ -63,7 +65,8 @@ internal class ReaderSelectionShareCoordinator(
     fun captureContentBackdrop(
         targetWidth: Int,
         targetHeight: Int,
-        blurRadius: Int
+        blurRadius: Int,
+        gravity: BackdropCropGravity = BackdropCropGravity.BOTTOM
     ): Bitmap? {
         if (isEpubCoreActive()) return null
         if (blurRadius <= 0) return null
@@ -79,7 +82,7 @@ internal class ReaderSelectionShareCoordinator(
         val drawn = runCatching {
             val canvas = Canvas(raw)
             canvas.scale(scale, scale)
-            canvas.translate(0f, sampledHeight - source.height)
+            canvas.translate(0f, computeBackdropTranslateY(gravity, sampledHeight, source.height))
             source.draw(canvas)
         }.onFailure { captureError = it }.isSuccess
         if (!drawn) {
@@ -102,7 +105,8 @@ internal class ReaderSelectionShareCoordinator(
     fun captureWindowBackdrop(
         targetWidth: Int,
         targetHeight: Int,
-        blurRadius: Int
+        blurRadius: Int,
+        gravity: BackdropCropGravity = BackdropCropGravity.BOTTOM
     ): Bitmap? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return null
         if (blurRadius <= 0 || targetWidth <= 0 || targetHeight <= 0) return null
@@ -147,7 +151,7 @@ internal class ReaderSelectionShareCoordinator(
             val sampledHeight = targetHeight / scale
             val canvas = Canvas(cropped)
             canvas.scale(scale, scale)
-            canvas.translate(0f, sampledHeight - sourceHeight)
+            canvas.translate(0f, computeBackdropTranslateY(gravity, sampledHeight, sourceHeight))
             canvas.drawBitmap(raw, 0f, 0f, null)
             val blurred = runCatching { cropped.stackBlurSoftware(blurRadius) }.getOrNull()
             if (blurred == null || blurred === cropped) return null

@@ -22,7 +22,7 @@ import io.legado.app.help.ai.AiImageGalleryManager
 import io.legado.app.help.ai.AiImageGalleryManager.GalleryFilter
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.applyUiLabelStyle
@@ -208,7 +208,10 @@ class AiImageGalleryActivity : BaseActivity<ActivityAiImageGalleryBinding>() {
         lifecycleScope.launch {
             val groups = withContext(Dispatchers.IO) { AiImageGalleryManager.listGroups() }
             val labels: List<CharSequence> = groups.map { it.name } + getString(R.string.ai_image_new_group)
-            selector(getString(R.string.ai_image_favorite_to), labels) { _, index ->
+            showComposeChoiceListDialog(
+                title = getString(R.string.ai_image_favorite_to),
+                labels = labels
+            ) { index ->
                 val group = groups.getOrNull(index)
                 if (group != null) {
                     moveSelectedToGroup(ids, group.id)

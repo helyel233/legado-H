@@ -47,7 +47,7 @@ import io.legado.app.help.http.readingHttpClient as okHttpClient
 import io.legado.app.help.http.text
 import io.legado.app.data.entities.RssSource
 import io.legado.app.lib.dialogs.SelectItem
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.lib.theme.ThemeStore
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.primaryTextColor
@@ -395,13 +395,15 @@ class ReadRssActivity : VMBaseActivity<ActivityRssReadBinding, ReadRssViewModel>
             if (hitTestResult.type == WebView.HitTestResult.IMAGE_TYPE ||
                 hitTestResult.type == WebView.HitTestResult.SRC_IMAGE_ANCHOR_TYPE) {
                 hitTestResult.extra?.let { webPic ->
-                    selector(
-                        arrayListOf(
-                            SelectItem(getString(R.string.action_save), "save"),
-                            SelectItem(getString(R.string.select_folder), "selectFolder")
-                        )
-                    ) { _, charSequence, _ ->
-                        when (charSequence.value) {
+                    val items = listOf(
+                        SelectItem(getString(R.string.action_save), "save"),
+                        SelectItem(getString(R.string.select_folder), "selectFolder")
+                    )
+                    showComposeChoiceListDialog(
+                        title = getString(R.string.save_image),
+                        labels = items.map { it.toString() }
+                    ) { index ->
+                        when (items[index].value) {
                             "save" -> saveImage(webPic)
                             "selectFolder" -> selectSaveFolder(null)
                         }

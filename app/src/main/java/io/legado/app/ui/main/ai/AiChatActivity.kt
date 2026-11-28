@@ -60,7 +60,7 @@ import io.legado.app.help.book.characterBookKey
 import io.legado.app.help.character.BookCharacterProfileMeta
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.config.AiWorldBookManageActivity
 import io.legado.app.ui.config.ConfigActivity
 import io.legado.app.ui.config.ConfigTag
@@ -199,8 +199,11 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
             appCtx.getString(R.string.ai_ui_goal_mode_keep_working_until),
             appCtx.getString(R.string.ai_ui_plan_mode_read_only_analysis)
         )
-        selector(appCtx.getString(R.string.ai_ui_agent_mode), labels) { _, _, index ->
-            val mode = modes.getOrNull(index) ?: return@selector
+        showComposeChoiceListDialog(
+            title = appCtx.getString(R.string.ai_ui_agent_mode),
+            labels = labels
+        ) { index ->
+            val mode = modes.getOrNull(index) ?: return@showComposeChoiceListDialog
             viewModel.setAgentMode(mode)
             refreshToken.intValue += 1
             toastOnUi(
@@ -431,7 +434,10 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
         } else {
             listOf(appCtx.getString(R.string.ai_ui_edit_character_card), appCtx.getString(R.string.ai_ui_new_chat), appCtx.getString(R.string.ai_tool_world_book), appCtx.getString(R.string.ai_ui_remove_character_assistant))
         }
-        selector(companion.name.ifBlank { appCtx.getString(R.string.side_nav_assistant) }, items) { _, _, index ->
+        showComposeChoiceListDialog(
+            title = companion.name.ifBlank { appCtx.getString(R.string.side_nav_assistant) },
+            labels = items
+        ) { index ->
             if (isDefault) {
                 when (index) {
                     0 -> startNewChatForCompanion(companion.id)
@@ -525,14 +531,20 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     private fun showCompanionWorldBookDialog(companion: AiChatCompanionConfig = viewModel.currentCompanion()) {
         val worldBooks = AppConfig.aiWorldBookList
         if (worldBooks.isEmpty()) {
-            selector(appCtx.getString(R.string.ai_tool_world_book), listOf(appCtx.getString(R.string.ai_ui_open_world_book_management))) { _, _, _ ->
+            showComposeChoiceListDialog(
+                title = appCtx.getString(R.string.ai_tool_world_book),
+                labels = listOf(appCtx.getString(R.string.ai_ui_open_world_book_management))
+            ) { _ ->
                 openWorldBookManage()
             }
             return
         }
         val visibleWorldBooks = worldBooks.filter { it.enabled && !it.isGlobalWorldBookEnabled() }
         if (visibleWorldBooks.isEmpty()) {
-            selector(appCtx.getString(R.string.ai_tool_world_book), listOf(appCtx.getString(R.string.ai_ui_no_world_book_can_be), appCtx.getString(R.string.ai_ui_open_world_book_management))) { _, _, which ->
+            showComposeChoiceListDialog(
+                title = appCtx.getString(R.string.ai_tool_world_book),
+                labels = listOf(appCtx.getString(R.string.ai_ui_no_world_book_can_be), appCtx.getString(R.string.ai_ui_open_world_book_management))
+            ) { which ->
                 if (which == 1) openWorldBookManage()
             }
             return
@@ -574,15 +586,15 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
             toastOnUi(R.string.ai_chat_wait_current)
             return
         }
-        selector(
-            appCtx.getString(R.string.ai_ui_current_window_capabilities),
-            listOf(
+        showComposeChoiceListDialog(
+            title = appCtx.getString(R.string.ai_ui_current_window_capabilities),
+            labels = listOf(
                 appCtx.getString(R.string.ai_ui_skills, viewModel.activeWindowSkillIds().size),
                 appCtx.getString(R.string.ai_ui_mcp, viewModel.activeWindowMcpServerIds().size),
                 appCtx.getString(R.string.ai_ui_world_books, activeCompanionWorldBookCount()),
                 appCtx.getString(R.string.ai_ui_clear_skill_mcp)
             )
-        ) { _, _, index ->
+        ) { index ->
             when (index) {
                 0 -> showWindowSkillDialog()
                 1 -> showWindowMcpDialog()
@@ -671,7 +683,10 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
         items += sessions.map { session ->
             "${session.title}\n${historyTimeFormat.format(Date(session.updatedAt))}"
         }
-        selector(getString(R.string.ai_chat_history), items) { _, _, index ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.ai_chat_history),
+            labels = items
+        ) { index ->
             if (index == 0) {
                 confirmClearAllHistory()
             } else {
@@ -681,13 +696,13 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
     }
 
     private fun showHistorySessionActions(session: AiChatSession) {
-        selector(
-            session.title,
-            listOf(
+        showComposeChoiceListDialog(
+            title = session.title,
+            labels = listOf(
                 getString(R.string.ai_history_open),
                 getString(R.string.ai_history_delete)
             )
-        ) { _, _, index ->
+        ) { index ->
             when (index) {
                 0 -> {
                     viewModel.loadSession(session.id)
@@ -735,14 +750,14 @@ class AiChatActivity : BaseActivity<ActivityAiChatBinding>(
             return
         }
         val providerNameMap = AppConfig.aiProviderList.associateBy({ it.id }, { it.name })
-        selector(
-            getString(R.string.ai_current_model),
-            models.map { model ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.ai_current_model),
+            labels = models.map { model ->
                 providerNameMap[model.providerId]?.takeIf { it.isNotBlank() }
                     ?.let { "${model.modelId} · $it" }
                     ?: model.modelId
             }
-        ) { _, _, index ->
+        ) { index ->
             AppConfig.aiCurrentModelId = models[index].id
             refreshToken.intValue += 1
         }

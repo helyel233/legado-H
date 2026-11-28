@@ -26,7 +26,6 @@ import io.legado.app.databinding.ItemThemePackageBinding
 import io.legado.app.help.http.newCallResponseBody
 import io.legado.app.help.http.importHttpClient as okHttpClient
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
@@ -40,6 +39,7 @@ import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.book.read.ReadMenuButtonIconHelper
 import io.legado.app.ui.book.read.ReadMenuButtonConfig
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.recycler.ItemTouchCallback
 import io.legado.app.utils.GSON
 import io.legado.app.utils.fromJsonArray
@@ -267,10 +267,10 @@ class ReadMenuButtonManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             toastOnUi(R.string.read_menu_no_available_button)
             return
         }
-        selector(
-            getString(R.string.read_menu_add_button),
-            candidates.map { it.title }
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.read_menu_add_button),
+            labels = candidates.map { it.title }
+        ) { index ->
             when (val action = candidates[index].action) {
                 is AddAction.AddRef -> addButton(action.ref)
                 is AddAction.ExistingCustom -> showExistingCustomButtonActions(action.button)
@@ -333,10 +333,10 @@ class ReadMenuButtonManageActivity : BaseActivity<ActivityThemeManageBinding>(),
     }
 
     private fun showImportButtonActions() {
-        selector(
-            getString(R.string.import_str),
-            listOf(getString(R.string.import_str), getString(R.string.import_on_line))
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.import_str),
+            labels = listOf(getString(R.string.import_str), getString(R.string.import_on_line))
+        ) { index ->
             when (index) {
                 0 -> launchImportButtonFile()
                 1 -> showImportButtonUrlDialog()
@@ -488,10 +488,10 @@ class ReadMenuButtonManageActivity : BaseActivity<ActivityThemeManageBinding>(),
             add(getString(R.string.delete) to { deleteCustomButton(button) })
             add(getString(R.string.export) to { exportButton(button) })
         }
-        selector(
-            button.displayName(),
-            actions.map { it.first }
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = button.displayName(),
+            labels = actions.map { it.first }
+        ) { index ->
             actions[index].second.invoke()
         }
     }
@@ -522,15 +522,15 @@ class ReadMenuButtonManageActivity : BaseActivity<ActivityThemeManageBinding>(),
         val isNightButton = ref.type == ReadMenuButtonConfig.TYPE_BUILTIN &&
                 ref.id == ReadMenuButtonConfig.Builtin.NIGHT_THEME
         if (isNightButton) {
-            selector(
-                getString(R.string.change_icon),
-                listOf(
+            showComposeChoiceListDialog(
+                title = getString(R.string.change_icon),
+                labels = listOf(
                     getString(R.string.read_menu_icon_set_day),
                     getString(R.string.read_menu_icon_set_night),
                     getString(R.string.read_menu_icon_clear_day),
                     getString(R.string.read_menu_icon_clear_night)
                 )
-            ) { _, index ->
+            ) { index ->
                 when (index) {
                     0 -> selectIcon(ref, nightIcon = false)
                     1 -> selectIcon(ref, nightIcon = true)
@@ -539,10 +539,10 @@ class ReadMenuButtonManageActivity : BaseActivity<ActivityThemeManageBinding>(),
                 }
             }
         } else {
-            selector(
-                getString(R.string.change_icon),
-                listOf(getString(R.string.change_icon), getString(R.string.clear))
-            ) { _, index ->
+            showComposeChoiceListDialog(
+                title = getString(R.string.change_icon),
+                labels = listOf(getString(R.string.change_icon), getString(R.string.clear))
+            ) { index ->
                 if (index == 0) selectIcon(ref, nightIcon = false) else clearIcon(ref, nightIcon = false)
             }
         }

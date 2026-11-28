@@ -47,7 +47,7 @@ import io.legado.app.help.config.MainBottomNavConfig
 import io.legado.app.help.config.NavigationBarIconConfig
 import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.primaryTextColor
@@ -593,15 +593,15 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun showSidebarBackgroundSelector() {
         val config = pendingConfig ?: return
         val currentEntry = editingEntry
-        selector(
-            getString(R.string.navigation_bar_sidebar_background),
-            buildList {
+        showComposeChoiceListDialog(
+            title = getString(R.string.navigation_bar_sidebar_background),
+            labels = buildList {
                 add(getString(R.string.select_image))
                 if (!config.sidebarBackgroundPath.isNullOrBlank()) {
                     add(getString(R.string.delete))
                 }
             }
-        ) { _, index ->
+        ) { index ->
             if (index == 0) {
                 pendingSidebarBackgroundEntry = currentEntry
                 selectSidebarBackground.launch {
@@ -620,13 +620,13 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     private fun showBottomWallpaperSelector() {
         val hasWallpaper = !pendingConfig?.wallpaperPath.isNullOrBlank()
-        selector(
-            getString(R.string.bottom_bar_wallpaper),
-            buildList {
+        showComposeChoiceListDialog(
+            title = getString(R.string.bottom_bar_wallpaper),
+            labels = buildList {
                 add(getString(R.string.theme_image_select))
                 if (hasWallpaper) add(getString(R.string.theme_image_delete))
             }
-        ) { _, index ->
+        ) { index ->
             if (index == 0) {
                 selectBottomWallpaper.launch {
                     mode = HandleFileContract.IMAGE
@@ -657,10 +657,10 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     private fun showSingleIconSelector(item: NavigationBarIconConfig.NavItem) {
         val entry = editingEntry ?: return
-        selector(
-            getString(item.titleRes),
-            listOf(getString(R.string.select_image), getString(R.string.delete))
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(item.titleRes),
+            labels = listOf(getString(R.string.select_image), getString(R.string.delete))
+        ) { index ->
             if (index == 0) {
                 val code = requestSingleIconBase + NavigationBarIconConfig.extraItems.indexOf(item)
                 pendingIconRequest = IconRequest(code, entry, item, selected = false, single = true)
@@ -682,10 +682,10 @@ class NavigationBarManageActivity : BaseActivity<ActivityThemeManageBinding>() {
 
     private fun showIconSelector(item: NavigationBarIconConfig.NavItem, selected: Boolean) {
         val entry = editingEntry ?: return
-        selector(
-            getString(if (selected) R.string.navigation_icon_selected else R.string.navigation_icon_normal),
-            listOf(getString(R.string.select_image), getString(R.string.delete))
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(if (selected) R.string.navigation_icon_selected else R.string.navigation_icon_normal),
+            labels = listOf(getString(R.string.select_image), getString(R.string.delete))
+        ) { index ->
             if (index == 0) {
                 val code = NavigationBarIconConfig.items.indexOf(item) * 2 + if (selected) 1 else 0
                 pendingIconRequest = IconRequest(code, entry, item, selected)

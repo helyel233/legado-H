@@ -35,11 +35,11 @@ import io.legado.app.help.cache.CacheSubmission
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.SelectItem
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.service.ExportBookService
 import io.legado.app.ui.about.AppLogDialog
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.widget.ModernActionPopup
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.ACache
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.applyNavigationBarPadding
@@ -583,7 +583,11 @@ class CacheActivity : VMBaseActivity<ActivityCacheBookBinding, CacheViewModel>()
     }
 
     private fun showExportTypeConfig() {
-        selector(R.string.export_type, exportTypes) { _, i ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.export_type),
+            labels = exportTypes,
+            selectedIndex = AppConfig.exportType
+        ) { i ->
             AppConfig.exportType = i
         }
     }

@@ -21,6 +21,7 @@ package io.legado.app.lib.dialogs
 import android.content.Context
 import android.content.DialogInterface
 
+@Deprecated("Use ModernActionPopup (anchored) or showComposeChoiceListDialog (list) instead.")
 fun Context.selector(
     items: List<CharSequence>,
     onClick: (DialogInterface, Int) -> Unit
@@ -31,6 +32,7 @@ fun Context.selector(
     }
 }
 
+@Deprecated("Use ModernActionPopup (anchored) or showComposeChoiceListDialog (list) instead.")
 fun <T> Context.selector(
     items: List<T>,
     onClick: (DialogInterface, T, Int) -> Unit
@@ -41,6 +43,7 @@ fun <T> Context.selector(
     }
 }
 
+@Deprecated("Use ModernActionPopup (anchored) or showComposeChoiceListDialog (list) instead.")
 fun Context.selector(
     title: CharSequence,
     items: List<CharSequence>,
@@ -53,6 +56,7 @@ fun Context.selector(
     }
 }
 
+@Deprecated("Use ModernActionPopup (anchored) or showComposeChoiceListDialog (list) instead.")
 fun <T> Context.selector(
     title: CharSequence,
     items: List<T>,
@@ -65,6 +69,7 @@ fun <T> Context.selector(
     }
 }
 
+@Deprecated("Use ModernActionPopup (anchored) or showComposeChoiceListDialog (list) instead.")
 fun Context.selector(
     titleSource: Int,
     items: List<CharSequence>,
@@ -77,6 +82,7 @@ fun Context.selector(
     }
 }
 
+@Deprecated("Use ModernActionPopup (anchored) or showComposeChoiceListDialog (list) instead.")
 fun <T> Context.selector(
     titleSource: Int,
     items: List<T>,

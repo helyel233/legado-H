@@ -144,6 +144,7 @@ fun ReadMenuTitleBar(
     showBorder: Boolean = true
 ) {
     val context = LocalContext.current
+    val readActivity = context as? BaseReadBookActivity
     var popupHandle by remember { mutableStateOf<ModernActionPopup.Handle?>(null) }
 
     Surface(
@@ -199,6 +200,16 @@ fun ReadMenuTitleBar(
                 contentDescription = appCtx.getString(R.string.refresh),
                 tint = style.primaryText,
                 style = style,
+                modifier = Modifier.onGloballyPositioned { coordinates ->
+                    val pos = coordinates.localToWindow(androidx.compose.ui.geometry.Offset.Zero)
+                    val size = coordinates.size
+                    readActivity?.readerRefreshAnchor = PopupAnchorRect(
+                        left = pos.x.toInt(),
+                        top = pos.y.toInt(),
+                        right = (pos.x + size.width).toInt(),
+                        bottom = (pos.y + size.height).toInt()
+                    )
+                },
                 onLongClick = actions.onRefreshLongClick,
                 onClick = actions.onRefreshClick
             )
@@ -226,6 +237,12 @@ fun ReadMenuTitleBar(
                         anchorBounds = androidx.compose.ui.geometry.Rect(
                             pos.x, pos.y,
                             pos.x + size.width, pos.y + size.height
+                        )
+                        readActivity?.readerOverflowAnchor = PopupAnchorRect(
+                            left = pos.x.toInt(),
+                            top = pos.y.toInt(),
+                            right = (pos.x + size.width).toInt(),
+                            bottom = (pos.y + size.height).toInt()
                         )
                     }
                     .clickable {
@@ -256,15 +273,17 @@ fun ReadMenuTitleBar(
                             onReviewSnapshotTtlClick = actions.onReviewSnapshotTtlClick,
                             onTogglePreheatWifiOnlyClick = actions.onTogglePreheatWifiOnlyClick
                         )
-                        popupHandle = ModernActionPopup.show(
-                            context,
-                            anchorBounds.left.toInt(),
-                            anchorBounds.top.toInt(),
-                            anchorBounds.right.toInt(),
-                            anchorBounds.bottom.toInt(),
-                            overflowActions,
-                            popupHandle
+                        val handle = ModernActionPopup.show(
+                            context = context,
+                            anchorLeft = anchorBounds.left.toInt(),
+                            anchorTop = anchorBounds.top.toInt(),
+                            anchorRight = anchorBounds.right.toInt(),
+                            anchorBottom = anchorBounds.bottom.toInt(),
+                            actions = overflowActions,
+                            previousPopup = readActivity?.readerMenuPopupHandle ?: popupHandle
                         )
+                        popupHandle = handle
+                        readActivity?.readerMenuPopupHandle = handle
                     },
                 contentAlignment = Alignment.Center
             ) {

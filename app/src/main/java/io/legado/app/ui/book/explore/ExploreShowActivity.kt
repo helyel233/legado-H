@@ -14,11 +14,11 @@ import io.legado.app.data.entities.SearchBook
 import io.legado.app.databinding.ActivityExploreShowBinding
 import io.legado.app.domain.model.HomepageModuleType
 import io.legado.app.help.webView.WebViewPool
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.main.homepage.HomepageModuleBuilder
 import io.legado.app.ui.widget.compose.LegadoComposeTheme
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.stableSearchBookKey
@@ -126,8 +126,11 @@ class ExploreShowActivity : VMBaseActivity<ActivityExploreShowBinding, ExploreSh
                 val labels = styleTypes.map { type ->
                     "${getString(type.titleRes)} · ${getString(HomepageModuleBuilder.styleDescriptionRes(type))}"
                 }
-                selector(getString(R.string.homepage_choose_style), labels) { _, index ->
-                    val chosen = styleTypes.getOrNull(index) ?: return@selector
+                showComposeChoiceListDialog(
+                    title = getString(R.string.homepage_choose_style),
+                    labels = labels
+                ) { index ->
+                    val chosen = styleTypes.getOrNull(index) ?: return@showComposeChoiceListDialog
                     lifecycleScope.launch {
                         HomepageModuleBuilder.pinExploreCategory(
                             sourceUrl = sourceUrl,

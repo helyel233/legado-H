@@ -37,7 +37,6 @@ import io.legado.app.help.book.removeType
 import io.legado.app.help.config.AppConfig
 import io.legado.app.help.storage.Backup
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.model.ReadManga
 import io.legado.app.receiver.NetworkChangedListener
 import io.legado.app.ui.book.ShelfExitRequestGate
@@ -56,6 +55,7 @@ import io.legado.app.ui.book.manga.recyclerview.ScrollTimer
 import io.legado.app.ui.book.read.MangaMenu
 import io.legado.app.ui.book.read.ReadBookActivity.Companion.RESULT_DELETED
 import io.legado.app.ui.book.toc.TocActivityResult
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.number.NumberPickerDialog
 import io.legado.app.ui.widget.recycler.LoadMoreView
 import io.legado.app.utils.GSON
@@ -831,7 +831,10 @@ class ReadMangaActivity : VMBaseActivity<ActivityMangaBinding, ReadMangaViewMode
             getString(R.string.manga_epaper_stting),
             getString(R.string.enable_manga_gray).removePrefix(appCtx.getString(R.string.ra_on)).removePrefix("Enable ")
         )
-        selector(R.string.manga_config, items) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.manga_config),
+            labels = items
+        ) { index ->
             when (index) {
                 0 -> triggerMangaMenuItem(R.id.menu_pre_manga_number)
                 1 -> triggerMangaMenuItem(R.id.menu_disable_manga_scale)

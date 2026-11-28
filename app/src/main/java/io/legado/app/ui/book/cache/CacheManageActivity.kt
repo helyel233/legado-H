@@ -30,8 +30,8 @@ import io.legado.app.lib.cloud.CloudStorageType
 import io.legado.app.lib.cloud.S3ContainerScope
 import io.legado.app.lib.dialogs.AndroidAlertBuilder
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.primaryTextColor
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.ConvertUtils
 import io.legado.app.utils.gone
 import io.legado.app.utils.cnCompare
@@ -220,9 +220,13 @@ class CacheManageActivity :
                 return@launch
             }
             val selected = cloudContainerId ?: AppCloudStorage.selectedContainer(S3ContainerScope.CACHE)?.id
-            selector(getString(R.string.s3_bucket), containers.map(AppCloudStorage::containerDisplayLabel)) { _, index ->
-                val container = containers.getOrNull(index) ?: return@selector
-                if (container.id == selected) return@selector
+            showComposeChoiceListDialog(
+                title = getString(R.string.s3_bucket),
+                labels = containers.map(AppCloudStorage::containerDisplayLabel),
+                selectedIndex = containers.indexOfFirst { it.id == selected }
+            ) { index ->
+                val container = containers.getOrNull(index) ?: return@showComposeChoiceListDialog
+                if (container.id == selected) return@showComposeChoiceListDialog
                 AppCloudStorage.selectContainer(S3ContainerScope.CACHE, container.id)
                 cloudContainerId = container.id
                 updateContainerMenu()
@@ -254,9 +258,13 @@ class CacheManageActivity :
 
     private fun showSortSelector() {
         val modes = CacheManageSortMode.entries
-        selector(getString(R.string.cache_manage_sort_title), modes.map { getString(it.titleRes) }) { _, index ->
-            val mode = modes.getOrNull(index) ?: return@selector
-            if (sortMode == mode) return@selector
+        showComposeChoiceListDialog(
+            title = getString(R.string.cache_manage_sort_title),
+            labels = modes.map { getString(it.titleRes) },
+            selectedIndex = modes.indexOf(sortMode)
+        ) { index ->
+            val mode = modes.getOrNull(index) ?: return@showComposeChoiceListDialog
+            if (sortMode == mode) return@showComposeChoiceListDialog
             sortMode = mode
             updateSortButton()
             applyFilters()
@@ -385,7 +393,10 @@ class CacheManageActivity :
             R.string.cache_manage_upload to { upload(item) },
             R.string.action_download to { download(item) }
         )
-        selector(getString(R.string.cache_manage_sync_action), actions.map { getString(it.first) }) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.cache_manage_sync_action),
+            labels = actions.map { getString(it.first) }
+        ) { index ->
             actions.getOrNull(index)?.second?.invoke()
         }
     }
@@ -495,8 +506,11 @@ class CacheManageActivity :
                 append(variant.cacheCountText(this@CacheManageActivity))
             }
         }
-        selector(getString(R.string.cache_manage_select_source), labels) { _, index ->
-            val variant = variants.getOrNull(index) ?: return@selector
+        showComposeChoiceListDialog(
+            title = getString(R.string.cache_manage_select_source),
+            labels = labels
+        ) { index ->
+            val variant = variants.getOrNull(index) ?: return@showComposeChoiceListDialog
             viewModel.selectSource(item.groupKey, variant.sourceKey)
         }
     }
@@ -565,7 +579,10 @@ class CacheManageActivity :
         }
         val title = item?.let { getString(R.string.cache_manage_delete_book_title, it.book.name) }
             ?: getString(R.string.delete)
-        selector(title, targets.map { getString(it.labelRes) }) { _, index ->
+        showComposeChoiceListDialog(
+            title = title,
+            labels = targets.map { getString(it.labelRes) }
+        ) { index ->
             targets.getOrNull(index)?.let(onSelected)
         }
     }
@@ -594,7 +611,10 @@ class CacheManageActivity :
         onSelected: (CacheSyncStrategy) -> Unit
     ) {
         val strategies = CacheSyncStrategy.entries
-        selector(getString(titleRes), strategies.map { getString(it.labelRes) }) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(titleRes),
+            labels = strategies.map { getString(it.labelRes) }
+        ) { index ->
             strategies.getOrNull(index)?.let(onSelected)
         }
     }

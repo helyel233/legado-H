@@ -87,7 +87,7 @@ import io.legado.app.help.ai.AiTaskKeepAlive
 import io.legado.app.help.ai.AiToolRegistry
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.config.AiWorldBookManageActivity
 import io.legado.app.ui.glass.LiquidGlassSpec
 import io.legado.app.ui.glass.applyLiquidGlassSpec
@@ -849,14 +849,15 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
             return
         }
         val providerNameMap = AppConfig.aiProviderList.associateBy({ it.id }, { it.name })
-        context.selector(
-            context.getString(R.string.ai_current_model),
-            models.map { model ->
+        context.showComposeChoiceListDialog(
+            title = context.getString(R.string.ai_current_model),
+            labels = models.map { model ->
                 providerNameMap[model.providerId]?.takeIf { it.isNotBlank() }
                     ?.let { "${model.modelId} - $it" }
                     ?: model.modelId
-            }
-        ) { _, _, index ->
+            },
+            selectedIndex = models.indexOfFirst { it.id == AppConfig.aiAskModelId }
+        ) { index ->
             AppConfig.aiAskModelId = models[index].id
             modelLabel = currentModelLabel()
         }
@@ -867,9 +868,9 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
             context.toastOnUi(R.string.ai_chat_wait_current)
             return
         }
-        context.selector(
-            appCtx.getString(R.string.ai_ui_current_window_capabilities),
-            listOf(
+        context.showComposeChoiceListDialog(
+            title = appCtx.getString(R.string.ai_ui_current_window_capabilities),
+            labels = listOf(
                 appCtx.getString(R.string.ai_ui_new_chat),
                 appCtx.getString(R.string.history),
                 appCtx.getString(R.string.ai_ui_skills_2, activeWindowSkills().size),
@@ -877,7 +878,7 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
                 appCtx.getString(R.string.ai_ui_world_books_2, activeReadAiWorldBookCount()),
                 appCtx.getString(R.string.ai_ui_clear_skill_mcp)
             )
-        ) { _, _, index ->
+        ) { index ->
             when (index) {
                 0 -> startNewChat()
                 1 -> toggleHistory()
@@ -911,7 +912,10 @@ class ReadAiFloatingPanel @JvmOverloads constructor(
     private fun showReadAiWorldBookDialog() {
         val worldBooks = AppConfig.aiWorldBookList
         if (worldBooks.isEmpty()) {
-            context.selector(appCtx.getString(R.string.ai_tool_world_book), listOf(appCtx.getString(R.string.ai_ui_open_world_book_management))) { _, _, _ ->
+            context.showComposeChoiceListDialog(
+                title = appCtx.getString(R.string.ai_tool_world_book),
+                labels = listOf(appCtx.getString(R.string.ai_ui_open_world_book_management))
+            ) { _ ->
                 openWorldBookManage()
             }
             return

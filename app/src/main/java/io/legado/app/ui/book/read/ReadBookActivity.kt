@@ -29,8 +29,8 @@ import android.text.StaticLayout
 import android.text.TextPaint
 import androidx.activity.addCallback
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.graphics.toColorInt
 import androidx.core.view.WindowCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.get
@@ -39,6 +39,7 @@ import androidx.core.view.doOnLayout
 import androidx.core.view.doOnPreDraw
 import androidx.core.view.size
 import androidx.core.view.updateLayoutParams
+import androidx.fragment.app.DialogFragment
 import androidx.lifecycle.lifecycleScope
 import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import io.legado.app.BuildConfig
@@ -95,12 +96,10 @@ import io.legado.app.help.readaloud.ReadAloudPlaybackState
 import io.legado.app.help.readaloud.ReadAloudProgressState
 import io.legado.app.help.source.getSourceType
 import io.legado.app.help.storage.Backup
-import io.legado.app.lib.dialogs.AndroidAlertBuilder
 import io.legado.app.lib.dialogs.SelectItem
-import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
+import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.themeCardColorOrDefault
@@ -210,11 +209,15 @@ import io.legado.app.ui.config.BubbleManageActivity
 import io.legado.app.ui.config.ShareNoteTemplateManageActivity
 import io.legado.app.ui.dict.DictDialog
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.BackdropCropGravity
+import io.legado.app.ui.glass.ContentBackdropHost
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.replace.ReplaceRuleActivity
 import io.legado.app.ui.replace.edit.ReplaceEditActivity
 import io.legado.app.ui.widget.ModernActionPopup
 import io.legado.app.ui.widget.PopupAction
+import io.legado.app.ui.widget.compose.ComposeConfirmDialog
+import io.legado.app.ui.widget.compose.showComposeConfirmDialog
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.ui.widget.dialog.BottomWebViewDialog
@@ -289,7 +292,8 @@ class ReadBookActivity : BaseReadBookActivity(),
     TxtTocRuleDialog.CallBack,
     ColorPickerDialogListener,
     LayoutProgressListener,
-    ReaderTemplateDialog.PreviewHost {
+    ReaderTemplateDialog.PreviewHost,
+    ContentBackdropHost {
 
     private var pendingReadAloudPlayerOpen = false
     private var pendingReadAloudPanelIntentOpen = false
@@ -313,61 +317,37 @@ class ReadBookActivity : BaseReadBookActivity(),
      */
     override val showsWallpaperBehindContent: Boolean get() = false
 
-    /**
-     * 当前阅读内容的模糊快照，供阅读页底部面板当「自己压着的那块内容」的磨砂底图。
-     *
-     * 取样范围是**屏幕底部与 [targetHeight] 等高的那一段**（面板贴底弹出）：先按
-     * `targetWidth / 源宽` 缩放画布，再把画布上移到该段顶端，让源视图底边与位图底边对齐。
-     * 位图宽高比与面板一致，因此 `SurfaceDrawable` 的 center-crop 退化为整图，不会二次裁切。
-     *
-     * 只在主线程调用一次（面板 `onCreateView`）。开销由调用方按 1/3 降采样控制：
-     * `stackBlurSoftware` 每像素 O(1)、与半径无关。任何一步失败都返回 null，调用方回退
-     * [io.legado.app.lib.theme.dialogSurfaceBackground]，绝不会留下半张底图。
-     *
-     * EPUB 直连模式**恒返回 null**（正文是硬件加速 WebView，软件画布截不到），原因见函数内
-     * 首段的说明。模糊半径为 0（用户把「玻璃模糊强度」拖到 0）同样返回 null：绝不交回未模糊
-     * 的清晰快照，否则就是「半透明 + 字看得见」这个已被真机否决的观感。
-     */
-    fun captureReaderContentBackdrop(
+    override fun captureContentBackdrop(
+        gravity: BackdropCropGravity,
         targetWidth: Int,
         targetHeight: Int,
         blurRadius: Int
-    ): Bitmap? = selectionShareCoordinator.captureContentBackdrop(
-        targetWidth = targetWidth,
-        targetHeight = targetHeight,
-        blurRadius = blurRadius
-    )
+    ): Bitmap? {
+        if (blurRadius <= 0) return null
+        return selectionShareCoordinator.captureContentBackdrop(
+            targetWidth = targetWidth,
+            targetHeight = targetHeight,
+            blurRadius = blurRadius,
+            gravity = gravity
+        ) ?: selectionShareCoordinator.captureWindowBackdrop(
+            targetWidth = targetWidth,
+            targetHeight = targetHeight,
+            blurRadius = blurRadius,
+            gravity = gravity
+        )
+    }
 
-    /**
-     * [captureReaderContentBackdrop] 的窗口级兜底：EPUB 直连模式（`readView` 被 GONE）
-     * 或正文 view 尚未布局时，用 `PixelCopy` 取 Activity 窗口的实际合成结果。
-     *
-     * ## 为什么必须有这条兜底
-     *
-     * 原实现在 `epubCoreActive` 与 `source.width/height <= 0` 两处直接 return null，
-     * 调用方 [io.legado.app.ui.book.read.config.MoreConfigDialog] 随即回退不透明实底。
-     * 用户反馈「设置弹窗完全无变化」在这两档上逐字成立——不是判定门，是取源分支。
-     * 正文是硬件加速 WebView 时软件 `View.draw` 截不到（旧注释的 TODO），但
-     * `PixelCopy.request(window, ...)` 拿的是窗口合成结果，不依赖 view 树的软件绘制。
-     *
-     * API < 26 / 窗口未布局 / 拷贝超时 / 非 SUCCESS / 模糊失败全部返回 null，
-     * 调用方仍走 [io.legado.app.lib.theme.dialogSurfaceBackground] 既有降级，
-     * 绝不会交回未模糊的清晰快照。失败落 AppLog，可在「我的-关于-日志」定位。
-     *
-     * 本函数在**调用线程同步等待**（MoreConfigDialog.onCreateView 与 Compose 弹层的
-     * remember 计算块都在主线程调用），`latch.await` 的超时就是主线程的最长冻结时间。
-     * PixelCopy 正常一帧内回调（16ms 级），50ms 已是 3 帧余量；窗口真没就绪时按时
-     * 降级回实底，比让弹窗打开动画卡 250ms 更可接受——不再给 250ms 的余量。
-     */
-    fun captureReaderWindowBackdrop(
-        targetWidth: Int,
-        targetHeight: Int,
-        blurRadius: Int
-    ): Bitmap? = selectionShareCoordinator.captureWindowBackdrop(
-        targetWidth = targetWidth,
-        targetHeight = targetHeight,
-        blurRadius = blurRadius
-    )
+    override fun contentGlassTintBaseColor(): Int {
+        return if (AppConfig.readBarStyleFollowPage &&
+            !ReadBook.usesPageTemplate() &&
+            ReadBookConfig.durConfig.curBgType() == 0
+        ) {
+            runCatching { ReadBookConfig.durConfig.curBgStr().toColorInt() }
+                .getOrDefault(bottomBackground)
+        } else {
+            bottomBackground
+        }
+    }
 
     private val tocActivity =
         registerForActivityResult(TocActivityResult()) {
@@ -454,7 +434,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         }
     }
     private var menu: Menu? = null
-    private var modernMenuPopup: ModernActionPopup.Handle? = null
     private var backupJob: Job? = null
     private var tts: TTS? = null
     private var commentWebViewSession: CommentWebViewSession? = null
@@ -525,7 +504,6 @@ class ReadBookActivity : BaseReadBookActivity(),
         NetworkChangedListener(this)
     }
     private var justInitData: Boolean = false
-    private var syncDialog: AlertDialog? = null
     private data class EpubCoreNavigationRequest(
         val chapterIndex: Int,
         val resetPageOffset: Boolean,
@@ -1121,18 +1099,18 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun onCompatCreateOptionsMenu(menu: Menu): Boolean {
         menuInflater.inflate(R.menu.book_read, menu)
         menu.iconItemOnLongClick(R.id.menu_change_source) {
-            modernMenuPopup = ModernActionPopup.showFromMenu(
+            readerMenuPopupHandle = ModernActionPopup.showFromMenu(
                 it,
                 R.menu.book_read_change_source,
-                modernMenuPopup,
+                readerMenuPopupHandle,
                 onClick = ::onMenuItemClick
             )
         }
         menu.iconItemOnLongClick(R.id.menu_refresh) {
-            modernMenuPopup = ModernActionPopup.showFromMenu(
+            readerMenuPopupHandle = ModernActionPopup.showFromMenu(
                 it,
                 R.menu.book_read_refresh,
-                modernMenuPopup,
+                readerMenuPopupHandle,
                 onClick = ::onMenuItemClick
             )
         }
@@ -1342,26 +1320,7 @@ class ReadBookActivity : BaseReadBookActivity(),
             }
 
             R.id.menu_set_charset -> showCharsetConfig()
-            R.id.menu_image_style -> {
-                val imgStyles =
-                    arrayListOf(
-                        Book.imgStyleDefault, Book.imgStyleFull, Book.imgStyleText,
-                        Book.imgStyleSingle
-                    )
-                selector(
-                    R.string.image_style,
-                    imgStyles
-                ) { _, index ->
-                    val imageStyle = imgStyles[index]
-                    ReadBook.book?.setImageStyle(imageStyle)
-                    if (imageStyle == Book.imgStyleSingle) {
-                        ReadBook.book?.setPageAnim(0)  // 切换图片样式single后，自动切换为覆盖
-                        binding.readView.upPageAnim()
-                    }
-                    ReadBook.saveRead(fullUpdate = true)
-                    ReadBook.reloadCurrentContent("image-style")
-                }
-            }
+            R.id.menu_image_style -> showImageStyle()
 
             R.id.menu_get_progress -> ReadBook.book?.let {
                 viewModel.syncBookProgress(it) { progress ->
@@ -2392,18 +2351,17 @@ class ReadBookActivity : BaseReadBookActivity(),
             AppConfig.ReviewOpenMode.OFFLINE to R.string.menu_review_open_mode_offline
         )
         val current = AppConfig.reviewOpenMode
-        selector(
-            R.string.menu_review_open_mode,
-            modes.map { (key, labelRes) ->
-                val label = getString(labelRes)
-                // 当前项用前缀勾号标记：括注已经很长，再在后缀加「当前」会挤成一团
-                if (key == current) "✓ $label" else label
+        val actions = modes.map { (key, labelRes) ->
+            ModernActionPopup.Action(
+                title = getString(labelRes),
+                checked = key == current
+            ) {
+                if (key != AppConfig.reviewOpenMode) {
+                    AppConfig.reviewOpenMode = key
+                }
             }
-        ) { _, index ->
-            val mode = modes.getOrNull(index) ?: return@selector
-            if (mode.first == AppConfig.reviewOpenMode) return@selector
-            AppConfig.reviewOpenMode = mode.first
         }
+        showReaderActionPopup(actions)
     }
 
     /**
@@ -2413,21 +2371,22 @@ class ReadBookActivity : BaseReadBookActivity(),
     override fun showReviewSnapshotTtlDialog() {
         val presets = listOf(1, 3, 7, 30, 0)
         val current = AppConfig.reviewSnapshotTtlDays
-        selector(
-            R.string.menu_review_snapshot_ttl,
-            presets.map { days ->
-                val label = if (days <= 0) {
-                    getString(R.string.menu_review_snapshot_ttl_never)
-                } else {
-                    getString(R.string.menu_review_snapshot_ttl_days, days)
-                }
-                if (days == current) "$label（${getString(R.string.menu_current_option)}）" else label
+        val actions = presets.map { days ->
+            val label = if (days <= 0) {
+                getString(R.string.menu_review_snapshot_ttl_never)
+            } else {
+                getString(R.string.menu_review_snapshot_ttl_days, days)
             }
-        ) { _, index ->
-            val days = presets.getOrNull(index) ?: return@selector
-            if (days == AppConfig.reviewSnapshotTtlDays) return@selector
-            AppConfig.reviewSnapshotTtlDays = days
+            ModernActionPopup.Action(
+                title = label,
+                checked = days == current
+            ) {
+                if (days != AppConfig.reviewSnapshotTtlDays) {
+                    AppConfig.reviewSnapshotTtlDays = days
+                }
+            }
         }
+        showReaderActionPopup(actions)
     }
 
     override suspend fun upContentAwait(
@@ -3347,22 +3306,25 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     private fun showEpubCoreScheduleModeDialog() {
         val modes = EpubCoreScheduleMode.values()
-        selector(
-            R.string.epub_core_schedule_mode,
-            modes.map { getString(it.titleRes) }
-        ) { _, index ->
-            val mode = modes.getOrNull(index) ?: return@selector
-            if (AppConfig.epubCoreScheduleMode == mode.key) return@selector
-            AppConfig.epubCoreScheduleMode = mode.key
-            binding.epubReadView.applyDirectPerformanceMode()
-            menu?.findItem(R.id.menu_epub_schedule_mode)?.title =
-                "${getString(R.string.epub_core_schedule_mode)} (${getString(mode.titleRes)})"
-            if (!isEpubCoreMode()) return@selector
-            cancelEpubCorePrefetch()
-            if (!epubCoreActive || epubCoreLoading) return@selector
-            val chapterIndex = binding.epubReadView.currentPage()?.chapterIndex ?: ReadBook.durChapterIndex
-            scheduleDirectEpubPrefetch(chapterIndex, epubCoreRequestSeq)
+        val currentKey = currentEpubCoreSchedule().key
+        val actions = modes.map { mode ->
+            ModernActionPopup.Action(
+                title = getString(mode.titleRes),
+                checked = mode.key == currentKey
+            ) {
+                if (AppConfig.epubCoreScheduleMode == mode.key) return@Action
+                AppConfig.epubCoreScheduleMode = mode.key
+                binding.epubReadView.applyDirectPerformanceMode()
+                menu?.findItem(R.id.menu_epub_schedule_mode)?.title =
+                    "${getString(R.string.epub_core_schedule_mode)} (${getString(mode.titleRes)})"
+                if (!isEpubCoreMode()) return@Action
+                cancelEpubCorePrefetch()
+                if (!epubCoreActive || epubCoreLoading) return@Action
+                val chapterIndex = binding.epubReadView.currentPage()?.chapterIndex ?: ReadBook.durChapterIndex
+                scheduleDirectEpubPrefetch(chapterIndex, epubCoreRequestSeq)
+            }
         }
+        showReaderActionPopup(actions)
     }
 
     private fun buildEpubCoreLayoutConfig(backgroundColor: Int): EpubCoreLayoutConfig {
@@ -4589,21 +4551,24 @@ class ReadBookActivity : BaseReadBookActivity(),
         if (confirmRestoreProcess == true) {
             ReadBook.restoreLastBookProgress()
         } else if (confirmRestoreProcess == null) {
-            alert(R.string.draw) {
-                setMessage(R.string.restore_last_book_process)
-                yesButton {
+            showComposeConfirmDialog(
+                title = getString(R.string.draw),
+                message = getString(R.string.restore_last_book_process),
+                positiveText = getString(R.string.yes),
+                negativeText = getString(R.string.no),
+                onPositive = {
                     confirmRestoreProcess = true
                     ReadBook.restoreLastBookProgress() //恢复启动全文搜索前的进度
-                }
-                noButton {
+                },
+                onNegative = {
+                    ReadBook.clearLastBookProgress()
+                    confirmRestoreProcess = false
+                },
+                onDismissAction = {
                     ReadBook.clearLastBookProgress()
                     confirmRestoreProcess = false
                 }
-                onCancelled {
-                    ReadBook.clearLastBookProgress()
-                    confirmRestoreProcess = false
-                }
-            }
+            )
         }
     }
 
@@ -4628,9 +4593,12 @@ class ReadBookActivity : BaseReadBookActivity(),
             toastOnUi("no chapter")
             return
         }
-        alert(R.string.chapter_pay) {
-            setMessage(chapter.title)
-            yesButton {
+        showComposeConfirmDialog(
+            title = getString(R.string.chapter_pay),
+            message = chapter.title,
+            positiveText = getString(R.string.yes),
+            negativeText = getString(R.string.no),
+            onPositive = {
                 Coroutine.async(lifecycleScope) {
                     val source =
                         ReadBook.bookSource ?: throw NoStackTraceException("no book source")
@@ -4672,8 +4640,7 @@ class ReadBookActivity : BaseReadBookActivity(),
                     AppLog.put("执行购买操作出错\n${it.localizedMessage}", it, true)
                 }
             }
-            noButton()
-        }
+        )
     }
 
     /**
@@ -5202,12 +5169,14 @@ class ReadBookActivity : BaseReadBookActivity(),
         paragraphNum: Int,
         imageIndexInParagraph: Int
     ) {
-        alert(titleResource = R.string.delete, messageResource = R.string.ai_image_delete_insert_confirm) {
-            okButton {
+        showComposeConfirmDialog(
+            title = getString(R.string.delete),
+            message = getString(R.string.ai_image_delete_insert_confirm),
+            dangerPositive = true,
+            onPositive = {
                 deleteAiInsertedImage(src, paragraphNum, imageIndexInParagraph)
             }
-            cancelButton()
-        }
+        )
     }
 
     private fun deleteAiInsertedImage(
@@ -5342,13 +5311,15 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
 
     private fun sureSyncProgress(progress: BookProgress) {
-        alert(R.string.get_book_progress) {
-            setMessage(R.string.current_progress_exceeds_cloud)
-            okButton {
+        showComposeConfirmDialog(
+            title = getString(R.string.get_book_progress),
+            message = getString(R.string.current_progress_exceeds_cloud),
+            positiveText = getString(android.R.string.ok),
+            negativeText = getString(R.string.no),
+            onPositive = {
                 ReadBook.setProgress(progress)
             }
-            noButton()
-        }
+        )
     }
 
     override fun openDirectTextChapter(index: Int, characterPosition: Int, success: (() -> Unit)?) {
@@ -5789,27 +5760,30 @@ class ReadBookActivity : BaseReadBookActivity(),
             getString(R.string.menu_refresh_all)
         )
         binding.readMenu.runMenuOut()
-        selector(R.string.refresh, labels) { _, index ->
-            if (ReadBook.bookSource == null) {
-                refreshContentWithoutSource()
-                return@selector
-            }
-            ReadBook.book?.let { book ->
-                when (index) {
-                    0 -> {
-                        ReadBook.curTextChapter = null
-                        binding.readView.upContent()
-                        viewModel.refreshContentDur(book)
+        val actions = labels.mapIndexed { index, label ->
+            ModernActionPopup.Action(title = label) {
+                if (ReadBook.bookSource == null) {
+                    refreshContentWithoutSource()
+                    return@Action
+                }
+                ReadBook.book?.let { book ->
+                    when (index) {
+                        0 -> {
+                            ReadBook.curTextChapter = null
+                            binding.readView.upContent()
+                            viewModel.refreshContentDur(book)
+                        }
+                        1 -> {
+                            ReadBook.clearTextChapter()
+                            binding.readView.upContent()
+                            viewModel.refreshContentAfter(book)
+                        }
+                        2 -> refreshContentAll(book)
                     }
-                    1 -> {
-                        ReadBook.clearTextChapter()
-                        binding.readView.upContent()
-                        viewModel.refreshContentAfter(book)
-                    }
-                    2 -> refreshContentAll(book)
                 }
             }
         }
+        showReaderActionPopup(actions, anchor = readerRefreshAnchor)
     }
 
     override fun showCacheDialog() {
@@ -5874,22 +5848,29 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
 
     override fun showImageStyle() {
-        val imgStyles = arrayListOf(
+        val imgStyles = listOf(
             Book.imgStyleDefault,
             Book.imgStyleFull,
             Book.imgStyleText,
             Book.imgStyleSingle
         )
-        selector(R.string.image_style, imgStyles) { _, index ->
-            val imageStyle = imgStyles[index]
-            ReadBook.book?.setImageStyle(imageStyle)
-            if (imageStyle == Book.imgStyleSingle) {
-                ReadBook.book?.setPageAnim(0)
-                binding.readView.upPageAnim()
+        val currentStyle = ReadBook.book?.getImageStyle()?.takeIf { it.isNotBlank() }
+            ?: Book.imgStyleDefault
+        val actions = imgStyles.map { imageStyle ->
+            ModernActionPopup.Action(
+                title = imageStyle,
+                checked = imageStyle.equals(currentStyle, ignoreCase = true)
+            ) {
+                ReadBook.book?.setImageStyle(imageStyle)
+                if (imageStyle == Book.imgStyleSingle) {
+                    ReadBook.book?.setPageAnim(0)
+                    binding.readView.upPageAnim()
+                }
+                ReadBook.saveRead(fullUpdate = true)
+                ReadBook.reloadCurrentContent("image-style")
             }
-            ReadBook.saveRead(fullUpdate = true)
-            ReadBook.reloadCurrentContent("image-style")
         }
+        showReaderActionPopup(actions)
     }
 
     override fun showHighlightRuleManage() {
@@ -5942,14 +5923,18 @@ class ReadBookActivity : BaseReadBookActivity(),
     }
 
     override fun sureNewProgress(progress: BookProgress) {
-        syncDialog?.dismiss()
-        syncDialog = alert(R.string.get_book_progress) {
-            setMessage(R.string.cloud_progress_exceeds_current)
-            okButton {
+        if (isFinishing || isDestroyed || supportFragmentManager.isStateSaved) return
+        (supportFragmentManager.findFragmentByTag(SYNC_PROGRESS_DIALOG_TAG) as? DialogFragment)
+            ?.dismissAllowingStateLoss()
+        ComposeConfirmDialog.create(
+            title = getString(R.string.get_book_progress),
+            message = getString(R.string.cloud_progress_exceeds_current),
+            positiveText = getString(android.R.string.ok),
+            negativeText = getString(R.string.no),
+            onPositive = {
                 ReadBook.setProgress(progress)
             }
-            noButton()
-        }
+        ).show(supportFragmentManager, SYNC_PROGRESS_DIALOG_TAG)
     }
 
     override fun finish() {
@@ -5964,9 +5949,12 @@ class ReadBookActivity : BaseReadBookActivity(),
             callBackBookEnd()
             viewModel.removeFromBookshelf { super.finish() }
         } else {
-            val dialog = alert(title = getString(R.string.add_to_bookshelf)) {
-                setMessage(getString(R.string.check_add_bookshelf, book.name))
-                okButton {
+            showComposeConfirmDialog(
+                title = getString(R.string.add_to_bookshelf),
+                message = getString(R.string.check_add_bookshelf, book.name),
+                positiveText = getString(android.R.string.ok),
+                negativeText = getString(R.string.no),
+                onPositive = {
                     ReadBook.book?.removeType(BookType.notShelf)
                     ReadBook.book?.save()
                     SourceCallBack.callBackBook(SourceCallBack.ADD_BOOK_SHELF, ReadBook.bookSource, ReadBook.book)
@@ -5974,13 +5962,15 @@ class ReadBookActivity : BaseReadBookActivity(),
                     setResult(RESULT_OK)
                     callBackBookEnd()
                     super.finish()
-                }
-                noButton {
+                },
+                onNegative = {
                     callBackBookEnd()
                     viewModel.removeFromBookshelf { super.finish() }
+                },
+                onDismissAction = {
+                    shelfExitRequestGate.cancel()
                 }
-            }
-            dialog.setOnCancelListener { shelfExitRequestGate.cancel() }
+            )
         }
     }
 
@@ -6253,6 +6243,7 @@ class ReadBookActivity : BaseReadBookActivity(),
 
     companion object {
         const val RESULT_DELETED = 100
+        private const val SYNC_PROGRESS_DIALOG_TAG = "read_sync_progress_dialog"
         private const val EPUB_PREPARE_TIMEOUT_MS = 15_000L
         private const val HOST_OVERLAY_SETTLE_TIMEOUT_MS = 500L
         private const val COMMENT_WEB_VIEW_WARM_UP_DELAY_MS = 1_200L

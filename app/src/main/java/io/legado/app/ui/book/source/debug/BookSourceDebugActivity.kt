@@ -13,13 +13,13 @@ import io.legado.app.base.VMBaseActivity
 import io.legado.app.databinding.ActivitySourceDebugBinding
 import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.source.exploreKinds
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.applyThemedFilletControlBackground
 import io.legado.app.lib.theme.primaryColor
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.qrcode.QrCodeResult
 import io.legado.app.ui.widget.applyGlassDomain
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.dialog.TextDialog
 import io.legado.app.utils.applyNavigationBarPadding
 import io.legado.app.utils.launch
@@ -146,7 +146,10 @@ class BookSourceDebugActivity : VMBaseActivity<ActivitySourceDebugBinding, BookS
             @Suppress("USELESS_ELVIS")
             exploreKinds?.map { it.title ?: "" }?.let { exploreKindTitles ->
                 binding.textFx.onLongClick {
-                    selector(appCtx.getString(R.string.ui_book_select_discover), exploreKindTitles) { _, index ->
+                    showComposeChoiceListDialog(
+                        title = appCtx.getString(R.string.ui_book_select_discover),
+                        labels = exploreKindTitles
+                    ) { index ->
                         val explore = exploreKinds[index]
                         binding.textFx.text = "${explore.title}::${explore.url}"
                         searchView.setQuery(binding.textFx.text, true)

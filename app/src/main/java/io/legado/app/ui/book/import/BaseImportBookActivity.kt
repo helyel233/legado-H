@@ -11,12 +11,12 @@ import io.legado.app.data.entities.Book
 import io.legado.app.databinding.ActivityImportBookBinding
 import io.legado.app.help.config.AppConfig
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.model.localBook.LocalBook
 import io.legado.app.ui.file.HandleFileContract
 import io.legado.app.ui.glass.GlassSamplingDomain
 import io.legado.app.ui.widget.applyGlassDomain
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.ArchiveUtils
 import io.legado.app.utils.FileDoc
 import io.legado.app.utils.applyTint
@@ -108,10 +108,11 @@ abstract class BaseImportBookActivity<VM : ViewModel> :
             toastOnUi(R.string.unsupport_archivefile_entry)
             return
         }
-        selector(
-            R.string.start_read,
-            fileNames
-        ) { _, name, _ ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.start_read),
+            labels = fileNames
+        ) { index ->
+            val name = fileNames[index]
             appDb.bookDao.getBookByFileName(name)?.let {
                 startReadBook(it)
             } ?: showImportAlert(fileDoc, name)

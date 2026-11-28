@@ -94,12 +94,12 @@ import io.legado.app.help.webView.PooledWebView
 import io.legado.app.help.webView.WebViewPool
 import io.legado.app.lib.dialogs.alert
 import io.legado.app.lib.dialogs.AndroidAlertBuilder
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.applyUiTitleTypeface
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.backgroundColor
+import io.legado.app.lib.theme.bottomBackground
 import io.legado.app.lib.theme.primaryTextColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.themeCardColorOrDefault
@@ -133,9 +133,13 @@ import io.legado.app.ui.association.OnLineImportActivity
 import io.legado.app.ui.book.source.edit.BookSourceEditActivity
 import io.legado.app.ui.book.toc.TocActivityResult
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.glass.BackdropCropGravity
+import io.legado.app.ui.glass.ContentBackdropHost
+import io.legado.app.ui.glass.captureViewBackdrop
 import io.legado.app.ui.login.SourceLoginActivity
 import io.legado.app.ui.main.ai.AiImageGalleryActivity
 import io.legado.app.ui.video.VideoPlayerActivity
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.ui.widget.dialog.PhotoDialog
 import io.legado.app.ui.widget.dialog.VariableDialog
 import io.legado.app.ui.widget.dialog.WaitDialog
@@ -176,7 +180,17 @@ class BookInfoActivity :
     GroupSelectDialog.CallBack,
     ChangeBookSourceDialog.CallBack,
     ChangeCoverDialog.CallBack,
-    VariableDialog.Callback {
+    VariableDialog.Callback,
+    ContentBackdropHost {
+
+    override fun captureContentBackdrop(
+        gravity: BackdropCropGravity,
+        targetWidth: Int,
+        targetHeight: Int,
+        blurRadius: Int
+    ): Bitmap? = captureViewBackdrop(binding.bgBook, gravity, targetWidth, targetHeight, blurRadius)
+
+    override fun contentGlassTintBaseColor(): Int = bottomBackground
 
     private enum class DetailPage {
         INTRO, TOC
@@ -2166,7 +2180,10 @@ class BookInfoActivity :
         onSelected: (CacheSyncStrategy) -> Unit
     ) {
         val strategies = CacheSyncStrategy.entries
-        selector(getString(titleRes), strategies.map { getString(it.labelRes) }) { _, index ->
+        showComposeChoiceListDialog(
+            title = getString(titleRes),
+            labels = strategies.map { getString(it.labelRes) }
+        ) { index ->
             strategies.getOrNull(index)?.let(onSelected)
         }
     }
@@ -3664,10 +3681,11 @@ class BookInfoActivity :
             toastOnUi("Unexpected webFileData")
             return
         }
-        selector(
-            R.string.download_and_import_file,
-            webFiles
-        ) { _, webFile, _ ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.download_and_import_file),
+            labels = webFiles.map { it.toString() }
+        ) { index ->
+            val webFile = webFiles[index]
             if (webFile.isSupported) {
                 //更新书籍最后更新时间,使之比远程书籍的时间新
                 viewModel.importOrDownloadWebFile<Book>(webFile) {
@@ -3712,10 +3730,11 @@ class BookInfoActivity :
             toastOnUi(R.string.unsupport_archivefile_entry)
             return
         }
-        selector(
-            R.string.import_select_book,
-            fileNames
-        ) { _, name, _ ->
+        showComposeChoiceListDialog(
+            title = getString(R.string.import_select_book),
+            labels = fileNames
+        ) { index ->
+            val name = fileNames[index]
             viewModel.importArchiveBook(archiveFileUri, name) {
                 success?.invoke(it)
             }

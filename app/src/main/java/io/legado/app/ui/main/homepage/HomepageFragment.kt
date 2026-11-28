@@ -21,13 +21,13 @@ import io.legado.app.data.entities.rule.ExploreKind
 import io.legado.app.databinding.FragmentHomepageBinding
 import io.legado.app.databinding.ItemHomepageSourcePageBinding
 import io.legado.app.help.config.AppConfig
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.ui.book.SearchBookOpenHelper
 import io.legado.app.ui.book.explore.ExploreShowActivity
 import io.legado.app.ui.glass.applyWallpaperGlassBackground
 import io.legado.app.ui.rss.article.RssSortActivity
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.applyMainBottomBarPadding
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.observeEvent
@@ -266,12 +266,12 @@ class HomepageFragment : VMBaseFragment<HomepageViewModel>(R.layout.fragment_hom
         val options = listOf(
             getString(R.string.homepage_layout_mixed),
             getString(R.string.homepage_layout_source_tab)
-        ).mapIndexed { index, label ->
-            if (index == current) "✓ $label" else label
-        }
-        requireContext().selector(
-            getString(R.string.homepage_switch_layout), options
-        ) { _, index ->
+        )
+        showComposeChoiceListDialog(
+            title = getString(R.string.homepage_switch_layout),
+            labels = options,
+            selectedIndex = current
+        ) { index ->
             if (index != current) {
                 viewModel.setLayoutMode(index)
             }
@@ -296,10 +296,10 @@ class HomepageFragment : VMBaseFragment<HomepageViewModel>(R.layout.fragment_hom
     }
 
     override fun onBookLongClick(book: SearchBook) {
-        requireContext().selector(
-            book.name,
-            listOf(getString(R.string.homepage_add_to_shelf), getString(R.string.homepage_view_info))
-        ) { _, index ->
+        showComposeChoiceListDialog(
+            title = book.name,
+            labels = listOf(getString(R.string.homepage_add_to_shelf), getString(R.string.homepage_view_info))
+        ) { index ->
             when (index) {
                 0 -> viewModel.onAddToShelf(book)
                 1 -> onBookClick(book)

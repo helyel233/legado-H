@@ -13,7 +13,7 @@ import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.ai.AiImageGalleryManager
 import io.legado.app.help.glide.ImageLoader
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.secondaryTextColor
 import io.legado.app.lib.theme.themeCardColorOrDefault
@@ -107,7 +107,7 @@ class AiImagePreviewDialog() : BaseDialogFragment(R.layout.dialog_ai_image_previ
     private fun showGroupSelector(title: String, onSelected: (String) -> Unit) {
         val groups = AiImageGalleryManager.listGroups()
         val labels = groups.map { it.name } + getString(R.string.ai_image_new_group)
-        requireContext().selector(title, labels) { _, index ->
+        showComposeChoiceListDialog(title = title, labels = labels) { index ->
             if (index == groups.size) {
                 createGroup(onSelected)
             } else {

@@ -25,7 +25,6 @@ import io.legado.app.databinding.ActivityThemeManageBinding
 import io.legado.app.databinding.DialogEditTextBinding
 import io.legado.app.help.readaloud.ReadAloudConfigChangeNotifier
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.UiCorner
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.accentColor
@@ -35,6 +34,7 @@ import io.legado.app.lib.theme.themeCardColorOrDefault
 import io.legado.app.lib.theme.themeMutedColorOrDefault
 import io.legado.app.lib.theme.uiTypeface
 import io.legado.app.ui.file.HandleFileContract
+import io.legado.app.ui.widget.compose.showComposeChoiceListDialog
 import io.legado.app.utils.MD5Utils
 import io.legado.app.utils.dpToPx
 import io.legado.app.utils.toastOnUi
@@ -233,9 +233,9 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
             toastOnUi(importingText.ifBlank { appCtx.getString(R.string.ra_cfg_importing_please_wait) })
             return
         }
-        selector(
-            appCtx.getString(R.string.ra_cfg_import_smart_audio),
-            listOf(
+        showComposeChoiceListDialog(
+            title = appCtx.getString(R.string.ra_cfg_import_smart_audio),
+            labels = listOf(
                 appCtx.getString(R.string.ra_cfg_batch_import, currentAssetLabel),
                 appCtx.getString(R.string.ra_cfg_import_one, currentAssetLabel),
                 appCtx.getString(R.string.ra_cfg_import_score_zip),
@@ -243,7 +243,7 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
                 appCtx.getString(R.string.ra_cfg_new_group),
                 appCtx.getString(R.string.ra_cfg_manage_groups)
             )
-        ) { _, index ->
+        ) { index ->
             when (index) {
                 0 -> importAudios.launch("audio/*")
                 1 -> importAudio.launch {
@@ -272,13 +272,13 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun confirmImportAudioPackage(uri: Uri, assetType: String) {
         val normalized = ReadAloudBgmTrack.normalizeAssetType(assetType)
         val label = assetLabel(normalized)
-        selector(
-            appCtx.getString(R.string.ra_cfg_import_zip_2, label),
-            listOf(
+        showComposeChoiceListDialog(
+            title = appCtx.getString(R.string.ra_cfg_import_zip_2, label),
+            labels = listOf(
                 appCtx.getString(R.string.ra_cfg_clear_existing_import, label),
                 appCtx.getString(R.string.ra_cfg_append_import)
             )
-        ) { _, index ->
+        ) { index ->
             val replaceOld = index == 0
             lifecycleScope.launch {
                 setImporting(true, appCtx.getString(R.string.ra_cfg_importing_zip, label))
@@ -451,9 +451,15 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
             toastOnUi(appCtx.getString(R.string.ra_cfg_no_groups))
             return
         }
-        selector(appCtx.getString(R.string.ra_cfg_manage_groups), managedGroups.map { it.displayName() }) { _, index ->
+        showComposeChoiceListDialog(
+            title = appCtx.getString(R.string.ra_cfg_manage_groups),
+            labels = managedGroups.map { it.displayName() }
+        ) { index ->
             val group = managedGroups[index]
-            selector(group.displayName(), listOf(appCtx.getString(R.string.group_edit), appCtx.getString(R.string.ra_cfg_delete_group))) { _, action ->
+            showComposeChoiceListDialog(
+                title = group.displayName(),
+                labels = listOf(appCtx.getString(R.string.group_edit), appCtx.getString(R.string.ra_cfg_delete_group))
+            ) { action ->
                 when (action) {
                     0 -> showGroupEditor(group)
                     1 -> confirmDeleteGroup(group)
@@ -798,7 +804,15 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     }
 
     private fun showTrackActions(track: ReadAloudBgmTrack) {
-        selector(track.displayName(), listOf(appCtx.getString(R.string.bookshelf_tag_edit), appCtx.getString(R.string.ra_cfg_default_volume), appCtx.getString(R.string.ra_cfg_move_group), appCtx.getString(R.string.delete))) { _, index ->
+        showComposeChoiceListDialog(
+            title = track.displayName(),
+            labels = listOf(
+                appCtx.getString(R.string.bookshelf_tag_edit),
+                appCtx.getString(R.string.ra_cfg_default_volume),
+                appCtx.getString(R.string.ra_cfg_move_group),
+                appCtx.getString(R.string.delete)
+            )
+        ) { index ->
             when (index) {
                 0 -> showTagsEditor(track)
                 1 -> showVolumeEditor(track)
@@ -866,7 +880,10 @@ class ReadAloudBgmManageActivity : BaseActivity<ActivityThemeManageBinding>() {
     private fun moveTracks(ids: List<Long>) {
         val options = listOf(ReadAloudBgmGroup(id = 0L, name = appCtx.getString(R.string.ra_cfg_default_group), assetType = currentAssetType)) +
             groups.filterNot { it.isDefaultGroup() }
-        selector(appCtx.getString(R.string.smart_group_select_group), options.map { it.displayName() }) { _, index ->
+        showComposeChoiceListDialog(
+            title = appCtx.getString(R.string.smart_group_select_group),
+            labels = options.map { it.displayName() }
+        ) { index ->
             val groupId = options[index].id
             lifecycleScope.launch(Dispatchers.IO) {
                 appDb.readAloudBgmDao.moveTracks(ids, groupId)

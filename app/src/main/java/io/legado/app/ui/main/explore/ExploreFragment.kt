@@ -83,7 +83,6 @@ import io.legado.app.help.source.clearExploreKindsCache
 import io.legado.app.help.source.exploreKinds
 import io.legado.app.help.webView.WebViewPool
 import io.legado.app.lib.dialogs.alert
-import io.legado.app.lib.dialogs.selector
 import io.legado.app.lib.theme.accentColor
 import io.legado.app.lib.theme.applyUiBodyTypefaceDeep
 import io.legado.app.lib.theme.applyUiSectionTitleStyle
@@ -3502,7 +3501,12 @@ class ExploreFragment : VMBaseFragment<ExploreViewModel>(R.layout.fragment_explo
         val options = item.kind.chars?.filterNotNull() ?: emptyList()
         if (options.isEmpty()) return
         val infoMap = getDiscoverInfoMap(source.bookSourceUrl)
-        context?.selector(item.text, options) { _, value, _ ->
+        context?.showComposeChoiceListDialog(
+            title = item.text,
+            labels = options,
+            selectedIndex = options.indexOf(currentDiscoverSelectValue(item))
+        ) { index ->
+            val value = options[index]
             infoMap[key] = value
             viewLifecycleOwner.lifecycleScope.launch(IO) {
                 source.clearExploreKindsCache()
