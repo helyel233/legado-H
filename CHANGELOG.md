@@ -1,5 +1,21 @@
 # 更新日志
 
+## 3.3.1 版（2026-11-28）
+
+阅读页弹窗与内容域玻璃收口：新增共享背板协议 `ContentBackdropHost`，让通用 Compose 弹窗 `AppDialogFrame` 在非壁纸域页面也能透出内容磨砂玻璃；全仓旧 `selector()` 迁移为锚定弹窗 `ModernActionPopup` 与 Compose 选择列表，阅读页设置弹窗拆成独立文件。**新特性 + 重构 → minor + 0.1，patch = 1。**
+
+### 新增
+
+- **内容域玻璃背板协议（`ContentBackdropHost`，`ui/glass/`）**：两方法接口由阅读页、书籍详情、朗读页三个非壁纸域页面实现，通用弹窗组件经 `Context.findContentBackdropHost()` 取宿主，避免 `ui/widget/compose` 反向依赖具体页面
+- **共享背板构建**：抽取 `captureViewBackdrop` / `buildContentGlassBackdrop` 到玻璃子目录，统一 BOTTOM/CENTER 裁切、缩放与软件模糊；`isContentGlassAllowed` 按 glass 档位与采样域守卫，solid/clear 档直接降级；bitmap 在 `DisposableEffect` 中回收
+- **阅读弹窗拆分（`ReaderActionDialogs.kt`）**：下载章节等设置弹窗从 `MoreConfigDialog` / `ReaderComposeComponents` 抽离为独立 Compose 弹窗（表单、开关、日期等），两个旧文件分别瘦身 184 / 76 行
+
+### 重构与迁移
+
+- 全仓 68 处旧 `selector()` 调用迁移为锚定弹窗 `ModernActionPopup`、Compose 选择列表 `showComposeChoiceListDialog`（76 处）与确认弹窗 `showComposeConfirmDialog`（9 处），覆盖 38 个 Activity/Fragment/Compose 组件；`AndroidSelectors.kt` 六个重载标记 `@Deprecated`，引导到新弹窗 API
+- `AppDialogFrame` 优先复用内容域玻璃背板，桌面色随玻璃态切换，未命中宿主时回退原纯色卡片
+- 施工单 `docs/reader-dialog-glass-plan.md` 定稿归档（方案 B：薄宿主协议 + 三处消费方收口）
+
 ## 3.2.1 版（2026-11-27）
 
 段评快照链路增强：预热窗口跟随 `preDownloadNum`（上限 3 章）并改用 `CONFLATED` 调度，新增纯快照模式（未命中严格零联网），缓存优先支持过门后自动切换并回写快照，预热入口增加无网守卫。**新特性 + 修复 → minor + 0.1，patch = 1。**

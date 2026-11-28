@@ -4,6 +4,12 @@ Release 下载：https://github.com/helyel233/legado-H/releases
 
 ## LegadoH
 
+**vH.3.3.1 · 2026/11/28**
+
+- 新增共享内容域玻璃背板协议 ContentBackdropHost：阅读页/书籍详情/朗读页实现宿主，通用 Compose 弹窗 AppDialogFrame 据此透出磨砂背板，solid/clear 档自动降级，bitmap 及时回收
+- 抽取 captureViewBackdrop / buildContentGlassBackdrop 到玻璃子目录，统一裁切、缩放与模糊；阅读下载等设置弹窗拆分为独立 ReaderActionDialogs，MoreConfigDialog 与 ReaderComposeComponents 大幅瘦身
+- 全仓 68 处旧 selector() 调用迁移为 ModernActionPopup / showComposeChoiceListDialog / showComposeConfirmDialog，覆盖 38 个页面与组件；旧 selector 六个重载标记 Deprecated
+
 **vH.3.2.1 · 2026/11/27**
 
 - 段评预热窗口跟随 preDownloadNum（上限 3 章，当前章优先），改用 CONFLATED 常驻调度避免翻章打断整轮预热，新增断网守卫不触发无效冷却
